@@ -9,6 +9,7 @@ st.set_page_config(page_title="Painel Almoxarifado", layout="wide")
 # Função para carregar ou criar o banco de dados
 def carregar_dados():
     try:
+<<<<<<< HEAD
         df = pd.read_csv("dados_almoxarifado.csv")
         # Converter a coluna DATA para datetime
         if 'DATA' in df.columns:
@@ -32,14 +33,36 @@ def salvar_dados(df):
     if 'VENCIMENTO FATURA' in df_copy.columns and pd.api.types.is_datetime64_any_dtype(df_copy['VENCIMENTO FATURA']):
         df_copy['VENCIMENTO FATURA'] = df_copy['VENCIMENTO FATURA'].dt.strftime('%d/%m/%Y')
     df_copy.to_csv("dados_almoxarifado.csv", index=False)
+=======
+            df = pd.read_csv("dados_almoxarifado.csv")
+                    # Converter a coluna DATA para datetime
+                            if 'DATA' in df.columns:
+                                        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+                                            except FileNotFoundError:
+                                                    df = pd.DataFrame(columns=[
+                                                                "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
+                                                                            "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
+                                                                                        "OBSERVAÇÃO", "DOC NF"
+                                                                                                ])
+                                                                                                    return df
 
-df = carregar_dados()
+                                                                                                    # Função para salvar os dados
+                                                                                                    def salvar_dados(df):
+                                                                                                        df_copy = df.copy()
+                                                                                                            # Converter datas para formato string antes de salvar
+                                                                                                                if 'DATA' in df_copy.columns and pd.api.types.is_datetime64_any_dtype(df_copy['DATA']):
+                                                                                                                        df_copy['DATA'] = df_copy['DATA'].dt.strftime('%d/%m/%Y')
+                                                                                                                            df_copy.to_csv("dados_almoxarifado.csv", index=False)
+>>>>>>> 26768da (Adicionando entrada_almox.py)
 
-st.title("Registro de Notas Fiscais")
+                                                                                                                            df = carregar_dados()
 
-# Preparar lista de fornecedores existentes
-fornecedores_list = sorted(df["FORNECEDOR"].dropna().astype(str).unique().tolist()) if not df.empty else []
+                                                                                                                            st.title("Registro de Notas Fiscais")
 
+                                                                                                                            # Preparar lista de fornecedores existentes
+                                                                                                                            fornecedores_list = sorted(df["FORNECEDOR"].dropna().astype(str).unique().tolist()) if not df.empty else []
+
+<<<<<<< HEAD
 # Formulário horizontal
 with st.form("formulario_nota", clear_on_submit=True):
     col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -237,4 +260,4 @@ if not df.empty and 'DATA_DT' in df.columns:
     else:
         st.write("Nenhum dado disponível para exibir histórico.")
 else:
-    st.write("Nenhum dado disponível.")
+    st.write("Nenhum dado disponível."
