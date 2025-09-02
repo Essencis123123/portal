@@ -2,35 +2,15 @@ import streamlit as st
 import pandas as pd
 import datetime
 import plotly.express as px
-import os
+import re
 
-st.set_page_config(page_title="PAINEL ALMOXARIFADO", layout="wide")
+st.set_page_config(page_title="Painel Almoxarifado", layout="wide")
 
-# ---------------------------
-# FUNÇÕES DE BANCO DE DADOS
-# ---------------------------
-from pandas.errors import EmptyDataError  # ← Import necessário
-
-def carregar_dados_almoxarifado():
+# Função para carregar ou criar o banco de dados
+def carregar_dados():
     try:
         df = pd.read_csv("dados_almoxarifado.csv")
-        if 'DATA' in df.columns:
-            df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-        if 'VENCIMENTO' in df.columns:
-            df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
-        for col in ["STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL"]:
-            if col not in df.columns:
-                df[col] = "N/A" if col == "REGISTRO_ADICIONAL" else "EM ANDAMENTO"
-        return df
-    except (FileNotFoundError, EmptyDataError):
-        return pd.DataFrame(columns=[
-            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
-            "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
-            "OBSERVAÇÃO", "DOC NF", "VENCIMENTO", "STATUS_FINANCEIRO",
-            "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL"
-        ])
-
-        # Converter colunas de data
+        # Converter a coluna DATA para datetime
         if 'DATA' in df.columns:
             df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
         if 'VENCIMENTO' in df.columns:
@@ -83,7 +63,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Carregar dados
-df = carregar_dados_almoxarifado()
+df = carregar_dados()
+
 
 # ---------------------------
 # FORMULÁRIO DE REGISTRO - ALMOXARIFADO
@@ -330,52 +311,4 @@ if not df.empty:
             st.info("✅ Nenhuma nota com problemas no momento")
     
 else:
-    st.info("📝 Nenhuma nota fiscal registrada ainda. Use o formulário acima para adicionar a primeira nota.")
-
-# ---------------------------
-# INSTRUÇÕES PARA O ALMOXARIFADO
-# ---------------------------
-st.markdown("---")
-st.header("ℹ️ Legenda dos Status Financeiros")
-
-col_leg1, col_leg2, col_leg3, col_leg4 = st.columns(4)
-
-with col_leg1:
-    st.markdown("""
-    <div style='background-color: #ffc107; padding: 15px; border-radius: 10px; color: black;'>
-        <h4>🔄 EM ANDAMENTO</h4>
-        <p>Nota recebida e em processamento pela área fiscal</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_leg2:
-    st.markdown("""
-    <div style='background-color: #dc3545; padding: 15px; border-radius: 10px; color: white;'>
-        <h4>⚠️ NF PROBLEMA</h4>
-        <p>Problema identificado - verificar observações</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_leg3:
-    st.markdown("""
-    <div style='background-color: #17a2b8; padding: 15px; border-radius: 10px; color: white;'>
-        <h4>📥 CAPTURADO</h4>
-        <p>Nota capturada no sistema financeiro</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_leg4:
-    st.markdown("""
-    <div style='background-color: #28a745; padding: 15px; border-radius: 10px; color: white;'>
-        <h4>✅ FINALIZADO</h4>
-        <p>Processo concluído e pago</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ---------------------------
-# RODAPÉ
-# ---------------------------
-st.markdown("---")
-st.caption(f"Última atualização: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | "
-          f"Total de registros: {len(df)} | "
-          "Sistema Integrado Almoxarifado-Financeiro")
+    st.write("Nenhum dado disponível.")
