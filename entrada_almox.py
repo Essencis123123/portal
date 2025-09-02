@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import datetime
 import plotly.express as px
-import re
 
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide")
 
@@ -11,36 +10,30 @@ def carregar_dados():
     try:
         df = pd.read_csv("dados_almoxarifado.csv")
         if df.empty:
-            # Se estiver vazio, criar DataFrame com colunas
             df = pd.DataFrame(columns=[
                 "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
                 "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
-                "OBSERVAÇÃO", "DOC NF"
+                "OBSERVAÇÃO", "DOC NF", "VENCIMENTO"
             ])
         if 'DATA' in df.columns:
             df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-    except FileNotFoundError:
+        if 'VENCIMENTO' in df.columns:
+            df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
+    except (FileNotFoundError, pd.errors.EmptyDataError):
         df = pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
             "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
-            "OBSERVAÇÃO", "DOC NF"
-        ])
-    except pd.errors.EmptyDataError:
-        # Caso o CSV exista, mas esteja vazio
-        df = pd.DataFrame(columns=[
-            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
-            "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
-            "OBSERVAÇÃO", "DOC NF"
+            "OBSERVAÇÃO", "DOC NF", "VENCIMENTO"
         ])
     return df
-
 
 # Função para salvar os dados
 def salvar_dados(df):
     df_copy = df.copy()
-    # Converter datas para formato string antes de salvar
     if 'DATA' in df_copy.columns and pd.api.types.is_datetime64_any_dtype(df_copy['DATA']):
         df_copy['DATA'] = df_copy['DATA'].dt.strftime('%d/%m/%Y')
+    if 'VENCIMENTO' in df_copy.columns and pd.api.types.is_datetime64_any_dtype(df_copy['VENCIMENTO']):
+        df_copy['VENCIMENTO'] = df_copy['VENCIMENTO'].dt.strftime('%d/%m/%Y')
     df_copy.to_csv("dados_almoxarifado.csv", index=False)
 
 df = carregar_dados()
@@ -58,14 +51,15 @@ with st.form("formulario_nota", clear_on_submit=True):
         data = st.date_input("Data*", datetime.date.today())
     
     with col2:
-        # Selectbox com todos os fornecedores existentes
-        fornecedor = st.selectbox(
-            "Fornecedor*",
-            options=fornecedores_list,
-            index=None,
-            placeholder="Selecione um fornecedor...",
-            key="fornecedor_select"
-        )
+        fornecedor_input = st.text_input("Fornecedor*", key="fornecedor_input", placeholder="Digite o nome do fornecedor...")
+        if fornecedor_input:
+            sugestoes = [f for f in fornecedores_list if fornecedor_input.lower() in f.lower()]
+            if sugestoes:
+                st.write("**Sugestões:**")
+                for sugestao in sugestoes[:5]:
+                    if st.button(sugestao, key=f"sug_{sugestao}"):
+                        st.session_state.fornecedor_input = sugestao
+                        st.rerun()
     
     with col3:
         recebedor = st.selectbox("Recebedor*", [
@@ -87,7 +81,7 @@ with st.form("formulario_nota", clear_on_submit=True):
     with col6:
         volume = st.number_input("Volume*", min_value=1)
     
-    col7, col8, col9, col10 = st.columns(4)
+    col7, col8, col9, col10, col11 = st.columns(5)
     with col7:
         valor_total_nf = st.text_input("V. TOTAL NF* (ex: 1234,56)", value="0,00")
     
@@ -95,84 +89,64 @@ with st.form("formulario_nota", clear_on_submit=True):
         condicao_frete = st.selectbox("Condição de Frete", ["CIF", "FOB"])
     
     with col9:
-        # Campo valor frete - SEM disabled, mas com lógica interna
         if condicao_frete == "CIF":
-            # Para CIF, sempre usar 0,00 mas deixar visível
             valor_frete = "0,00"
             st.text_input("Valor Frete", value=valor_frete, key="valor_frete_cif")
         else:
-            # Para FOB, campo editável normal
             valor_frete = st.text_input("Valor Frete (ex: 123,45)", value="0,00", key="valor_frete_fob")
     
     with col10:
         observacao = st.text_input("Observação")
     
-    doc_nf = st.text_input("Link DOC NF")
+    with col11:
+        vencimento = st.date_input("Vencimento da Fatura", datetime.date.today())
     
-    # CAMPO NOVO FORNECEDOR (como último campo)
-    if fornecedor is None:
-        novo_fornecedor = st.text_input("Novo Fornecedor*", placeholder="Digite o nome do novo fornecedor...")
-    else:
-        novo_fornecedor = ""
+    doc_nf = st.text_input("Link DOC NF")
     
     enviar = st.form_submit_button("Registrar Nota")
     
     if enviar:
-        # Verificar se temos um fornecedor válido
-        if fornecedor is None and not novo_fornecedor.strip():
-            st.error("Por favor, selecione um fornecedor existente ou digite um novo fornecedor.")
+        fornecedor_final = fornecedor_input.strip()
+        
+        campos_obrigatorios = {
+            "Fornecedor": fornecedor_final,
+            "Recebedor": recebedor,
+            "NF": nf.strip(),
+            "Pedido": pedido.strip(),
+            "Volume": volume > 0,
+            "Valor Total NF": valor_total_nf.strip() not in ["", "0,00"]
+        }
+        
+        campos_faltantes = [campo for campo, preenchido in campos_obrigatorios.items() if not preenchido]
+        
+        if campos_faltantes:
+            st.error(f"Campos obrigatórios não preenchidos: {', '.join(campos_faltantes)}")
         else:
-            # Usar o fornecedor selecionado ou o novo fornecedor
-            fornecedor_final = fornecedor if fornecedor is not None else novo_fornecedor
-            
-            # Verificar campos obrigatórios
-            campos_obrigatorios = {
-                "Fornecedor": fornecedor_final.strip(),
-                "Recebedor": recebedor,
-                "NF": nf.strip(),
-                "Pedido": pedido.strip(),
-                "Volume": volume > 0,
-                "Valor Total NF": valor_total_nf.strip() not in ["", "0,00"]
-            }
-            
-            campos_faltantes = [campo for campo, preenchido in campos_obrigatorios.items() if not preenchido]
-            
-            if campos_faltantes:
-                st.error(f"Campos obrigatórios não preenchidos: {', '.join(campos_faltantes)}")
-            else:
-                try:
-                    # Converter valores para float
-                    valor_total_nf_float = float(valor_total_nf.replace(".", "").replace(",", "."))
-                    
-                    # Se for CIF, força o valor 0.00 independente do que estiver no campo
-                    if condicao_frete == "CIF":
-                        valor_frete_float = 0.0
-                    else:
-                        # Para FOB, usa o valor digitado
-                        valor_frete_float = float(valor_frete.replace(".", "").replace(",", ".")) if valor_frete else 0.0
-                    
-                    novo_registro = {
-                        "DATA": pd.to_datetime(data),
-                        "RECEBEDOR": recebedor,
-                        "FORNECEDOR": fornecedor_final,
-                        "NF": nf,
-                        "PEDIDO": pedido,
-                        "VOLUME": volume,
-                        "V. TOTAL NF": valor_total_nf_float,
-                        "CONDICAO FRETE": condicao_frete,
-                        "VALOR FRETE": valor_frete_float,
-                        "OBSERVAÇÃO": observacao,
-                        "DOC NF": doc_nf
-                    }
-                    
-                    df = pd.concat([df, pd.DataFrame([novo_registro])], ignore_index=True)
-                    salvar_dados(df)
-                    st.success("Nota registrada com sucesso!")
-                    
-                except ValueError:
-                    st.error("Erro na conversão de valores numéricos. Verifique os formatos.")
+            try:
+                valor_total_nf_float = float(valor_total_nf.replace(".", "").replace(",", "."))
+                valor_frete_float = 0.0 if condicao_frete == "CIF" else float(valor_frete.replace(".", "").replace(",", ".")) if valor_frete else 0.0
+                
+                novo_registro = {
+                    "DATA": pd.to_datetime(data),
+                    "RECEBEDOR": recebedor,
+                    "FORNECEDOR": fornecedor_final,
+                    "NF": nf,
+                    "PEDIDO": pedido,
+                    "VOLUME": volume,
+                    "V. TOTAL NF": valor_total_nf_float,
+                    "CONDICAO FRETE": condicao_frete,
+                    "VALOR FRETE": valor_frete_float,
+                    "OBSERVAÇÃO": observacao,
+                    "DOC NF": doc_nf,
+                    "VENCIMENTO": pd.to_datetime(vencimento)
+                }
+                
+                df = pd.concat([df, pd.DataFrame([novo_registro])], ignore_index=True)
+                salvar_dados(df)
+                st.success("Nota registrada com sucesso!")
+            except ValueError:
+                st.error("Erro na conversão de valores numéricos. Verifique os formatos.")
 
-# Restante do código mantido igual...
 # Sidebar: notas do mês
 st.sidebar.header("Notas enviadas este mês")
 if not df.empty and 'DATA' in df.columns:
@@ -236,7 +210,7 @@ if not df.empty and 'DATA_DT' in df.columns:
             df_historico_exibir = df_historico[[
                 "DATA_FORMATADA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
                 "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
-                "OBSERVAÇÃO", "DOC NF"
+                "OBSERVAÇÃO", "DOC NF", "VENCIMENTO"
             ]].copy()
             
             # Formatar valores monetários
@@ -246,6 +220,9 @@ if not df.empty and 'DATA_DT' in df.columns:
             df_historico_exibir["VALOR FRETE"] = df_historico_exibir["VALOR FRETE"].apply(
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
+            
+            # Formatar vencimento
+            df_historico_exibir["VENCIMENTO"] = pd.to_datetime(df_historico_exibir["VENCIMENTO"], errors='coerce').dt.strftime('%d/%m/%Y')
             
             # Links para documentos
             df_historico_exibir["DOC NF"] = df_historico_exibir["DOC NF"].apply(
