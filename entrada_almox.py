@@ -2,239 +2,370 @@ import streamlit as st
 import pandas as pd
 import datetime
 import plotly.express as px
+import os
 
-st.set_page_config(page_title="Painel Almoxarifado", layout="wide")
+st.set_page_config(page_title="PAINEL ALMOXARIFADO", layout="wide")
 
-# Função para carregar ou criar o banco de dados
-def carregar_dados():
+# ---------------------------
+# FUNÇÕES DE BANCO DE DADOS
+# ---------------------------
+def carregar_dados_almoxarifado():
+    """Carrega os dados do almoxarifado"""
     try:
         df = pd.read_csv("dados_almoxarifado.csv")
         if df.empty:
             df = pd.DataFrame(columns=[
                 "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
                 "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
-                "OBSERVAÇÃO", "DOC NF", "VENCIMENTO"
+                "OBSERVAÇÃO", "DOC NF", "VENCIMENTO", "STATUS_FINANCEIRO",
+                "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL"
             ])
+        # Converter colunas de data
         if 'DATA' in df.columns:
             df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
         if 'VENCIMENTO' in df.columns:
             df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
-    except (FileNotFoundError, pd.errors.EmptyDataError):
-        df = pd.DataFrame(columns=[
+        
+        # Garantir que colunas do financeiro existam
+        for col in ["STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL"]:
+            if col not in df.columns:
+                df[col] = "N/A" if col == "REGISTRO_ADICIONAL" else "EM ANDAMENTO"
+                
+        return df
+    except FileNotFoundError:
+        return pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
             "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
-            "OBSERVAÇÃO", "DOC NF", "VENCIMENTO"
+            "OBSERVAÇÃO", "DOC NF", "VENCIMENTO", "STATUS_FINANCEIRO",
+            "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL"
         ])
-    return df
 
-# Função para salvar os dados
-def salvar_dados(df):
-    df_copy = df.copy()
-    if 'DATA' in df_copy.columns and pd.api.types.is_datetime64_any_dtype(df_copy['DATA']):
-        df_copy['DATA'] = df_copy['DATA'].dt.strftime('%d/%m/%Y')
-    if 'VENCIMENTO' in df_copy.columns and pd.api.types.is_datetime64_any_dtype(df_copy['VENCIMENTO']):
-        df_copy['VENCIMENTO'] = df_copy['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-    df_copy.to_csv("dados_almoxarifado.csv", index=False)
-
-df = carregar_dados()
-
-st.title("Registro de Notas Fiscais")
-
-# Preparar lista de fornecedores existentes
-fornecedores_list = sorted(df["FORNECEDOR"].dropna().astype(str).unique().tolist()) if not df.empty else []
-
-# Formulário horizontal
-with st.form("formulario_nota", clear_on_submit=True):
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        data = st.date_input("Data*", datetime.date.today())
-    
-    with col2:
-        fornecedor_input = st.text_input("Fornecedor*", key="fornecedor_input", placeholder="Digite o nome do fornecedor...")
-        if fornecedor_input:
-            sugestoes = [f for f in fornecedores_list if fornecedor_input.lower() in f.lower()]
-            if sugestoes:
-                st.write("**Sugestões:**")
-                for sugestao in sugestoes[:5]:
-                    if st.button(sugestao, key=f"sug_{sugestao}"):
-                        st.session_state.fornecedor_input = sugestao
-                        st.rerun()
-    
-    with col3:
-        recebedor = st.selectbox("Recebedor*", [
-            "ARLEY GONCALVES DOS SANTOS",
-            "EVIANE DAS GRACAS DE ASSIS",
-            "ANDRE CASTRO DE SOUZA",
-            "ISABELA CAROLINA DE PAURA SOARES",
-            "EMERSON ALMEIDA DE ARAUJO",
-            "GABRIEL PEREIRA MARTINS",
-            "OUTROS"
-        ])
-    
-    with col4:
-        nf = st.text_input("NF*")
-    
-    with col5:
-        pedido = st.text_input("Pedido*")
-    
-    with col6:
-        volume = st.number_input("Volume*", min_value=1)
-    
-    col7, col8, col9, col10, col11 = st.columns(5)
-    with col7:
-        valor_total_nf = st.text_input("V. TOTAL NF* (ex: 1234,56)", value="0,00")
-    
-    with col8:
-        condicao_frete = st.selectbox("Condição de Frete", ["CIF", "FOB"])
-    
-    with col9:
-        if condicao_frete == "CIF":
-            valor_frete = "0,00"
-            st.text_input("Valor Frete", value=valor_frete, key="valor_frete_cif")
-        else:
-            valor_frete = st.text_input("Valor Frete (ex: 123,45)", value="0,00", key="valor_frete_fob")
-    
-    with col10:
-        observacao = st.text_input("Observação")
-    
-    with col11:
-        vencimento = st.date_input("Vencimento da Fatura", datetime.date.today())
-    
-    doc_nf = st.text_input("Link DOC NF")
-    
-    enviar = st.form_submit_button("Registrar Nota")
-    
-    if enviar:
-        fornecedor_final = fornecedor_input.strip()
+def salvar_dados_almoxarifado(df):
+    """Salva os dados do almoxarifado"""
+    try:
+        df_copy = df.copy()
+        # Converter datas para formato string
+        if 'DATA' in df_copy.columns and pd.api.types.is_datetime64_any_dtype(df_copy['DATA']):
+            df_copy['DATA'] = df_copy['DATA'].dt.strftime('%d/%m/%Y')
+        if 'VENCIMENTO' in df_copy.columns and pd.api.types.is_datetime64_any_dtype(df_copy['VENCIMENTO']):
+            df_copy['VENCIMENTO'] = df_copy['VENCIMENTO'].dt.strftime('%d/%m/%Y')
         
-        campos_obrigatorios = {
-            "Fornecedor": fornecedor_final,
-            "Recebedor": recebedor,
-            "NF": nf.strip(),
-            "Pedido": pedido.strip(),
-            "Volume": volume > 0,
-            "Valor Total NF": valor_total_nf.strip() not in ["", "0,00"]
-        }
-        
-        campos_faltantes = [campo for campo, preenchido in campos_obrigatorios.items() if not preenchido]
-        
-        if campos_faltantes:
-            st.error(f"Campos obrigatórios não preenchidos: {', '.join(campos_faltantes)}")
-        else:
-            try:
-                valor_total_nf_float = float(valor_total_nf.replace(".", "").replace(",", "."))
-                valor_frete_float = 0.0 if condicao_frete == "CIF" else float(valor_frete.replace(".", "").replace(",", ".")) if valor_frete else 0.0
-                
-                novo_registro = {
-                    "DATA": pd.to_datetime(data),
-                    "RECEBEDOR": recebedor,
-                    "FORNECEDOR": fornecedor_final,
-                    "NF": nf,
-                    "PEDIDO": pedido,
-                    "VOLUME": volume,
-                    "V. TOTAL NF": valor_total_nf_float,
-                    "CONDICAO FRETE": condicao_frete,
-                    "VALOR FRETE": valor_frete_float,
-                    "OBSERVAÇÃO": observacao,
-                    "DOC NF": doc_nf,
-                    "VENCIMENTO": pd.to_datetime(vencimento)
-                }
-                
-                df = pd.concat([df, pd.DataFrame([novo_registro])], ignore_index=True)
-                salvar_dados(df)
-                st.success("Nota registrada com sucesso!")
-            except ValueError:
-                st.error("Erro na conversão de valores numéricos. Verifique os formatos.")
+        df_copy.to_csv("dados_almoxarifado.csv", index=False, encoding='utf-8')
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados: {e}")
+        return False
 
-# Sidebar: notas do mês
-st.sidebar.header("Notas enviadas este mês")
-if not df.empty and 'DATA' in df.columns:
-    df["DATA_DT"] = pd.to_datetime(df["DATA"], errors='coerce')
-    mes_atual = datetime.date.today().month
-    ano_atual = datetime.date.today().year
-    
-    df_mes = df[(df["DATA_DT"].dt.month == mes_atual) & (df["DATA_DT"].dt.year == ano_atual)]
-    
-    if not df_mes.empty:
-        df_mes_exibir = df_mes[["DATA_DT", "NF", "FORNECEDOR", "V. TOTAL NF"]].copy()
-        df_mes_exibir["DATA"] = df_mes_exibir["DATA_DT"].dt.strftime('%d/%m/%Y')
-        df_mes_exibir = df_mes_exibir[["DATA", "NF", "FORNECEDOR", "V. TOTAL NF"]]
-        st.sidebar.dataframe(df_mes_exibir, hide_index=True)
-    else:
-        st.sidebar.write("Nenhuma nota registrada neste mês.")
-else:
-    st.sidebar.write("Nenhum dado disponível.")
+# ---------------------------
+# CONFIGURAÇÕES
+# ---------------------------
+status_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
+problema_options = ["N/A", "REGISTRO CHAMADO", "CARTA CORRECAO", "AJUSTE NA ORDEM DE COMPRA", "RECUSA DE NOTA FISCAL"]
 
-# Dashboard Top 5
-st.subheader("Dashboard Resumido")
-if not df.empty and 'DATA_DT' in df.columns:
-    df_mes_atual = df[(df["DATA_DT"].dt.month == datetime.date.today().month) & 
-                     (df["DATA_DT"].dt.year == datetime.date.today().year)]
-    
-    if not df_mes_atual.empty:
-        col1, col2 = st.columns(2)
+# ---------------------------
+# INTERFACE PRINCIPAL
+# ---------------------------
+st.markdown("""
+    <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
+        <h1 style='color: white; text-align: center; margin: 0;'>🏭 PAINEL ALMOXARIFADO</h1>
+        <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+    </div>
+""", unsafe_allow_html=True)
+
+# Carregar dados
+df = carregar_dados_almoxarifado()
+
+# ---------------------------
+# FORMULÁRIO DE REGISTRO - ALMOXARIFADO
+# ---------------------------
+st.header("📝 Registro de Notas Fiscais - Almoxarifado")
+
+with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
+    with st.form("formulario_nota", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            top5_nf = df_mes_atual.groupby("FORNECEDOR")["NF"].count().sort_values(ascending=False).head(5).reset_index()
-            if not top5_nf.empty:
-                fig1 = px.bar(top5_nf, x="NF", y="FORNECEDOR", orientation='h', 
-                             title="Top 5 Quantidade de Notas",
-                             labels={"NF": "Quantidade", "FORNECEDOR": "Fornecedor"})
-                st.plotly_chart(fig1, use_container_width=True)
-        
+            data = st.date_input("Data*", datetime.date.today())
+            fornecedor = st.text_input("Fornecedor*", placeholder="Nome do fornecedor...")
+            nf = st.text_input("Número da NF*")
+            
         with col2:
-            top5_valor = df_mes_atual.groupby("FORNECEDOR")["V. TOTAL NF"].sum().sort_values(ascending=False).head(5).reset_index()
-            if not top5_valor.empty:
-                fig2 = px.bar(top5_valor, x="V. TOTAL NF", y="FORNECEDOR", orientation='h',
-                             title="Top 5 Valor Total",
-                             labels={"V. TOTAL NF": "Valor Total (R$)", "FORNECEDOR": "Fornecedor"})
-                st.plotly_chart(fig2, use_container_width=True)
+            recebedor = st.selectbox("Recebedor*", [
+                "ARLEY GONCALVES DOS SANTOS",
+                "EVIANE DAS GRACAS DE ASSIS",
+                "ANDRE CASTRO DE SOUZA",
+                "ISABELA CAROLINA DE PAURA SOARES",
+                "EMERSON ALMEIDA DE ARAUJO",
+                "GABRIEL PEREIRA MARTINS",
+                "OUTROS"
+            ])
+            pedido = st.text_input("Número do Pedido*")
+            volume = st.number_input("Volume*", min_value=1, value=1)
+            
+        with col3:
+            valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
+            condicao_frete = st.selectbox("Condição de Frete", ["CIF", "FOB"])
+            if condicao_frete == "FOB":
+                valor_frete = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
+            else:
+                valor_frete = "0,00"
+        
+        observacao = st.text_area("Observações", placeholder="Informações adicionais...")
+        doc_nf = st.text_input("Link para Documento da NF", placeholder="https://...")
+        vencimento = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30))
+        
+        enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
+        
+        if enviar:
+            # Validação dos campos obrigatórios
+            campos_validos = all([
+                fornecedor.strip(), nf.strip(), pedido.strip(), 
+                valor_total_nf.strip() not in ["", "0,00"]
+            ])
+            
+            if not campos_validos:
+                st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
+            else:
+                try:
+                    # Converter valores monetários
+                    valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
+                    valor_frete_float = float(valor_frete.replace(".", "").replace(",", ".")) if condicao_frete == "FOB" else 0.0
+                    
+                    novo_registro = {
+                        "DATA": pd.to_datetime(data),
+                        "RECEBEDOR": recebedor,
+                        "FORNECEDOR": fornecedor,
+                        "NF": nf,
+                        "PEDIDO": pedido,
+                        "VOLUME": volume,
+                        "V. TOTAL NF": valor_total_float,
+                        "CONDICAO FRETE": condicao_frete,
+                        "VALOR FRETE": valor_frete_float,
+                        "OBSERVAÇÃO": observacao,
+                        "DOC NF": doc_nf,
+                        "VENCIMENTO": pd.to_datetime(vencimento),
+                        "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                        "CONDICAO_PROBLEMA": "N/A",
+                        "REGISTRO_ADICIONAL": ""
+                    }
+                    
+                    df = pd.concat([df, pd.DataFrame([novo_registro])], ignore_index=True)
+                    if salvar_dados_almoxarifado(df):
+                        st.success("🎉 Nota fiscal registrada com sucesso! Status financeiro: EM ANDAMENTO")
+                    else:
+                        st.error("❌ Erro ao salvar dados")
+                        
+                except ValueError:
+                    st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
 
-# Histórico detalhado
-st.subheader("Histórico de Notas")
-if not df.empty and 'DATA_DT' in df.columns:
-    meses_disponiveis = sorted(df["DATA_DT"].dt.month.dropna().unique())
-    meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junio",
-                  7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+# ---------------------------
+# PAINEL DE STATUS FINANCEIRO - VISÃO ALMOXARIFADO
+# ---------------------------
+st.header("📊 Status do Processo Financeiro")
+
+if not df.empty:
+    # Estatísticas rápidas
+    col1, col2, col3, col4 = st.columns(4)
     
-    if meses_disponiveis:
-        mes_selecionado = st.selectbox("Selecione o mês", 
-                                      options=meses_disponiveis,
-                                      format_func=lambda x: f"{meses_nomes.get(x, x)}")
-        
-        df_historico = df[df["DATA_DT"].dt.month == mes_selecionado].copy()
-        
-        if not df_historico.empty:
-            df_historico["DATA_FORMATADA"] = df_historico["DATA_DT"].dt.strftime('%d/%m/%Y')
-            df_historico_exibir = df_historico[[
-                "DATA_FORMATADA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
-                "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
-                "OBSERVAÇÃO", "DOC NF", "VENCIMENTO"
-            ]].copy()
-            
-            # Formatar valores monetários
-            df_historico_exibir["V. TOTAL NF"] = df_historico_exibir["V. TOTAL NF"].apply(
-                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    total_nfs = len(df)
+    em_andamento = len(df[df['STATUS_FINANCEIRO'] == 'EM ANDAMENTO'])
+    com_problema = len(df[df['STATUS_FINANCEIRO'] == 'NF PROBLEMA'])
+    finalizadas = len(df[df['STATUS_FINANCEIRO'] == 'FINALIZADO'])
+    
+    with col1:
+        st.metric("📦 Total de NFs", total_nfs)
+    with col2:
+        st.metric("🔄 Em Andamento", em_andamento)
+    with col3:
+        st.metric("⚠️ Com Problema", com_problema)
+    with col4:
+        st.metric("✅ Finalizadas", finalizadas)
+    
+    # Filtros
+    st.subheader("🔍 Filtros de Consulta")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    
+    with col_f1:
+        status_filtro = st.multiselect(
+            "Status Financeiro",
+            options=status_options,
+            default=["EM ANDAMENTO", "NF PROBLEMA"],
+            help="Filtrar por situação no financeiro"
+        )
+    
+    with col_f2:
+        # Filtro por data
+        datas_disponiveis = sorted(df['DATA'].dropna().unique())
+        if len(datas_disponiveis) > 0:
+            data_inicio = st.date_input(
+                "Data Início",
+                value=datas_disponiveis[0],
+                min_value=datas_disponiveis[0],
+                max_value=datas_disponiveis[-1]
             )
-            df_historico_exibir["VALOR FRETE"] = df_historico_exibir["VALOR FRETE"].apply(
-                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            )
-            
-            # Formatar vencimento
-            df_historico_exibir["VENCIMENTO"] = pd.to_datetime(df_historico_exibir["VENCIMENTO"], errors='coerce').dt.strftime('%d/%m/%Y')
-            
-            # Links para documentos
-            df_historico_exibir["DOC NF"] = df_historico_exibir["DOC NF"].apply(
-                lambda x: f'<a href="{x}" target="_blank">📄 Abrir PDF</a>' 
-                if pd.notna(x) and str(x).strip() != "" and str(x).startswith(('http://', 'https://')) 
-                else "N/A"
-            )
-            
-            st.write(df_historico_exibir.to_html(escape=False, index=False), unsafe_allow_html=True)
         else:
-            st.write("Nenhuma nota encontrada para o mês selecionado.")
+            data_inicio = st.date_input("Data Início", datetime.date.today())
+    
+    with col_f3:
+        fornecedor_filtro = st.multiselect(
+            "Fornecedor",
+            options=sorted(df['FORNECEDOR'].dropna().unique()),
+            help="Filtrar por fornecedor específico"
+        )
+    
+    # Aplicar filtros
+    df_filtrado = df.copy()
+    if status_filtro:
+        df_filtrado = df_filtrado[df_filtrado['STATUS_FINANCEIRO'].isin(status_filtro)]
+    if fornecedor_filtro:
+        df_filtrado = df_filtrado[df_filtrado['FORNECEDOR'].isin(fornecedor_filtro)]
+    
+    # Mostrar tabela com status
+    st.subheader("📋 Situação das Notas Fiscais")
+    
+    if not df_filtrado.empty:
+        # Função para colorir o status
+        def colorir_status(status):
+            if status == "FINALIZADO":
+                return "background-color: #28a745; color: white; padding: 5px; border-radius: 5px;"
+            elif status == "NF PROBLEMA":
+                return "background-color: #dc3545; color: white; padding: 5px; border-radius: 5px;"
+            elif status == "EM ANDAMENTO":
+                return "background-color: #ffc107; color: black; padding: 5px; border-radius: 5px;"
+            elif status == "CAPTURADO":
+                return "background-color: #17a2b8; color: white; padding: 5px; border-radius: 5px;"
+            else:
+                return ""
+        
+        # Preparar dados para exibição
+        df_exibir = df_filtrado[[
+            'DATA', 'FORNECEDOR', 'NF', 'PEDIDO', 'V. TOTAL NF', 
+            'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'REGISTRO_ADICIONAL', 'VENCIMENTO'
+        ]].copy()
+        
+        # Formatar datas e valores
+        df_exibir['DATA'] = pd.to_datetime(df_exibir['DATA']).dt.strftime('%d/%m/%Y')
+        df_exibir['VENCIMENTO'] = pd.to_datetime(df_exibir['VENCIMENTO']).dt.strftime('%d/%m/%Y')
+        df_exibir['V. TOTAL NF'] = df_exibir['V. TOTAL NF'].apply(
+            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        
+        # Aplicar estilos
+        styled_df = df_exibir.style.applymap(
+            lambda x: colorir_status(x) if x in status_options else "", 
+            subset=['STATUS_FINANCEIRO']
+        )
+        
+        st.dataframe(
+            styled_df,
+            use_container_width=True,
+            height=400
+        )
+        
+        # Download dos dados filtrados
+        csv = df_exibir.to_csv(index=False, encoding='utf-8')
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv,
+            file_name="status_financeiro.csv",
+            mime="text/csv"
+        )
+        
     else:
-        st.write("Nenhum dado disponível para exibir histórico.")
+        st.info("ℹ️ Nenhuma nota encontrada com os filtros selecionados.")
+    
+    # Gráficos de acompanhamento
+    st.subheader("📈 Análise do Status Financeiro")
+    
+    col_g1, col_g2 = st.columns(2)
+    
+    with col_g1:
+        # Gráfico de pizza - Distribuição de status
+        status_count = df['STATUS_FINANCEIRO'].value_counts().reset_index()
+        status_count.columns = ['Status', 'Quantidade']
+        
+        if not status_count.empty:
+            fig_pizza = px.pie(
+                status_count, 
+                values='Quantidade', 
+                names='Status',
+                title='Distribuição dos Status Financeiros',
+                color='Status',
+                color_discrete_map={
+                    'FINALIZADO': '#28a745',
+                    'EM ANDAMENTO': '#ffc107',
+                    'NF PROBLEMA': '#dc3545',
+                    'CAPTURADO': '#17a2b8'
+                }
+            )
+            st.plotly_chart(fig_pizza, use_container_width=True)
+    
+    with col_g2:
+        # Gráfico de barras - Top fornecedores com problemas
+        problemas_df = df[df['STATUS_FINANCEIRO'] == 'NF PROBLEMA']
+        if not problemas_df.empty:
+            top_problemas = problemas_df['FORNECEDOR'].value_counts().head(10).reset_index()
+            top_problemas.columns = ['Fornecedor', 'Notas com Problema']
+            
+            fig_barras = px.bar(
+                top_problemas,
+                x='Notas com Problema',
+                y='Fornecedor',
+                orientation='h',
+                title='Top 10 Fornecedores com Problemas',
+                color='Notas com Problema'
+            )
+            st.plotly_chart(fig_barras, use_container_width=True)
+        else:
+            st.info("✅ Nenhuma nota com problemas no momento")
+    
 else:
-    st.write("Nenhum dado disponível.")
+    st.info("📝 Nenhuma nota fiscal registrada ainda. Use o formulário acima para adicionar a primeira nota.")
+
+# ---------------------------
+# INSTRUÇÕES PARA O ALMOXARIFADO
+# ---------------------------
+st.markdown("---")
+st.header("ℹ️ Legenda dos Status Financeiros")
+
+col_leg1, col_leg2, col_leg3, col_leg4 = st.columns(4)
+
+with col_leg1:
+    st.markdown("""
+    <div style='background-color: #ffc107; padding: 15px; border-radius: 10px; color: black;'>
+        <h4>🔄 EM ANDAMENTO</h4>
+        <p>Nota recebida e em processamento pela área fiscal</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_leg2:
+    st.markdown("""
+    <div style='background-color: #dc3545; padding: 15px; border-radius: 10px; color: white;'>
+        <h4>⚠️ NF PROBLEMA</h4>
+        <p>Problema identificado - verificar observações</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_leg3:
+    st.markdown("""
+    <div style='background-color: #17a2b8; padding: 15px; border-radius: 10px; color: white;'>
+        <h4>📥 CAPTURADO</h4>
+        <p>Nota capturada no sistema financeiro</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_leg4:
+    st.markdown("""
+    <div style='background-color: #28a745; padding: 15px; border-radius: 10px; color: white;'>
+        <h4>✅ FINALIZADO</h4>
+        <p>Processo concluído e pago</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ---------------------------
+# RODAPÉ
+# ---------------------------
+st.markdown("---")
+st.caption(f"Última atualização: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | "
+          f"Total de registros: {len(df)} | "
+          "Sistema Integrado Almoxarifado-Financeiro")
