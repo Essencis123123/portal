@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
+
 # Configuração do painel
 st.set_page_config(page_title="Painel de Serviços", layout="wide")
 
