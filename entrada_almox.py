@@ -9,28 +9,27 @@ st.set_page_config(page_title="PAINEL ALMOXARIFADO", layout="wide")
 # ---------------------------
 # FUNÇÕES DE BANCO DE DADOS
 # ---------------------------
+from pandas.errors import EmptyDataError  # ← Import necessário
+
 def carregar_dados_almoxarifado():
-    """Carrega os dados do almoxarifado"""
     try:
         df = pd.read_csv("dados_almoxarifado.csv")
-        # Converter datas
         if 'DATA' in df.columns:
             df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
         if 'VENCIMENTO' in df.columns:
             df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
-        # Garantir colunas
         for col in ["STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL"]:
             if col not in df.columns:
                 df[col] = "N/A" if col == "REGISTRO_ADICIONAL" else "EM ANDAMENTO"
         return df
     except (FileNotFoundError, EmptyDataError):
-        # Retorna DataFrame vazio com colunas definidas
         return pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
             "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
             "OBSERVAÇÃO", "DOC NF", "VENCIMENTO", "STATUS_FINANCEIRO",
             "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL"
         ])
+
         # Converter colunas de data
         if 'DATA' in df.columns:
             df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
