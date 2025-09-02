@@ -7,6 +7,9 @@ import re
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide")
 
 # Função para carregar ou criar o banco de dados
+import pandas as pd
+from pandas.errors import EmptyDataError
+
 def carregar_dados():
     try:
         df = pd.read_csv("dados_almoxarifado.csv")
@@ -22,7 +25,9 @@ def carregar_dados():
                 df[col] = "N/A" if col == "REGISTRO_ADICIONAL" else "EM ANDAMENTO"
                 
         return df
-    except FileNotFoundError:
+
+    except (FileNotFoundError, EmptyDataError):
+        # Arquivo não existe ou está vazio: cria DataFrame com colunas
         return pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
             "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
