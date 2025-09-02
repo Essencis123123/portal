@@ -10,7 +10,13 @@ st.set_page_config(page_title="Painel Almoxarifado", layout="wide")
 def carregar_dados():
     try:
         df = pd.read_csv("dados_almoxarifado.csv")
-        # Converter a coluna DATA para datetime
+        if df.empty:
+            # Se estiver vazio, criar DataFrame com colunas
+            df = pd.DataFrame(columns=[
+                "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
+                "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
+                "OBSERVAÇÃO", "DOC NF"
+            ])
         if 'DATA' in df.columns:
             df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
     except FileNotFoundError:
@@ -19,7 +25,15 @@ def carregar_dados():
             "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
             "OBSERVAÇÃO", "DOC NF"
         ])
+    except pd.errors.EmptyDataError:
+        # Caso o CSV exista, mas esteja vazio
+        df = pd.DataFrame(columns=[
+            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "PEDIDO",
+            "VOLUME", "V. TOTAL NF", "CONDICAO FRETE", "VALOR FRETE",
+            "OBSERVAÇÃO", "DOC NF"
+        ])
     return df
+
 
 # Função para salvar os dados
 def salvar_dados(df):
