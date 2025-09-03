@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import os
+import time
 import plotly.express as px
 from pandas.errors import EmptyDataError
 import numpy as np
-import os
 import requests
 from PIL import Image
 from io import BytesIO
@@ -15,12 +16,14 @@ from email.mime.multipart import MIMEMultipart
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
-# CSS para personalizar o menu lateral e garantir que todo o texto seja branco
+# --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
     <style>
+    /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
+        color: white;
     }
     
     /* Regras para garantir que TODO o texto no sidebar seja branco */
@@ -30,19 +33,23 @@ st.markdown(
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p, 
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j {
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
+    .stDownloadButton button p {
         color: white !important;
     }
-    
-    /* Estilos para o radio button, garantindo que o texto dele também seja branco */
+
+    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
     }
     
     /* Estilo para deixar a letra dos botões preta */
-    [data-testid="stSidebar"] .stButton button p {
+    .stButton button p {
         color: black !important;
+    }
+    .stDownloadButton button p {
+        color: white !important;
     }
 
     [data-testid="stSidebar"] img {
@@ -52,6 +59,63 @@ st.markdown(
         width: 80%;
         border-radius: 10px;
         padding: 10px 0;
+    }
+
+    /* Estilo para o container principal da página */
+    .main-container {
+        background-color: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        color: #333;
+    }
+    
+    /* Estilo para o cabeçalho principal da página */
+    .header-container {
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: white;
+    }
+    
+    .header-container h1 {
+        color: white;
+        margin: 0;
+    }
+
+    .header-container p {
+        color: white;
+        margin: 5px 0 0 0;
+        font-size: 18px;
+    }
+    
+    /* Estilo para os sub-cabeçalhos dentro da área principal */
+    h2, h3 {
+        color: #1C4D86;
+        font-weight: 600;
+    }
+    
+    /* Estilo para os botões de ação */
+    .stButton button {
+        background-color: #0055a5;
+        color: white;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton button:hover {
+        background-color: #007ea7;
+    }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     </style>
     """,
@@ -69,14 +133,15 @@ def load_logo(url):
         return None
 
 # Funções de carregamento e salvamento de dados
-@st.cache_data
+# Removido o decorator @st.cache_data para evitar problemas de sincronização
 def carregar_dados_almoxarifado():
     try:
         df = pd.read_csv("dados_pedidos.csv")
         
         dtype_dict = {'FORNECEDOR': str, 'ORDEM_COMPRA': str, 'MATERIAL': str, 'RECEBEDOR': str,
                       'OBSERVACAO': str, 'DOC NF': str, 'CONDICAO_FRETE': str, 'REQUISICAO': str,
-                      'SOLICITANTE': str, 'DEPARTAMENTO': str, 'FILIAL': str, 'NF': str}
+                      'SOLICITANTE': str, 'DEPARTAMENTO': str, 'FILIAL': str, 'NF': str,
+                      'VALOR_FRETE': float}
         for col in dtype_dict:
             if col in df.columns:
                 df[col] = df[col].astype(dtype_dict[col])
@@ -124,7 +189,7 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados: {e}")
         return False
 
-@st.cache_data
+# O decorator @st.cache_data foi removido para evitar problemas de sincronização
 def carregar_dados_solicitantes():
     try:
         df = pd.read_csv("dados_solicitantes.csv", dtype={'NOME': str, 'DEPARTAMENTO': str, 'EMAIL': str, 'FILIAL': str})
@@ -134,7 +199,7 @@ def carregar_dados_solicitantes():
 
 # --- Configurações e Funções de E-mail ---
 status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
-logo_url = "https://media.licdn.com/dms/image/v2/C560BAQHJFSN_XUibJw/company-logo_200_200/company-logo_200_200/0/1675703958506/essencismg_logo?e=2147483647&v=beta&t=ZNEo5jZJnySYCy2VbJdq1AMvUVreiPP0V3sK4Ku1nX0"
+logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
 # Adiciona uma lista de log na sessão
@@ -192,7 +257,7 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
     "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
-    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAURA SOARES"},
     "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
     "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
     "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
@@ -216,7 +281,11 @@ if 'logado' not in st.session_state or not st.session_state['logado']:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    logo_img = load_logo("https://media.licdn.com/dms/image/v2/C560BAQHJFSN_XUibJw/company-logo_200_200/company-logo_200_200/0/1675703958506/essencismg_logo?e=2147483647&v=beta&t=ZNEo5jZJnySYCy2VbJdq1AMvUVreiPP0V3sK4Ku1nX0")
+    # Gerencia o estado do DataFrame em st.session_state
+    if 'df_pedidos' not in st.session_state:
+        st.session_state.df_pedidos = carregar_dados_almoxarifado()
+
+    logo_img = load_logo(logo_url)
     if logo_img:
         st.sidebar.image(logo_img, use_container_width=True)
     
@@ -233,14 +302,14 @@ else:
         st.session_state.pop('nome_colaborador', None)
         st.rerun()
     
-    df_pedidos = carregar_dados_almoxarifado()
+    df_pedidos = st.session_state.df_pedidos
     df_solicitantes = carregar_dados_solicitantes()
 
     if menu_option == "📝 Registrar NF":
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-                <h1 style='color: white; text-align: center; margin: 0;'>🏭 REGISTRAR NOTA FISCAL</h1>
-                <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            <div class='header-container'>
+                <h1>🏭 REGISTRAR NOTA FISCAL</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -250,7 +319,16 @@ else:
                 
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
-                    fornecedor_nf = st.text_input("Fornecedor da NF*", placeholder="Nome do fornecedor...")
+                    
+                    # Carrega a lista de fornecedores
+                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+                    fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                    
+                    if fornecedor_nf == '':
+                         fornecedor_manual = st.text_input("Novo Fornecedor (opcional)", placeholder="Digite o nome se não estiver na lista...")
+                    else:
+                         fornecedor_manual = ""
+                    
                     nf_numero = st.text_input("Número da NF*")
                     
                 with col2:
@@ -266,7 +344,9 @@ else:
                 with col3:
                     valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
                     condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
-                    valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00") if condicao_frete_nf == "FOB" else "0,00"
+                    valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
+                
+                doc_nf_link = st.text_input("Link da Nota Fiscal (URL)", placeholder="Cole o link de acesso aqui...")
                 
                 observacao = st.text_area("Observações", placeholder="Informações adicionais...")
                 vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30))
@@ -274,8 +354,11 @@ else:
                 enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
                 
                 if enviar:
+                    # Lógica para determinar o nome do fornecedor a ser usado
+                    nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
+
                     campos_validos = all([
-                        fornecedor_nf.strip(), nf_numero.strip(), ordem_compra_nf.strip(), 
+                        nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
                         valor_total_nf.strip() not in ["", "0,00"]
                     ])
                     
@@ -289,22 +372,22 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            df_pedidos_orig = carregar_dados_almoxarifado()
-                            
-                            df_update = df_pedidos_orig[df_pedidos_orig['ORDEM_COMPRA'] == ordem_compra_nf].copy()
+                            df_update = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
                             
                             if not df_update.empty:
                                 for original_index in df_update.index:
-                                    df_pedidos_orig.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                                    df_pedidos_orig.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
-                                    df_pedidos_orig.loc[original_index, 'STATUS_FINANCEIRO'] = 'EM ANDAMENTO'
-                                    df_pedidos_orig.loc[original_index, 'NF'] = nf_numero
-                                    df_pedidos_orig.loc[original_index, 'V. TOTAL NF'] = valor_total_float
-                                    df_pedidos_orig.loc[original_index, 'CONDICAO_FRETE'] = condicao_frete_nf
-                                    df_pedidos_orig.loc[original_index, 'VALOR_FRETE'] = valor_frete_float
-                                    df_pedidos_orig.loc[original_index, 'OBSERVACAO'] = observacao
-                                    df_pedidos_orig.loc[original_index, 'VENCIMENTO'] = pd.to_datetime(vencimento_nf)
-                                    df_pedidos_orig.loc[original_index, 'RECEBEDOR'] = recebedor
+                                    st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                                    st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                                    st.session_state.df_pedidos.loc[original_index, 'STATUS_FINANCEIRO'] = 'EM ANDAMENTO'
+                                    st.session_state.df_pedidos.loc[original_index, 'NF'] = nf_numero
+                                    st.session_state.df_pedidos.loc[original_index, 'V. TOTAL NF'] = valor_total_float
+                                    st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = condicao_frete_nf
+                                    st.session_state.df_pedidos.loc[original_index, 'VALOR_FRETE'] = valor_frete_float
+                                    st.session_state.df_pedidos.loc[original_index, 'OBSERVACAO'] = observacao
+                                    st.session_state.df_pedidos.loc[original_index, 'VENCIMENTO'] = pd.to_datetime(vencimento_nf)
+                                    st.session_state.df_pedidos.loc[original_index, 'RECEBEDOR'] = recebedor
+                                    st.session_state.df_pedidos.loc[original_index, 'DOC NF'] = doc_nf_link
+                                    st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = nome_final_fornecedor # Atualiza o nome do fornecedor
 
                                 solicitante_nome = df_update.iloc[0]['SOLICITANTE']
                                 adicionar_log(f"Buscando e-mail para o solicitante '{solicitante_nome}'.")
@@ -320,13 +403,13 @@ else:
                                     st.warning("O nome do solicitante não foi preenchido no pedido de compra. E-mail de notificação não enviado.")
                                     adicionar_log("Aviso: Nome do solicitante não preenchido no pedido de compra.")
                                 
-                                salvar_dados_almoxarifado(df_pedidos_orig)
+                                salvar_dados_almoxarifado(st.session_state.df_pedidos)
                                 st.success(f"🎉 Nota fiscal registrada! O pedido com a OC '{ordem_compra_nf}' foi atualizado como ENTREGUE no painel do comprador.")
                             else:
                                 novo_registro = {
                                     "DATA": pd.to_datetime(data_recebimento),
                                     "RECEBEDOR": recebedor,
-                                    "FORNECEDOR": fornecedor_nf,
+                                    "FORNECEDOR": nome_final_fornecedor, # Salva o nome do novo fornecedor
                                     "NF": nf_numero,
                                     "REQUISICAO": np.nan,
                                     "VOLUME": volume_nf,
@@ -334,7 +417,7 @@ else:
                                     "CONDICAO_FRETE": condicao_frete_nf,
                                     "VALOR_FRETE": valor_frete_float,
                                     "OBSERVACAO": observacao,
-                                    "DOC NF": np.nan,
+                                    "DOC NF": doc_nf_link,
                                     "VENCIMENTO": pd.to_datetime(vencimento_nf),
                                     "STATUS_FINANCEIRO": "EM ANDAMENTO",
                                     "STATUS_PEDIDO": "PENDENTE",
@@ -343,29 +426,37 @@ else:
                                     "VALOR_ITEM": 0.0,
                                     "VALOR_RENEGOCIADO": 0.0
                                 }
-                                df_pedidos_orig = pd.concat([df_pedidos_orig, pd.DataFrame([novo_registro])], ignore_index=True)
-                                salvar_dados_almoxarifado(df_pedidos_orig)
+                                st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, pd.DataFrame([novo_registro])], ignore_index=True)
+                                salvar_dados_almoxarifado(st.session_state.df_pedidos)
                                 st.warning(f"ℹ️ Nota fiscal registrada. A OC '{ordem_compra_nf}' não foi encontrada para atualização automática. Os dados foram salvos como um novo registro.")
                                 adicionar_log(f"Aviso: OC '{ordem_compra_nf}' não encontrada, nota registrada como novo registro.")
                         
                             st.balloons()
-                            st.cache_data.clear()
                             st.rerun()
-                        
+                            
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
                             adicionar_log("Erro: Falha na conversão de valores numéricos do formulário.")
+        
+        # Feedback visual imediato para o usuário
+        st.markdown("---")
+        st.subheader("Últimas Notas Registradas")
+        if not st.session_state.df_pedidos.empty:
+            df_ultimas_nfs = st.session_state.df_pedidos[st.session_state.df_pedidos['NF'].astype(str) != ''].tail(10)
+            st.dataframe(df_ultimas_nfs, use_container_width=True)
+        else:
+            st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
+
 
     elif menu_option == "📊 Dashboard":
-        df = carregar_dados_almoxarifado()
-
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-                <h1 style='color: white; text-align: center; margin: 0;'>🏭 DASHBOARD ALMOXARIFADO</h1>
-                <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            <div class='header-container'>
+                <h1>📊 DASHBOARD ALMOXARIFADO</h1>
+                <p>Análise estratégica dos custos por departamento</p>
             </div>
         """, unsafe_allow_html=True)
         
+        df = st.session_state.df_pedidos
         if not df.empty:
             df_almoxarifado = df.copy()
             
@@ -402,20 +493,19 @@ else:
                     st.plotly_chart(fig_barras, use_container_width=True)
                 else:
                     st.info("✅ Nenhuma nota com problemas no momento")
-        
+            
         else:
             st.write("Nenhum dado disponível.")
 
     elif menu_option == "🔍 Consultar NFs":
-        df = carregar_dados_almoxarifado()
-
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-                <h1 style='color: white; text-align: center; margin: 0;'>🏭 CONSULTAR NOTAS FISCAIS</h1>
-                <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            <div class='header-container'>
+                <h1>🔍 CONSULTAR NOTAS FISCAIS</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
             </div>
         """, unsafe_allow_html=True)
         
+        df = st.session_state.df_pedidos
         if not df.empty:
             st.subheader("🔎 Consulta Avançada")
             col1, col2 = st.columns(2)
@@ -446,7 +536,7 @@ else:
             if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
             
             df_consulta = df_consulta[
-                (df_consulta['DATA'].dt.date >= data_inicio_consulta) & 
+                (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
                 (df_consulta['DATA'].dt.date <= data_fim_consulta)
             ]
             
@@ -454,8 +544,8 @@ else:
             
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
-                    'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'REQUISICAO', 'V. TOTAL NF', 
-                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO'
+                    'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'REQUISICAO', 'V. TOTAL NF',
+                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR_FRETE'
                 ]].copy()
                 
                 df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
@@ -463,8 +553,24 @@ else:
                 df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
+                df_exibir_consulta['VALOR_FRETE'] = df_exibir_consulta['VALOR_FRETE'].apply(
+                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
                 
-                st.dataframe(df_exibir_consulta, use_container_width=True, height=400)
+                # --- CORREÇÃO APLICADA AQUI: USANDO `column_config` ---
+                st.dataframe(
+                    df_exibir_consulta,
+                    use_container_width=True,
+                    height=400,
+                    column_config={
+                        "DOC NF": st.column_config.LinkColumn(
+                            "DOC NF",
+                            help="Clique para abrir a nota fiscal.",
+                            display_text="📥 Abrir NF"
+                        )
+                    }
+                )
+                
                 csv_consulta = df_exibir_consulta.to_csv(index=False, encoding='utf-8')
                 st.download_button(
                     label="📥 Download Resultados",
@@ -478,14 +584,14 @@ else:
             st.info("📝 Nenhum dado disponível para consulta.")
 
     elif menu_option == "⚙️ Configurações":
-        df = carregar_dados_almoxarifado()
-
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-                <h1 style='color: white; text-align: center; margin: 0;'>🏭 CONFIGURAÇÕES DO SISTEMA</h1>
-                <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            <div class='header-container'>
+                <h1>⚙️ CONFIGURAÇÕES DO SISTEMA</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
             </div>
         """, unsafe_allow_html=True)
+        
+        df = st.session_state.df_pedidos
         
         st.subheader("⚙️ Configurações Gerais")
         col1, col2 = st.columns(2)
@@ -496,7 +602,7 @@ else:
             st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
             
             if st.button("🔄 Recarregar Dados"):
-                st.cache_data.clear()
+                st.session_state.df_pedidos = carregar_dados_almoxarifado()
                 st.success("Dados recarregados com sucesso!")
                 st.rerun()
         
@@ -504,13 +610,15 @@ else:
             st.info("**Manutenção**")
             st.write("Versão: 1.0")
             
-            if st.button("💾 Fazer Backup"):
-                try:
-                    backup_filename = f"backup_almoxarifado_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                    df.to_csv(backup_filename, index=False, encoding='utf-8')
-                    st.success(f"Backup realizado com sucesso: {backup_filename}")
-                except Exception as e:
-                    st.error(f"Erro ao fazer backup: {e}")
+            # Aqui está o botão de backup corrigido
+            csv_backup = df.to_csv(index=False, encoding='utf-8')
+            st.download_button(
+                label="💾 Fazer Backup",
+                data=csv_backup,
+                file_name=f"backup_almoxarifado_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                help="Clique para baixar uma cópia de segurança dos dados."
+            )
 
         st.subheader("📋 Log de Atividades")
         if 'log_messages' in st.session_state:
