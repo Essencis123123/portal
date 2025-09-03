@@ -16,12 +16,20 @@ from email.mime.multipart import MIMEMultipart
 # Configuração da página
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide")
 
-# CSS para personalizar o menu lateral e deixar o texto branco
+# --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
     <style>
+    /* Estilos globais */
+    .stApp {
+        background-color: #f0f2f5;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Estilo para a barra lateral */
     [data-testid="stSidebar"] {
-        background-color: #1C4D86;
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        color: white;
     }
     
     /* Regras para garantir que TODO o texto no sidebar seja branco */
@@ -31,26 +39,16 @@ st.markdown(
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p, 
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j {
+    .stDownloadButton button p {
         color: white !important;
     }
-    
-    /* Estilos para o radio button, garantindo que o texto dele também seja branco */
+
+    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
     }
     
-    [data-testid="stSidebar"] .stMultiSelect label, 
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stTextInput label,
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2, 
-    [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] .stInfo {
-        color: white !important;
-    }
-    
+    /* Estilo para a logo no sidebar */
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -58,6 +56,63 @@ st.markdown(
         width: 80%;
         border-radius: 10px;
         padding: 10px 0;
+    }
+
+    /* Estilo para o container principal da página */
+    .main-container {
+        background-color: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        color: #333;
+    }
+    
+    /* Estilo para o cabeçalho principal da página */
+    .header-container {
+        background-color: white;
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: #333;
+    }
+    
+    .header-container h1 {
+        color: #1C4D86;
+        margin: 0;
+    }
+
+    .header-container p {
+        color: #333;
+        margin: 5px 0 0 0;
+        font-size: 18px;
+    }
+    
+    /* Estilo para os sub-cabeçalhos dentro da área principal */
+    h2, h3 {
+        color: #1C4D86;
+        font-weight: 600;
+    }
+    
+    /* Estilo para os botões de ação */
+    .stButton button {
+        background-color: #0055a5;
+        color: white;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton button:hover {
+        background-color: #007ea7;
+    }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     </style>
     """,
@@ -200,6 +255,8 @@ else:
             total_nfs = len(df)
             total_valor = df['V. TOTAL NF'].sum() if 'V. TOTAL NF' in df.columns else 0
             nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]) if 'STATUS' in df.columns else 0
+            total_juros = df['VALOR_JUROS'].sum() if 'VALOR_JUROS' in df.columns else 0
+            total_frete = df['VALOR_FRETE'].sum() if 'VALOR_FRETE' in df.columns else 0
             
             st.metric("Total de NFs", total_nfs)
             st.metric("Valor Total", f"R$ {total_valor:,.2f}")
@@ -218,9 +275,9 @@ else:
         st.caption("Sistema Financeiro Completo v1.0")
 
     st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-            <h1 style='color: white; text-align: center; margin: 0;'>💼 PAINEL FINANCEIRO COMPLETO</h1>
-            <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Controle de NF, Fretes, Juros e Análise Financeira</p>
+        <div style='background: white; padding: 25px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);'>
+            <h1 style='color: #1C4D86; text-align: center; margin: 0;'>💼 PAINEL FINANCEIRO COMPLETO</h1>
+            <p style='color: #333; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Controle de NF, Fretes, Juros e Análise Financeira</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -303,8 +360,7 @@ else:
                             "VALOR_FRETE": 0.0,
                             "CONDICAO_FRETE": "CIF"
                         }
-                        df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
-                        st.session_state.df = df
+                        st.session_state.df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
                         st.session_state.alteracoes_pendentes = True
                         st.session_state.nova_nf = False
                         st.success("NF adicionada com sucesso!")
@@ -330,9 +386,9 @@ else:
         with col2:
             ano_selecionado = st.selectbox("**Ano**", sorted(df['ANO'].dropna().unique(), reverse=True))
         with col3:
-            status_filtro = st.multiselect("**Filtrar por Status**", 
-                                             ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"],
-                                             placeholder="Todos os status")
+            status_filtro = st.multiselect("**Filtrar por Status**",
+                                            ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"],
+                                            placeholder="Todos os status")
 
         df_filtrado = df[(df['MES'] == mes_selecionado) & (df['ANO'] == ano_selecionado)]
 
@@ -424,8 +480,8 @@ else:
                     if pd.notna(row['DOC NF']) and str(row['DOC NF']).strip() != "":
                         st.markdown(f"""
                             <a href="{row['DOC NF']}" target="_blank" style="
-                                background-color:#0d6efd; color:white; padding:4px 8px; 
-                                border-radius:5px; text-decoration:none; display: block; 
+                                background-color:#0d6efd; color:white; padding:4px 8px;
+                                border-radius:5px; text-decoration:none; display: block;
                                 text-align: center; margin-top: 8px;">
                                 📥
                             </a>
@@ -480,33 +536,36 @@ else:
                                 st.success("Juros aplicados com sucesso!")
                                 time.sleep(1)
                                 st.rerun()
+                
+                st.subheader("📈 Resumo de Juros Aplicados")
+                juros_por_mes = df.groupby(df['DATA'].dt.to_period('M'))['VALOR_JUROS'].sum().reset_index()
+                juros_por_mes['DATA'] = juros_por_mes['DATA'].dt.to_timestamp()
+                
+                if not juros_por_mes.empty:
+                    fig_juros = px.bar(
+                        juros_por_mes,
+                        x='DATA',
+                        y='VALOR_JUROS',
+                        title='Evolução dos Juros Mensais',
+                        labels={'VALOR_JUROS': 'Valor de Juros (R$)', 'DATA': 'Mês'}
+                    )
+                    st.plotly_chart(fig_juros, use_container_width=True)
+                
+                juros_por_fornecedor = df.groupby('FORNECEDOR')['VALOR_JUROS'].sum().nlargest(10).reset_index()
+                if not juros_por_fornecedor.empty:
+                    fig_fornecedor = px.pie(
+                        juros_por_fornecedor,
+                        values='VALOR_JUROS',
+                        names='FORNECEDOR',
+                        title='Distribuição de Juros por Fornecedor (Top 10)'
+                    )
+                    st.plotly_chart(fig_fornecedor, use_container_width=True)
             
-            st.subheader("📈 Resumo de Juros Aplicados")
-            juros_por_mes = df.groupby(df['DATA'].dt.to_period('M'))['VALOR_JUROS'].sum().reset_index()
-            juros_por_mes['DATA'] = juros_por_mes['DATA'].dt.to_timestamp()
-            
-            if not juros_por_mes.empty:
-                fig_juros = px.bar(
-                    juros_por_mes,
-                    x='DATA',
-                    y='VALOR_JUROS',
-                    title='Evolução dos Juros Mensais',
-                    labels={'VALOR_JUROS': 'Valor de Juros (R$)', 'DATA': 'Mês'}
-                )
-                st.plotly_chart(fig_juros, use_container_width=True)
-            
-            juros_por_fornecedor = df.groupby('FORNECEDOR')['VALOR_JUROS'].sum().nlargest(10).reset_index()
-            if not juros_por_fornecedor.empty:
-                fig_fornecedor = px.pie(
-                    juros_por_fornecedor,
-                    values='VALOR_JUROS',
-                    names='FORNECEDOR',
-                    title='Distribuição de Juros por Fornecedor (Top 10)'
-                )
-                st.plotly_chart(fig_fornecedor, use_container_width=True)
-        
+            else:
+                st.info("Nenhuma nota fiscal para calcular juros.")
+
         else:
-            st.info("Nenhuma nota fiscal para calcular juros.")
+            st.info("Nenhum dado disponível.")
 
     elif menu == "📊 Dashboards Financeiros":
         st.header("📊 Dashboards Financeiros Completos")
@@ -648,8 +707,10 @@ else:
                 salvar_dados(df_limpo)
                 st.success("Dados limpos com sucesso!")
                 st.rerun()
-
-    # Rodapé
-    st.markdown("---")
-    st.caption(f"💰 Sistema Financeiro Completo | Última atualização: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | "
-               f"Total de registros: {len(df)}")
+        
+        st.subheader("Log de Atividades")
+        if 'log_messages' in st.session_state:
+            log_text = "\n".join(st.session_state['log_messages'])
+            st.text_area("Log de Atividades", value=log_text, height=300, disabled=True)
+        else:
+            st.info("Nenhum log disponível.")
