@@ -546,7 +546,20 @@ else:
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
                 
-                st.dataframe(df_exibir_consulta, use_container_width=True, height=400)
+                # --- CORREÇÃO APLICADA AQUI: USANDO `column_config` ---
+                st.dataframe(
+                    df_exibir_consulta,
+                    use_container_width=True,
+                    height=400,
+                    column_config={
+                        "DOC NF": st.column_config.LinkColumn(
+                            "DOC NF",
+                            help="Clique para abrir a nota fiscal.",
+                            display_text="📥 Abrir NF"
+                        )
+                    }
+                )
+                
                 csv_consulta = df_exibir_consulta.to_csv(index=False, encoding='utf-8')
                 st.download_button(
                     label="📥 Download Resultados",
