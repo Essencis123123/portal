@@ -321,9 +321,8 @@ else:
                 st.session_state.df = carregar_dados()
                 st.rerun()
         with col3:
-            if st.button("➕ Nova NF", use_container_width=True):
-                st.session_state.nova_nf = True
-                st.rerun()
+            # Botão "Nova NF" removido para focar na visualização de notas já existentes.
+            pass
         with col4:
             if st.session_state.ultimo_salvamento:
                 st.info(f"Último save: {st.session_state.ultimo_salvamento.strftime('%H:%M:%S')}")
@@ -405,45 +404,7 @@ else:
                     st.rerun()
 
         else:
-            st.warning("Nenhuma nota fiscal cadastrada. Use o botão 'Nova NF' para adicionar.")
-            if st.session_state.get('nova_nf', False):
-                with st.form("nova_nf_form"):
-                    st.subheader("➕ Nova Nota Fiscal")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        nova_data = st.date_input("Data", datetime.date.today())
-                        novo_fornecedor = st.text_input("Fornecedor")
-                        novo_nf = st.text_input("Número da NF")
-                    with col2:
-                        novo_pedido = st.text_input("Número do Pedido")
-                        novo_volume = st.number_input("Volume", min_value=0)
-                        novo_valor = st.number_input("Valor Total", min_value=0.0, format="%.2f")
-                    
-                    if st.form_submit_button("Adicionar NF"):
-                        nova_linha = {
-                            "DATA": nova_data,
-                            "FORNECEDOR": novo_fornecedor,
-                            "NF": novo_nf,
-                            "PEDIDO": novo_pedido,
-                            "VOLUME": novo_volume,
-                            "V. TOTAL NF": novo_valor,
-                            "VENCIMENTO": pd.NaT,
-                            "DOC NF": "",
-                            "STATUS": "EM ANDAMENTO",
-                            "CONDICAO_PROBLEMA": "N/A",
-                            "REGISTRO_ADICIONAL": "",
-                            "VALOR_JUROS": 0.0,
-                            "DIAS_ATRASO": 0,
-                            "VALOR_FRETE": 0.0
-                        }
-                        st.session_state.df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
-                        st.session_state.alteracoes_pendentes = True
-                        st.session_state.nova_nf = False
-                        st.success("NF adicionada com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
-            
-            st.stop()
+            st.info("📝 Nenhuma nota fiscal registrada no sistema. As notas cadastradas no Painel do Almoxarifado aparecerão aqui.")
         
     elif menu == "💰 Gestão de Juros":
         st.header("💰 Gestão de Juros e Multas")
