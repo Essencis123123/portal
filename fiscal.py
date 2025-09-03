@@ -6,12 +6,63 @@ import time
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import requests
+from PIL import Image
+from io import BytesIO
 
+# Configuração da página
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide")
 
-# ---------------------------
-# FUNÇÕES DE BANCO DE DADOS
-# ---------------------------
+# CSS para personalizar o menu lateral
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {
+        background-color: #1C4D86;
+    }
+    [data-testid="stSidebar"] .stRadio > div {
+        background-color: #1C4D86;
+        color: white;
+    }
+    [data-testid="stSidebar"] .stRadio label {
+        color: white;
+    }
+    [data-testid="stSidebar"] .stMultiSelect label, 
+    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stTextInput label,
+    [data-testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] h2, 
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] .stInfo {
+        color: white !important;
+    }
+    [data-testid="stSidebar"] img {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 80%;
+        border-radius: 10px;
+        padding: 10px 0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Carregar a imagem do logo a partir da URL
+@st.cache_data
+def load_logo(url):
+    try:
+        response = requests.get(url)
+        img = Image.open(BytesIO(response.content))
+        return img
+    except:
+        st.error("Erro ao carregar a imagem do logo")
+        return None
+
+logo_url = "https://media.licdn.com/dms/image/v2/C560BAQHJFSN_XUibJw/company-logo_200_200/company-logo_200_200/0/1675703958506/essencismg_logo?e=2147483647&v=beta&t=ZNEo5jZJnySYCy2VbJdq1AMvUVreiPP0V3sK4Ku1nX0"
+logo_img = load_logo(logo_url)
+
 def carregar_dados():
     """Carrega os dados do arquivo CSV ou cria um novo se não existir"""
     arquivo_csv = "dados_almoxarifado.csv"
@@ -86,8 +137,47 @@ if 'alteracoes_pendentes' not in st.session_state:
 
 df = st.session_state.df
 
+# Menu lateral estilizado
+with st.sidebar:
+    if logo_img:
+        st.image(logo_img, use_container_width=True)
+    
+    st.title("💼 Menu Financeiro")
+    
+    menu = st.radio(
+        "📌 Navegação",
+        [
+            "📋 Visualização de NFs",
+            "💰 Gestão de Juros",
+            "📊 Dashboards Financeiros",
+            "⚙️ Configurações"
+        ]
+    )
+    
+    st.divider()
+    
+    # CORREÇÃO: Informações rápidas (agora carrega após os dados estarem disponíveis)
+    st.subheader("📊 Resumo Rápido")
+    
+    if not df.empty:
+        total_nfs = len(df)
+        total_valor = df['V. TOTAL NF'].sum() if 'V. TOTAL NF' in df.columns else 0
+        nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]) if 'STATUS' in df.columns else 0
+        
+        st.metric("Total de NFs", total_nfs)
+        st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+        st.metric("Pendentes", nfs_pendentes)
+    else:
+        st.info("Nenhum dado disponível")
+        st.metric("Total de NFs", 0)
+        st.metric("Valor Total", "R$ 0,00")
+        st.metric("Pendentes", 0)
+
+    st.divider()
+    st.caption("Sistema Financeiro Completo v1.0")
+
 # ---------------------------
-# INTERFACE DO USUÁRIO
+# INTERFACE PRINCIPAL
 # ---------------------------
 st.markdown("""
     <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
@@ -96,11 +186,8 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Menu de navegação
-menu = st.sidebar.radio("Navegação", ["📋 Visualização de NFs", "💰 Gestão de Juros", "📊 Dashboards Financeiros", "⚙️ Configurações"])
-
 # ---------------------------
-# PÁGINA PRINCIPAL - VISUALIZAÇÃO DE NFs (Como estava antes)
+# PÁGINA PRINCIPAL - VISUALIZAÇÃO DE NFs
 # ---------------------------
 if menu == "📋 Visualização de NFs":
     # Botões de controle no topo
@@ -326,7 +413,7 @@ if menu == "📋 Visualização de NFs":
             st.markdown("---")
 
 # ---------------------------
-# OUTRAS PÁGINAS (MANTIDAS COMO ESTAVAM)
+# OUTRAS PÁGINAS
 # ---------------------------
 elif menu == "💰 Gestão de Juros":
     st.header("💰 Gestão de Juros e Multas")
