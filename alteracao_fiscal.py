@@ -137,6 +137,17 @@ def carregar_dados():
     """Carrega os dados do arquivo CSV ou cria um novo se não existir"""
     arquivo_csv = "dados_pedidos.csv"
     
+    # Variável definida fora dos blocos try/except
+    colunas_necessarias = {
+        "STATUS_FINANCEIRO": "N/A",
+        "CONDICAO_PROBLEMA": "N/A",
+        "REGISTRO_ADICIONAL": "",
+        "VALOR_JUROS": 0.0,
+        "DIAS_ATRASO": 0,
+        "VALOR_FRETE": 0.0,
+        "DOC NF": ""
+    }
+
     if os.path.exists(arquivo_csv):
         try:
             df = pd.read_csv(arquivo_csv)
@@ -148,16 +159,6 @@ def carregar_dados():
                 df['VENCIMENTO'] = pd.NaT
             
             # Garantir que colunas importantes existam
-            colunas_necessarias = {
-                "STATUS_FINANCEIRO": "N/A",
-                "CONDICAO_PROBLEMA": "N/A",
-                "REGISTRO_ADICIONAL": "",
-                "VALOR_JUROS": 0.0,
-                "DIAS_ATRASO": 0,
-                "VALOR_FRETE": 0.0,
-                "DOC NF": ""
-            }
-            
             for col, default_val in colunas_necessarias.items():
                 if col not in df.columns:
                     df[col] = default_val
