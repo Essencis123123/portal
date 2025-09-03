@@ -268,6 +268,9 @@ else:
                     condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
                     valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00") if condicao_frete_nf == "FOB" else "0,00"
                 
+                # ADIÇÃO DO NOVO CAMPO DE LINK
+                doc_nf_link = st.text_input("Link da Nota Fiscal (URL)", placeholder="Cole o link de acesso aqui...")
+                
                 observacao = st.text_area("Observações", placeholder="Informações adicionais...")
                 vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30))
                 
@@ -305,6 +308,8 @@ else:
                                     df_pedidos_orig.loc[original_index, 'OBSERVACAO'] = observacao
                                     df_pedidos_orig.loc[original_index, 'VENCIMENTO'] = pd.to_datetime(vencimento_nf)
                                     df_pedidos_orig.loc[original_index, 'RECEBEDOR'] = recebedor
+                                    # ATUALIZAÇÃO DO CAMPO LINK
+                                    df_pedidos_orig.loc[original_index, 'DOC NF'] = doc_nf_link
 
                                 solicitante_nome = df_update.iloc[0]['SOLICITANTE']
                                 adicionar_log(f"Buscando e-mail para o solicitante '{solicitante_nome}'.")
@@ -334,7 +339,7 @@ else:
                                     "CONDICAO_FRETE": condicao_frete_nf,
                                     "VALOR_FRETE": valor_frete_float,
                                     "OBSERVACAO": observacao,
-                                    "DOC NF": np.nan,
+                                    "DOC NF": doc_nf_link, # SALVANDO O NOVO CAMPO
                                     "VENCIMENTO": pd.to_datetime(vencimento_nf),
                                     "STATUS_FINANCEIRO": "EM ANDAMENTO",
                                     "STATUS_PEDIDO": "PENDENTE",
@@ -455,7 +460,7 @@ else:
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
                     'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'REQUISICAO', 'V. TOTAL NF', 
-                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO'
+                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF' # INCLUINDO DOC NF NA VISUALIZAÇÃO
                 ]].copy()
                 
                 df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
