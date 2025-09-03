@@ -136,6 +136,7 @@ def load_logo(url):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
+@st.cache_data
 def carregar_dados():
     """Carrega os dados do arquivo CSV ou cria um novo se não existir"""
     arquivo_csv = "dados_pedidos.csv"
@@ -321,7 +322,6 @@ else:
                 st.session_state.df = carregar_dados()
                 st.rerun()
         with col3:
-            # Botão "Nova NF" removido para focar na visualização de notas já existentes.
             pass
         with col4:
             if st.session_state.ultimo_salvamento:
@@ -345,7 +345,6 @@ else:
             with col6:
                 st.metric("🚚 Fretes", f"R$ {df['VALOR_FRETE'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-            # --- Visualização da Tabela de Notas Fiscais ---
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
 
@@ -364,7 +363,6 @@ else:
                 except:
                     return "N/A"
 
-            # Adicionei a definição das opções de status e problema aqui
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
             
@@ -392,7 +390,6 @@ else:
                 }
             )
 
-            # Lógica de atualização e salvamento
             if not edited_df.equals(df_display):
                 st.session_state.df.update(edited_df)
                 st.session_state.alteracoes_pendentes = True
@@ -604,6 +601,13 @@ else:
         taxa_padrao = st.number_input("Taxa de Juros Padrão (% ao dia)", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
         dias_carencia = st.number_input("Dias de Carência para Juros", min_value=0, value=5)
         
+        st.subheader("Manutenção de Dados")
+        if st.button("🔄 Forçar Recarregamento de Dados"):
+            st.cache_data.clear()
+            st.session_state.df = carregar_dados()
+            st.success("Cache limpo e dados recarregados com sucesso!")
+            st.rerun()
+
         st.subheader("Exportação de Dados")
         csv = df.to_csv(index=False, encoding='utf-8')
         st.download_button(
