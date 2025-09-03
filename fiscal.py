@@ -364,14 +364,14 @@ else:
                 except:
                     return "N/A"
 
-            # Aplica a formatação de vencimento ao DataFrame antes de exibir
-            df['VENCIMENTO_FORMATADO'] = df['VENCIMENTO'].apply(formatar_vencimento)
-            df['VALOR_NF_FORMATADO'] = df['V. TOTAL NF'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            df['VALOR_JUROS_FORMATADO'] = df['VALOR_JUROS'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            df['VALOR_FRETE_FORMATADO'] = df['VALOR_FRETE'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            # Opções para os Selectboxes
+            status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
+            problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
+            
+            df_display = df.copy()
 
             edited_df = st.data_editor(
-                df[[
+                df_display[[
                     "DATA", "FORNECEDOR", "NF", "PEDIDO", "V. TOTAL NF", "VENCIMENTO",
                     "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF"
                 ]],
@@ -393,7 +393,7 @@ else:
             )
 
             # Lógica de atualização e salvamento
-            if not edited_df.equals(df):
+            if not edited_df.equals(df_display):
                 st.session_state.df.update(edited_df)
                 st.session_state.alteracoes_pendentes = True
                 if salvar_dados(st.session_state.df):
@@ -538,15 +538,16 @@ else:
             col1, col2 = st.columns(2)
             
             with col1:
-                frete_tipo = df.groupby('CONDICAO_FRETE')['VALOR_FRETE'].sum().reset_index()
-                if not frete_tipo.empty:
-                    fig_frete_tipo = px.pie(
-                        frete_tipo,
-                        values='VALOR_FRETE',
-                        names='CONDICAO_FRETE',
-                        title='Distribuição por Tipo de Frete'
-                    )
-                    st.plotly_chart(fig_frete_tipo, use_container_width=True)
+                if 'CONDICAO_FRETE' in df.columns:
+                    frete_tipo = df.groupby('CONDICAO_FRETE')['VALOR_FRETE'].sum().reset_index()
+                    if not frete_tipo.empty:
+                        fig_frete_tipo = px.pie(
+                            frete_tipo,
+                            values='VALOR_FRETE',
+                            names='CONDICAO_FRETE',
+                            title='Distribuição por Tipo de Frete'
+                        )
+                        st.plotly_chart(fig_frete_tipo, use_container_width=True)
             
             with col2:
                 if not dados_mensais.empty:
