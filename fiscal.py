@@ -136,7 +136,7 @@ def salvar_dados(df):
         st.error(f"Erro ao salvar dados: {e}")
         return False
 
-# --- Lógica de Login ---
+# --- Lógica de Login (UNIFICADA) ---
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
     "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
@@ -151,6 +151,7 @@ def fazer_login(email, senha):
         st.session_state['logado'] = True
         st.session_state['nome_colaborador'] = USERS[email]["name"]
         st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
+        time.sleep(1) # Dá tempo para o usuário ver a mensagem antes de recarregar
         st.rerun()
     else:
         st.error("E-mail ou senha incorretos.")
@@ -160,7 +161,7 @@ def fazer_login(email, senha):
 if 'logado' not in st.session_state or not st.session_state.logado:
     st.title("Login - Painel de Notas Fiscais")
     with st.form("login_form"):
-        email = st.text_input("E-mail Office 365")
+        email = st.text_input("E-mail")
         senha = st.text_input("Senha", type="password")
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
@@ -330,8 +331,8 @@ else:
             ano_selecionado = st.selectbox("**Ano**", sorted(df['ANO'].dropna().unique(), reverse=True))
         with col3:
             status_filtro = st.multiselect("**Filtrar por Status**", 
-                                            ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"],
-                                            placeholder="Todos os status")
+                                             ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"],
+                                             placeholder="Todos os status")
 
         df_filtrado = df[(df['MES'] == mes_selecionado) & (df['ANO'] == ano_selecionado)]
 
