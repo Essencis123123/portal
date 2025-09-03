@@ -142,7 +142,7 @@ def carregar_dados_almoxarifado():
             'FORNECEDOR': str, 'NF': str, 'RECEBEDOR': str, 'OBSERVACAO': str, 
             'DOC NF': str, 'VENCIMENTO': pd.NaT, 'STATUS_FINANCEIRO': str, 
             'CONDICAO_PROBLEMA': str, 'REGISTRO_ADICIONAL': str, 
-            'ORDEM_COMPRA': str, 'VALOR_FRETE': float
+            'ORDEM_COMPRA': str, 'VALOR_FRETE': float, 'V. TOTAL NF': float,
         }
         for col in dtype_dict:
             if col in df.columns:
@@ -362,7 +362,9 @@ else:
                 enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
                 
                 if enviar:
+                    # Lógica para determinar o nome do fornecedor a ser usado
                     nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
+
                     campos_validos = all([
                         nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
                         valor_total_nf.strip() not in ["", "0,00"]
@@ -426,6 +428,8 @@ else:
         st.subheader("Últimas Notas Registradas")
         if not st.session_state.df_almoxarifado.empty:
             df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
+            
+            # --- Correção do ícone de download na tabela ---
             st.dataframe(
                 df_ultimas_nfs,
                 use_container_width=True,
@@ -582,7 +586,7 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        df = st.session_state.df_pedidos
+        df = st.session_state.df_almoxarifado
         
         st.subheader("⚙️ Configurações Gerais")
         col1, col2 = st.columns(2)
@@ -594,6 +598,7 @@ else:
             
             if st.button("🔄 Recarregar Dados"):
                 st.session_state.df_pedidos = carregar_dados_pedidos()
+                st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
                 st.success("Dados recarregados com sucesso!")
                 st.rerun()
         
