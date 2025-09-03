@@ -136,9 +136,12 @@ def load_logo(url):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
-@st.cache_data
 def carregar_dados():
-    """Carrega os dados do arquivo CSV ou cria um novo se não existir"""
+    """
+    Carrega os dados do arquivo CSV ou cria um novo se não existir.
+    NOTA: O decorador @st.cache_data foi removido para garantir que os dados
+    sejam sempre lidos novamente quando a página é recarregada.
+    """
     arquivo_csv = "dados_pedidos.csv"
     
     if os.path.exists(arquivo_csv):
@@ -225,8 +228,10 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    if 'df' not in st.session_state:
-        st.session_state.df = carregar_dados()
+    # A chamada para a função de carregamento agora não usa cache
+    # para garantir que o arquivo seja lido a cada vez.
+    st.session_state.df = carregar_dados()
+
     if 'ultimo_salvamento' not in st.session_state:
         st.session_state.ultimo_salvamento = None
     if 'alteracoes_pendentes' not in st.session_state:
@@ -362,7 +367,7 @@ else:
                         return f"🟢 {venc_date.strftime('%d/%m/%Y')}"
                 except:
                     return "N/A"
-
+            
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
             
