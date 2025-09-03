@@ -132,64 +132,82 @@ def load_logo(url):
     except:
         return None
 
-# Funções de carregamento e salvamento de dados
-# Removido o decorator @st.cache_data para evitar problemas de sincronização
+# Funções de carregamento e salvamento de dados para ambos os arquivos
 def carregar_dados_almoxarifado():
     try:
-        df = pd.read_csv("dados_pedidos.csv")
+        df = pd.read_csv("dados_almoxarifado.csv")
         
-        dtype_dict = {'FORNECEDOR': str, 'ORDEM_COMPRA': str, 'MATERIAL': str, 'RECEBEDOR': str,
-                      'OBSERVACAO': str, 'DOC NF': str, 'CONDICAO_FRETE': str, 'REQUISICAO': str,
-                      'SOLICITANTE': str, 'DEPARTAMENTO': str, 'FILIAL': str, 'NF': str,
-                      'VALOR_FRETE': float}
+        # Converte colunas para os tipos corretos
+        dtype_dict = {
+            'FORNECEDOR': str, 'NF': str, 'RECEBEDOR': str, 'OBSERVACAO': str, 
+            'DOC NF': str, 'VENCIMENTO': pd.NaT, 'STATUS_FINANCEIRO': str, 
+            'CONDICAO_PROBLEMA': str, 'REGISTRO_ADICIONAL': str, 
+            'ORDEM_COMPRA': str, 'VALOR_FRETE': float
+        }
         for col in dtype_dict:
             if col in df.columns:
-                df[col] = df[col].astype(dtype_dict[col])
-        
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'VENCIMENTO']:
+                df[col] = df[col].astype(dtype_dict.get(col, str))
+
+        for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        if 'NF' not in df.columns: df['NF'] = ''
-        if 'STATUS_FINANCEIRO' not in df.columns: df['STATUS_FINANCEIRO'] = "N/A"
-        if 'CONDICAO_PROBLEMA' not in df.columns: df['CONDICAO_PROBLEMA'] = "N/A"
-        if 'REGISTRO_ADICIONAL' not in df.columns: df['REGISTRO_ADICIONAL'] = ""
-        if 'V. TOTAL NF' not in df.columns: df['V. TOTAL NF'] = 0.0
-        if 'OBSERVACAO' not in df.columns: df['OBSERVACAO'] = ""
-        if 'VENCIMENTO' not in df.columns: df['VENCIMENTO'] = pd.NaT
-        if 'STATUS_PEDIDO' not in df.columns: df['STATUS_PEDIDO'] = "PENDENTE"
-        if 'DATA_ENTREGA' not in df.columns: df['DATA_ENTREGA'] = pd.NaT
-        if 'VALOR_RENEGOCIADO' not in df.columns: df['VALOR_RENEGOCIADO'] = 0.0
-        if 'PEDIDO' not in df.columns: df['PEDIDO'] = ''
-        if 'VOLUME' not in df.columns: df['VOLUME'] = 0
-        if 'VALOR_FRETE' not in df.columns: df['VALOR_FRETE'] = 0.0
-        if 'DOC NF' not in df.columns: df['DOC NF'] = ''
-        if 'CONDICAO FRETE' not in df.columns: df['CONDICAO FRETE'] = ''
-
         return df
     except (FileNotFoundError, EmptyDataError):
         return pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-            "REQUISICAO", "MATERIAL", "QUANTIDADE", "FILIAL", "DEPARTAMENTO",
-            "SOLICITANTE", "ORDEM_COMPRA", "VALOR_ITEM", "DATA_APROVACAO", "TIPO_PEDIDO",
-            "STATUS_PEDIDO", "DATA_ENTREGA", "VALOR_RENEGOCIADO"
+            "ORDEM_COMPRA"
         ])
 
 def salvar_dados_almoxarifado(df):
     try:
         df_copy = df.copy()
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'VENCIMENTO']:
+        for col in ['DATA', 'VENCIMENTO']:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        df_copy.to_csv("dados_almoxarifado.csv", index=False, encoding='utf-8')
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados do almoxarifado: {e}")
+        return False
+
+def carregar_dados_pedidos():
+    try:
+        df = pd.read_csv("dados_pedidos.csv")
+        
+        dtype_dict = {'ORDEM_COMPRA': str}
+        for col in dtype_dict:
+            if col in df.columns:
+                df[col] = df[col].astype(dtype_dict[col])
+                
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+        
+        return df
+    except (FileNotFoundError, EmptyDataError):
+        return pd.DataFrame(columns=[
+            "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
+            "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM",
+            "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO",
+            "DATA_ENTREGA"
+        ])
+
+def salvar_dados_pedidos(df):
+    try:
+        df_copy = df.copy()
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         df_copy.to_csv("dados_pedidos.csv", index=False, encoding='utf-8')
         return True
     except Exception as e:
-        st.error(f"Erro ao salvar dados: {e}")
+        st.error(f"Erro ao salvar dados de pedidos: {e}")
         return False
 
-# O decorator @st.cache_data foi removido para evitar problemas de sincronização
+@st.cache_data
 def carregar_dados_solicitantes():
     try:
         df = pd.read_csv("dados_solicitantes.csv", dtype={'NOME': str, 'DEPARTAMENTO': str, 'EMAIL': str, 'FILIAL': str})
@@ -202,16 +220,13 @@ status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALI
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
-# Adiciona uma lista de log na sessão
 if 'log_messages' not in st.session_state:
     st.session_state['log_messages'] = []
 
 def adicionar_log(mensagem):
-    """Adiciona uma mensagem de log à lista da sessão e a imprime no terminal."""
     st.session_state['log_messages'].append(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {mensagem}")
     print(st.session_state['log_messages'][-1])
 
-# Credenciais fixas da conta do Gmail para envio de e-mails
 GMAIL_EMAIL = "suprimentosessencis@gmail.com"
 GMAIL_APP_PASSWORD = "wvap juiz axkf xqcw"
 
@@ -219,25 +234,18 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
     remetente = GMAIL_EMAIL
     senha = GMAIL_APP_PASSWORD
     destinatario = email_solicitante
-
     adicionar_log(f"Tentando enviar e-mail para: {destinatario}...")
-    
     corpo_mensagem = f"""
     Olá, {solicitante_nome}.
-
     Gostaríamos de informar que o material **{material}** da requisição **{numero_requisicao}** se encontra disponível para retirada no almoxarifado.
-
     Por favor, entre em contato com o setor responsavel para mais informações.
-
-    Atenciosamente,
-    Equipe de Suprimentos
+    Atenciosamente, Equipe de Suprimentos
     """
     mensagem = MIMEMultipart()
     mensagem['From'] = remetente
     mensagem['To'] = destinatario
     mensagem['Subject'] = f"Material Entregue - Requisição {numero_requisicao}"
     mensagem.attach(MIMEText(corpo_mensagem, 'plain'))
-    
     try:
         servidor_smtp = smtplib.SMTP('smtp.gmail.com', 587)
         servidor_smtp.starttls()
@@ -253,7 +261,6 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
         return False
 
 # --- LÓGICA DE LOGIN ---
-# Dicionário de usuários com nome completo e senha
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
     "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
@@ -281,9 +288,10 @@ if 'logado' not in st.session_state or not st.session_state['logado']:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    # Gerencia o estado do DataFrame em st.session_state
     if 'df_pedidos' not in st.session_state:
-        st.session_state.df_pedidos = carregar_dados_almoxarifado()
+        st.session_state.df_pedidos = carregar_dados_pedidos()
+    if 'df_almoxarifado' not in st.session_state:
+        st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
 
     logo_img = load_logo(logo_url)
     if logo_img:
@@ -303,6 +311,7 @@ else:
         st.rerun()
     
     df_pedidos = st.session_state.df_pedidos
+    df_almoxarifado = st.session_state.df_almoxarifado
     df_solicitantes = carregar_dados_solicitantes()
 
     if menu_option == "📝 Registrar NF":
@@ -320,7 +329,6 @@ else:
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
-                    # Carrega a lista de fornecedores
                     fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist()
                     fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                     
@@ -354,9 +362,7 @@ else:
                 enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
                 
                 if enviar:
-                    # Lógica para determinar o nome do fornecedor a ser usado
                     nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
-
                     campos_validos = all([
                         nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
                         valor_total_nf.strip() not in ["", "0,00"]
@@ -372,68 +378,42 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            df_update = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
+                            # Lógica para atualizar o arquivo de PEDIDOS
+                            df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
                             
-                            if not df_update.empty:
-                                for original_index in df_update.index:
+                            if not df_update_pedidos.empty:
+                                for original_index in df_update_pedidos.index:
                                     st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
                                     st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
-                                    st.session_state.df_pedidos.loc[original_index, 'STATUS_FINANCEIRO'] = 'EM ANDAMENTO'
-                                    st.session_state.df_pedidos.loc[original_index, 'NF'] = nf_numero
-                                    st.session_state.df_pedidos.loc[original_index, 'V. TOTAL NF'] = valor_total_float
-                                    st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = condicao_frete_nf
-                                    st.session_state.df_pedidos.loc[original_index, 'VALOR_FRETE'] = valor_frete_float
-                                    st.session_state.df_pedidos.loc[original_index, 'OBSERVACAO'] = observacao
-                                    st.session_state.df_pedidos.loc[original_index, 'VENCIMENTO'] = pd.to_datetime(vencimento_nf)
-                                    st.session_state.df_pedidos.loc[original_index, 'RECEBEDOR'] = recebedor
-                                    st.session_state.df_pedidos.loc[original_index, 'DOC NF'] = doc_nf_link
-                                    st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = nome_final_fornecedor # Atualiza o nome do fornecedor
-
-                                solicitante_nome = df_update.iloc[0]['SOLICITANTE']
-                                adicionar_log(f"Buscando e-mail para o solicitante '{solicitante_nome}'.")
-                                if pd.notna(solicitante_nome) and solicitante_nome != '':
-                                    df_solicitantes_orig = carregar_dados_solicitantes()
-                                    email_solicitante_df = df_solicitantes_orig[df_solicitantes_orig['NOME'].str.contains(solicitante_nome, case=False, na=False)]
-                                    if not email_solicitante_df.empty:
-                                        enviar_email_entrega(solicitante_nome, email_solicitante_df.iloc[0]['EMAIL'], df_update.iloc[0]['REQUISICAO'], df_update.iloc[0]['MATERIAL'])
-                                    else:
-                                        st.warning(f"O e-mail para o solicitante '{solicitante_nome}' não foi encontrado na base de dados. O e-mail não foi enviado.")
-                                        adicionar_log(f"Aviso: E-mail não encontrado para '{solicitante_nome}'.")
-                                else:
-                                    st.warning("O nome do solicitante não foi preenchido no pedido de compra. E-mail de notificação não enviado.")
-                                    adicionar_log("Aviso: Nome do solicitante não preenchido no pedido de compra.")
                                 
-                                if salvar_dados_almoxarifado(st.session_state.df_pedidos):
-                                    st.success(f"🎉 Nota fiscal registrada! O pedido com a OC '{ordem_compra_nf}' foi atualizado como ENTREGUE no painel do comprador.")
-                                else:
-                                    st.error("Erro ao salvar os dados. A nota pode não ter sido registrada corretamente.")
+                                salvar_dados_pedidos(st.session_state.df_pedidos)
                             else:
-                                novo_registro = {
-                                    "DATA": pd.to_datetime(data_recebimento),
-                                    "RECEBEDOR": recebedor,
-                                    "FORNECEDOR": nome_final_fornecedor, # Salva o nome do novo fornecedor
-                                    "NF": nf_numero,
-                                    "REQUISICAO": np.nan,
-                                    "VOLUME": volume_nf,
-                                    "V. TOTAL NF": valor_total_float,
-                                    "CONDICAO_FRETE": condicao_frete_nf,
-                                    "VALOR_FRETE": valor_frete_float,
-                                    "OBSERVACAO": observacao,
-                                    "DOC NF": doc_nf_link,
-                                    "VENCIMENTO": pd.to_datetime(vencimento_nf),
-                                    "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                                    "STATUS_PEDIDO": "PENDENTE",
-                                    "DATA_ENTREGA": pd.NaT,
-                                    "ORDEM_COMPRA": ordem_compra_nf,
-                                    "VALOR_ITEM": 0.0,
-                                    "VALOR_RENEGOCIADO": 0.0
-                                }
-                                st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, pd.DataFrame([novo_registro])], ignore_index=True)
-                                if salvar_dados_almoxarifado(st.session_state.df_pedidos):
-                                    st.warning(f"ℹ️ Nota fiscal registrada. A OC '{ordem_compra_nf}' não foi encontrada para atualização automática. Os dados foram salvos como um novo registro.")
-                                    adicionar_log(f"Aviso: OC '{ordem_compra_nf}' não encontrada, nota registrada como novo registro.")
-                                else:
-                                    st.error("Erro ao salvar os dados. A nota pode não ter sido registrada corretamente.")
+                                st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada em dados_pedidos.csv. O status não foi atualizado.")
+                            
+                            # Lógica para registrar a nota fiscal no arquivo do ALMOXARIFADO
+                            novo_registro_nf = {
+                                "DATA": pd.to_datetime(data_recebimento),
+                                "RECEBEDOR": recebedor,
+                                "FORNECEDOR": nome_final_fornecedor,
+                                "NF": nf_numero,
+                                "VOLUME": volume_nf,
+                                "V. TOTAL NF": valor_total_float,
+                                "CONDICAO FRETE": condicao_frete_nf,
+                                "VALOR FRETE": valor_frete_float,
+                                "OBSERVACAO": observacao,
+                                "DOC NF": doc_nf_link,
+                                "VENCIMENTO": pd.to_datetime(vencimento_nf),
+                                "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                                "CONDICAO_PROBLEMA": "N/A",
+                                "REGISTRO_ADICIONAL": "",
+                                "ORDEM_COMPRA": ordem_compra_nf
+                            }
+                            st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                            
+                            if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                                st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso no arquivo dados_almoxarifado.csv!")
+                            else:
+                                st.error("Erro ao salvar os dados da nota fiscal.")
                         
                             st.balloons()
                             st.rerun()
@@ -442,13 +422,10 @@ else:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
                             adicionar_log("Erro: Falha na conversão de valores numéricos do formulário.")
         
-        # Feedback visual imediato para o usuário
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
-        if not st.session_state.df_pedidos.empty:
-            df_ultimas_nfs = st.session_state.df_pedidos[st.session_state.df_pedidos['NF'].astype(str) != ''].tail(10)
-            
-            # --- Correção do ícone de download na tabela ---
+        if not st.session_state.df_almoxarifado.empty:
+            df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
             st.dataframe(
                 df_ultimas_nfs,
                 use_container_width=True,
@@ -472,12 +449,11 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        df = st.session_state.df_pedidos
+        df = st.session_state.df_almoxarifado
         if not df.empty:
-            df_almoxarifado = df.copy()
+            df_almoxarifado_filtrado = df[df['NF'].astype(str) != '']
             
             col1, col2, col3, col4 = st.columns(4)
-            df_almoxarifado_filtrado = df_almoxarifado[df_almoxarifado['NF'].astype(str) != '']
             
             total_nfs = len(df_almoxarifado_filtrado)
             em_andamento = len(df_almoxarifado_filtrado[df_almoxarifado_filtrado['STATUS_FINANCEIRO'] == 'EM ANDAMENTO'])
@@ -521,7 +497,7 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        df = st.session_state.df_pedidos
+        df = st.session_state.df_almoxarifado
         if not df.empty:
             st.subheader("🔎 Consulta Avançada")
             col1, col2 = st.columns(2)
@@ -573,7 +549,6 @@ else:
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
                 
-                # --- CORREÇÃO APLICADA AQUI: USANDO `column_config` ---
                 st.dataframe(
                     df_exibir_consulta,
                     use_container_width=True,
@@ -618,7 +593,7 @@ else:
             st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
             
             if st.button("🔄 Recarregar Dados"):
-                st.session_state.df_pedidos = carregar_dados_almoxarifado()
+                st.session_state.df_pedidos = carregar_dados_pedidos()
                 st.success("Dados recarregados com sucesso!")
                 st.rerun()
         
@@ -626,7 +601,6 @@ else:
             st.info("**Manutenção**")
             st.write("Versão: 1.0")
             
-            # Aqui está o botão de backup corrigido
             csv_backup = df.to_csv(index=False, encoding='utf-8')
             st.download_button(
                 label="💾 Fazer Backup",
