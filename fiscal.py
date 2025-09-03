@@ -139,6 +139,8 @@ logo_img = load_logo(logo_url)
 def carregar_dados():
     """
     Carrega os dados do arquivo CSV, lidando com o caso de arquivo vazio.
+    NOTA: O decorador @st.cache_data foi removido para garantir que os dados
+    sejam sempre lidos novamente quando a página é recarregada.
     """
     arquivo_csv = "dados_pedidos.csv"
     
@@ -171,20 +173,12 @@ def carregar_dados():
         except pd.errors.EmptyDataError:
             # Se o arquivo existe mas está vazio, retorna um DataFrame vazio
             st.warning("O arquivo de dados existe, mas está vazio. Adicione dados pelo Painel do Almoxarifado.")
-            return criar_dataframe_vazio()
+            return pd.DataFrame(columns=list(colunas_necessarias.keys()))
         except Exception as e:
             st.error(f"Erro ao carregar arquivo: {e}")
-            return criar_dataframe_vazio()
+            return pd.DataFrame(columns=list(colunas_necessarias.keys()))
     else:
-        return criar_dataframe_vazio()
-
-def criar_dataframe_vazio():
-    """Cria um DataFrame vazio com a estrutura correta"""
-    return pd.DataFrame(columns=[
-        "DATA", "FORNECEDOR", "NF", "PEDIDO", "VOLUME", "V. TOTAL NF",
-        "VENCIMENTO", "DOC NF", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-        "VALOR_JUROS", "DIAS_ATRASO", "VALOR_FRETE"
-    ])
+        return pd.DataFrame(columns=list(colunas_necessarias.keys()))
 
 def salvar_dados(df):
     """Salva o DataFrame no arquivo CSV"""
