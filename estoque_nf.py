@@ -362,9 +362,7 @@ else:
                 enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
                 
                 if enviar:
-                    # Lógica para determinar o nome do fornecedor a ser usado
                     nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
-
                     campos_validos = all([
                         nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
                         valor_total_nf.strip() not in ["", "0,00"]
@@ -380,7 +378,6 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            # Lógica para atualizar o arquivo de PEDIDOS
                             df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
                             
                             if not df_update_pedidos.empty:
@@ -429,7 +426,6 @@ else:
         if not st.session_state.df_almoxarifado.empty:
             df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
             
-            # --- Correção do ícone de download na tabela ---
             st.dataframe(
                 df_ultimas_nfs,
                 use_container_width=True,
@@ -501,7 +497,27 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        df = st.session_state.df_almoxarifado
+        # Leitura dos dois arquivos para mesclagem
+        df_almox = st.session_state.df_almoxarifado.copy()
+        df_ped = st.session_state.df_pedidos.copy()
+        
+        # Garante que as colunas de mesclagem são do mesmo tipo
+        df_almox['ORDEM_COMPRA'] = df_almox['ORDEM_COMPRA'].astype(str)
+        df_ped['ORDEM_COMPRA'] = df_ped['ORDEM_COMPRA'].astype(str)
+
+        # Mescla os dois DataFrames para a consulta
+        df_mesclado = pd.merge(
+            df_almox, 
+            df_ped[[
+                'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'FILIAL', 'MATERIAL', 
+                'ORDEM_COMPRA', 'VALOR_ITEM'
+            ]],
+            on='ORDEM_COMPRA',
+            how='left',
+            suffixes=('_almox', '_pedido')
+        )
+        
+        df = df_mesclado
         if not df.empty:
             st.subheader("🔎 Consulta Avançada")
             col1, col2 = st.columns(2)
