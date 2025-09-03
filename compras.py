@@ -10,36 +10,40 @@ import requests
 from PIL import Image
 from io import BytesIO
 import numpy as np
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 # Configuração da página
 st.set_page_config(page_title="Painel do Comprador", layout="wide")
 
-# CSS para personalizar o menu lateral
+# CSS para personalizar o menu lateral e deixar o texto branco
 st.markdown(
     """
     <style>
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
     }
-    [data-testid="stSidebar"] .stRadio > div {
-        background-color: #1C4D86;
-        color: white;
-    }
-    [data-testid="stSidebar"] .stRadio label {
-        color: white;
-    }
-    [data-testid="stSidebar"] .stMultiSelect label, 
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stTextInput label,
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2, 
+    
+    /* Regras para garantir que TODO o texto no sidebar seja branco */
+    [data-testid="stSidebar"] *,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] .stInfo {
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p, 
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j {
         color: white !important;
     }
+    
+    /* Estilos para o radio button, garantindo que o texto dele também seja branco */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
+        color: white !important;
+    }
+    
+    /* Estilo para deixar a letra dos botões preta, como você pediu */
+    [data-testid="stSidebar"] .stButton button p {
+        color: black !important;
+    }
+
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -73,16 +77,14 @@ def carregar_dados_pedidos():
     arquivo_csv = "dados_pedidos.csv"
     if os.path.exists(arquivo_csv):
         try:
-            # Especifica os tipos de colunas para garantir que Fornecedor e Ordem_Compra sejam sempre strings
             df = pd.read_csv(arquivo_csv, dtype={'FORNECEDOR': str, 'ORDEM_COMPRA': str, 'MATERIAL': str})
             
-            # Converter colunas de data
             for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
                 if col in df.columns:
                     df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
             
             if 'QUANTIDADE' not in df.columns:
-                df['QUANTIDADE'] = 1  # Adiciona a coluna com valor padrão
+                df['QUANTIDADE'] = 1
             
             if 'VALOR_RENEGOCIADO' not in df.columns:
                 df['VALOR_RENEGOCIADO'] = 0.0
@@ -130,33 +132,30 @@ def salvar_dados_solicitantes(df):
     """Salva o DataFrame de solicitantes."""
     df.to_csv("dados_solicitantes.csv", index=False, encoding='utf-8')
 
-def obter_nome_do_email(email):
-    try:
-        nome_completo = email.split('@')[0].replace('.', ' ').title()
-        return nome_completo
-    except:
-        return "Colaborador"
+# --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
+USERS = {
+    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
+    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
+    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
+    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
+    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
+}
 
 def fazer_login(email, senha):
-    try:
-        server = smtplib.SMTP('smtp.office365.com', 587)
-        server.starttls()
-        server.login(email, senha)
-        server.quit()
-        st.session_state['email'] = email
-        st.session_state['senha'] = senha
+    if email in USERS and USERS[email]["password"] == senha:
         st.session_state['logado'] = True
-        st.session_state['nome_colaborador'] = obter_nome_do_email(email)
-        st.success("Login bem-sucedido! Você pode acessar o painel.")
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
         st.rerun()
-    except Exception as e:
-        st.error(f"Falha no login: {e}. Verifique seu e-mail e senha.")
+    else:
+        st.error("E-mail ou senha incorretos.")
 
 # --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
 if 'logado' not in st.session_state or not st.session_state.logado:
     st.title("Login - Painel do Comprador")
     with st.form("login_form"):
-        email = st.text_input("E-mail Office 365")
+        email = st.text_input("E-mail")
         senha = st.text_input("Senha", type="password")
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
@@ -181,13 +180,6 @@ else:
             ["📝 Registrar Requisição", "✍️ Atualizar Pedidos (OC)", "📜 Histórico e Edição", "👤 Cadastro de Solicitante", "📊 Dashboards de Desempenho", "📊 Performance Local"]
         )
         st.divider()
-        if st.button("💾 Salvar Pedidos"):
-            salvar_dados_pedidos(st.session_state.df_pedidos)
-            st.success("Pedidos salvos!")
-        if st.button("🔄 Recarregar Dados"):
-            st.session_state.df_pedidos = carregar_dados_pedidos()
-            st.session_state.df_solicitantes = carregar_dados_solicitantes()
-            st.rerun()
 
     st.markdown("""
         <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
