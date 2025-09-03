@@ -95,6 +95,9 @@ def carregar_dados_pedidos():
 
 # --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
 df_pedidos = carregar_dados_pedidos()
+if not df_pedidos['DATA'].isnull().all():
+    df_pedidos['MES'] = df_pedidos['DATA'].dt.month
+    df_pedidos['ANO'] = df_pedidos['DATA'].dt.year
 
 with st.sidebar:
     if logo_img:
@@ -112,7 +115,20 @@ with st.sidebar:
     st.divider()
     
     if menu_option == "📋 Acompanhar Pedidos":
-        # Filtros para o painel de acompanhamento
+        st.subheader("Filtros de Pedidos")
+        # Filtros de mês e ano para o acompanhamento
+        if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
+            meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
+            anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
+            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+                           7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+            filtro_mes_pedidos = st.selectbox("Selecione o Mês:", ['Todos'] + meses_disponiveis, format_func=lambda x: meses_nomes.get(x) if isinstance(x, int) else x)
+            filtro_ano_pedidos = st.selectbox("Selecione o Ano:", ['Todos'] + anos_disponiveis)
+        else:
+            filtro_mes_pedidos = 'Todos'
+            filtro_ano_pedidos = 'Todos'
+        
+        # Filtros de solicitante, departamento e status
         solicitantes_disponiveis = ['Todos'] + sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
         departamentos_disponiveis = ['Todos'] + sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
         status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
@@ -138,13 +154,9 @@ with st.sidebar:
     
     elif menu_option == "📊 Dashboard de Custos":
         st.subheader("Filtros do Dashboard")
-        if not df_pedidos['DATA'].isnull().all():
-            df_pedidos['MES'] = df_pedidos['DATA'].dt.month
-            df_pedidos['ANO'] = df_pedidos['DATA'].dt.year
-            
+        if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
             meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
             anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
-            
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
                            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             
@@ -169,6 +181,11 @@ if menu_option == "📋 Acompanhar Pedidos":
     df_filtrado = df_pedidos.copy()
 
     # Aplicação dos filtros
+    if filtro_mes_pedidos != 'Todos':
+        df_filtrado = df_filtrado[df_filtrado['MES'] == filtro_mes_pedidos]
+    if filtro_ano_pedidos != 'Todos':
+        df_filtrado = df_filtrado[df_filtrado['ANO'] == filtro_ano_pedidos]
+
     if filtro_solicitante != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
 
@@ -245,6 +262,16 @@ if menu_option == "📋 Acompanhar Pedidos":
             "FORNECEDOR": "Fornecedor",
             "DATA ENTREGA": "Data Entrega"
         }
+    )
+    
+    # Botão de download para o CSV
+    csv_pedidos = df_filtrado.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Exportar Tabela para CSV",
+        data=csv_pedidos,
+        file_name=f"pedidos_filtrados_{datetime.date.today()}.csv",
+        mime="text/csv",
+        help="Clique para baixar os dados da tabela filtrada."
     )
     
     st.markdown("---")
