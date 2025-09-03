@@ -15,29 +15,36 @@ from email.mime.multipart import MIMEMultipart
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
-# CSS para personalizar o menu lateral
+# CSS para personalizar o menu lateral e garantir que todo o texto seja branco
 st.markdown(
     """
     <style>
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
     }
-    [data-testid="stSidebar"] .stRadio > div {
-        background-color: #1C4D86;
-        color: white;
-    }
-    [data-testid="stSidebar"] .stRadio label {
-        color: white;
-    }
-    [data-testid="stSidebar"] .stMultiSelect label, 
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stTextInput label,
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2, 
+    
+    /* Regras para garantir que TODO o texto no sidebar seja branco */
+    [data-testid="stSidebar"] *,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] .stInfo {
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p, 
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j {
         color: white !important;
     }
+    
+    /* Estilos para o radio button, garantindo que o texto dele também seja branco */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
+        color: white !important;
+    }
+    
+    /* Estilo para deixar a letra dos botões preta */
+    [data-testid="stSidebar"] .stButton button p {
+        color: black !important;
+    }
+
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -180,29 +187,22 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
         st.error(f"❌ Erro ao enviar e-mail: {e}. O problema pode ser na conexão ou credenciais do Gmail.")
         return False
 
-def obter_nome_do_email(email):
-    try:
-        nome_completo = email.split('@')[0].replace('.', ' ').title()
-        return nome_completo
-    except:
-        return "Colaborador"
-
 # --- LÓGICA DE LOGIN ---
-# Dicionário de usuários e senhas para login no aplicativo
+# Dicionário de usuários com nome completo e senha
 USERS = {
-    "eassis@essencis.com.br": "Essencis01",
-    "agsantos@essencis.com.br": "Essencis01",
-    "isoares@essencis.com.br": "Essencis01",
-    "acsouza@essencis.com.br": "Essencis01",
-    "bcampos@essencis.com.br": "Essencis01",
-    "earaujo@essencis.com.br": "Essencis01"
+    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
+    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
+    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
+    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
+    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
 }
 
 def fazer_login(email, senha):
-    if email in USERS and USERS[email] == senha:
+    if email in USERS and USERS[email]["password"] == senha:
         st.session_state['logado'] = True
-        st.session_state['nome_colaborador'] = obter_nome_do_email(email)
-        st.success("Login bem-sucedido!")
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
         st.rerun()
     else:
         st.error("E-mail ou senha incorretos.")
