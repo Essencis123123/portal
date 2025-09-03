@@ -264,7 +264,9 @@ elif menu_option == "📊 Dashboard de Custos":
         df_filtrado_dash = df_pedidos[
             (df_pedidos['MES'] == filtro_mes_dash) & 
             (df_pedidos['ANO'] == filtro_ano_dash) &
-            (df_pedidos['DEPARTAMENTO'].notna())
+            (df_pedidos['DEPARTAMENTO'].notna()) & 
+            (df_pedidos['VALOR_ITEM'].notna()) &
+            (df_pedidos['VALOR_ITEM'] > 0)
         ]
         
         if not df_filtrado_dash.empty:
@@ -283,6 +285,16 @@ elif menu_option == "📊 Dashboard de Custos":
                 text_auto='.2s'
             )
             st.plotly_chart(fig_custo, use_container_width=True)
+            
+            # Botão de download para o CSV
+            csv = custo_por_departamento.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Exportar dados para CSV",
+                data=csv,
+                file_name=f"custos_por_departamento_{filtro_mes_dash}_{filtro_ano_dash}.csv",
+                mime="text/csv",
+                help="Clique para baixar os dados do gráfico acima."
+            )
         else:
             st.info("Nenhum dado de custo disponível para o período selecionado.")
     else:
