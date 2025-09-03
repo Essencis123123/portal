@@ -482,7 +482,7 @@ else:
                     st.plotly_chart(fig_barras, use_container_width=True)
                 else:
                     st.info("✅ Nenhuma nota com problemas no momento")
-        
+            
         else:
             st.write("Nenhum dado disponível.")
 
@@ -586,13 +586,15 @@ else:
             st.info("**Manutenção**")
             st.write("Versão: 1.0")
             
-            if st.button("💾 Fazer Backup"):
-                try:
-                    backup_filename = f"backup_almoxarifado_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                    df.to_csv(backup_filename, index=False, encoding='utf-8')
-                    st.success(f"Backup realizado com sucesso: {backup_filename}")
-                except Exception as e:
-                    st.error(f"Erro ao fazer backup: {e}")
+            # Aqui está o botão de backup corrigido
+            csv_backup = df.to_csv(index=False, encoding='utf-8')
+            st.download_button(
+                label="💾 Fazer Backup",
+                data=csv_backup,
+                file_name=f"backup_almoxarifado_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                help="Clique para baixar uma cópia de segurança dos dados."
+            )
 
         st.subheader("📋 Log de Atividades")
         if 'log_messages' in st.session_state:
