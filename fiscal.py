@@ -138,7 +138,7 @@ logo_img = load_logo(logo_url)
 
 def carregar_dados():
     """Carrega os dados do arquivo CSV ou cria um novo se não existir"""
-    arquivo_csv = "dados_almoxarifado.csv"
+    arquivo_csv = "dados_pedidos.csv"  # CORRIGIDO: Agora aponta para o arquivo correto
     
     if os.path.exists(arquivo_csv):
         try:
@@ -188,7 +188,7 @@ def salvar_dados(df):
         if 'VENCIMENTO' in df_to_save.columns:
             df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
             
-        df_to_save.to_csv("dados_almoxarifado.csv", index=False, encoding='utf-8')
+        df_to_save.to_csv("dados_pedidos.csv", index=False, encoding='utf-8') # CORRIGIDO: Salva no arquivo correto
         return True
     except Exception as e:
         st.error(f"Erro ao salvar dados: {e}")
