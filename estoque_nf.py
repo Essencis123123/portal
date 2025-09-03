@@ -403,8 +403,10 @@ else:
                                     st.warning("O nome do solicitante não foi preenchido no pedido de compra. E-mail de notificação não enviado.")
                                     adicionar_log("Aviso: Nome do solicitante não preenchido no pedido de compra.")
                                 
-                                salvar_dados_almoxarifado(st.session_state.df_pedidos)
-                                st.success(f"🎉 Nota fiscal registrada! O pedido com a OC '{ordem_compra_nf}' foi atualizado como ENTREGUE no painel do comprador.")
+                                if salvar_dados_almoxarifado(st.session_state.df_pedidos):
+                                    st.success(f"🎉 Nota fiscal registrada! O pedido com a OC '{ordem_compra_nf}' foi atualizado como ENTREGUE no painel do comprador.")
+                                else:
+                                    st.error("Erro ao salvar os dados. A nota pode não ter sido registrada corretamente.")
                             else:
                                 novo_registro = {
                                     "DATA": pd.to_datetime(data_recebimento),
@@ -427,9 +429,11 @@ else:
                                     "VALOR_RENEGOCIADO": 0.0
                                 }
                                 st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, pd.DataFrame([novo_registro])], ignore_index=True)
-                                salvar_dados_almoxarifado(st.session_state.df_pedidos)
-                                st.warning(f"ℹ️ Nota fiscal registrada. A OC '{ordem_compra_nf}' não foi encontrada para atualização automática. Os dados foram salvos como um novo registro.")
-                                adicionar_log(f"Aviso: OC '{ordem_compra_nf}' não encontrada, nota registrada como novo registro.")
+                                if salvar_dados_almoxarifado(st.session_state.df_pedidos):
+                                    st.warning(f"ℹ️ Nota fiscal registrada. A OC '{ordem_compra_nf}' não foi encontrada para atualização automática. Os dados foram salvos como um novo registro.")
+                                    adicionar_log(f"Aviso: OC '{ordem_compra_nf}' não encontrada, nota registrada como novo registro.")
+                                else:
+                                    st.error("Erro ao salvar os dados. A nota pode não ter sido registrada corretamente.")
                         
                             st.balloons()
                             st.rerun()
@@ -443,7 +447,19 @@ else:
         st.subheader("Últimas Notas Registradas")
         if not st.session_state.df_pedidos.empty:
             df_ultimas_nfs = st.session_state.df_pedidos[st.session_state.df_pedidos['NF'].astype(str) != ''].tail(10)
-            st.dataframe(df_ultimas_nfs, use_container_width=True)
+            
+            # --- Correção do ícone de download na tabela ---
+            st.dataframe(
+                df_ultimas_nfs,
+                use_container_width=True,
+                column_config={
+                    "DOC NF": st.column_config.LinkColumn(
+                        "DOC NF",
+                        help="Clique para abrir a nota fiscal.",
+                        display_text="📥 Abrir NF"
+                    )
+                }
+            )
         else:
             st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
 
