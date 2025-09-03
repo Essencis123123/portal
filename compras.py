@@ -67,7 +67,7 @@ def load_logo(url):
     except:
         return None
 
-logo_url = "https://media.licdn.com/dms/image/v2/C560BAQHJFSN_XUibJw/company-logo_200_200/company-logo_200_200/0/1675703958506/essencismg_logo?e=2147483647&v=beta&t=ZNEo5jZJnySYCy2VbJdq1AMvUVreiPP0V3sK4Ku1nX0"
+logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
 # --- Funções de Carregamento e Salvamento de Dados ---
