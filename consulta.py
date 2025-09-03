@@ -9,32 +9,43 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-# Configuração da página
+# Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel do Solicitante", layout="wide", page_icon="📝")
 
-# CSS para personalizar o menu lateral e garantir que todo o texto seja branco
+# --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
     <style>
+    /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
+        color: white;
     }
     
     /* Regras para garantir que TODO o texto no sidebar seja branco */
     [data-testid="stSidebar"] *,
+    [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3 {
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
+    .stDownloadButton button p {
         color: white !important;
     }
 
-    /* Estilos para os campos de filtro e botões - texto preto */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span,
-    [data-testid="stSidebar"] .stMultiSelect label,
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stTextInput label,
-    [data-testid="stSidebar"] .stButton button {
+    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
+        color: white !important;
+    }
+    
+    /* Estilo para deixar a letra dos botões preta */
+    .stButton button p {
         color: black !important;
+    }
+    .stDownloadButton button p {
+        color: white !important;
     }
 
     [data-testid="stSidebar"] img {
@@ -44,6 +55,63 @@ st.markdown(
         width: 80%;
         border-radius: 10px;
         padding: 10px 0;
+    }
+
+    /* Estilo para o container principal da página */
+    .main-container {
+        background-color: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        color: #333;
+    }
+    
+    /* Estilo para o cabeçalho principal da página */
+    .header-container {
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: white;
+    }
+    
+    .header-container h1 {
+        color: white;
+        margin: 0;
+    }
+
+    .header-container p {
+        color: white;
+        margin: 5px 0 0 0;
+        font-size: 18px;
+    }
+    
+    /* Estilo para os sub-cabeçalhos dentro da área principal */
+    h2, h3 {
+        color: #1C4D86;
+        font-weight: 600;
+    }
+    
+    /* Estilo para os botões de ação */
+    .stButton button {
+        background-color: #0055a5;
+        color: white;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton button:hover {
+        background-color: #007ea7;
+    }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     </style>
     """,
@@ -60,7 +128,7 @@ def load_logo(url):
     except:
         return None
 
-logo_url = "https://media.licdn.com/dms/image/v2/C560BAQHJFSN_XUibJw/company-logo_200_200/company-logo_200_200/0/1675703958506/essencismg_logo?e=2147483647&v=beta&t=ZNEo5jZJnySYCy2VbJdq1AMvUVreiPP0V3sK4Ku1nX0"
+logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
 # --- Funções de Carregamento de Dados ---
@@ -165,13 +233,21 @@ with st.sidebar:
         else:
             st.info("Nenhum dado com data disponível para filtrar.")
 
-
-st.markdown("""
-    <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-        <h1 style='color: white; text-align: center; margin: 0;'>📝 PAINEL DE ACOMPANHAMENTO DE REQUISIÇÕES</h1>
-        <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Visualize o status das requisições de compra da empresa</p>
-    </div>
-""", unsafe_allow_html=True)
+# Exibe o cabeçalho temático com base na opção do menu
+if menu_option == "📋 Acompanhar Pedidos":
+    st.markdown("""
+        <div class='header-container'>
+            <h1>📋 ACOMPANHAMENTO DE REQUISIÇÕES</h1>
+            <p>Visualize o status das suas requisições de compra</p>
+        </div>
+    """, unsafe_allow_html=True)
+elif menu_option == "📊 Dashboard de Custos":
+    st.markdown("""
+        <div class='header-container'>
+            <h1>📊 DASHBOARD DE CUSTOS</h1>
+            <p>Análise estratégica dos custos por departamento</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 if df_pedidos.empty:
     st.info("Nenhum pedido registrado no sistema.")
@@ -280,13 +356,6 @@ if menu_option == "📋 Acompanhar Pedidos":
                f"Total de pedidos: {len(df_pedidos)}")
 
 elif menu_option == "📊 Dashboard de Custos":
-    st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-            <h1 style='color: white; text-align: center; margin: 0;'>📊 DASHBOARD DE CUSTOS</h1>
-            <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Análise estratégica dos custos por departamento</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
     if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
         df_filtrado_dash = df_pedidos[
             (df_pedidos['MES'] == filtro_mes_dash) & 

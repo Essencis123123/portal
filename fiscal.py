@@ -13,15 +13,17 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Configuração da página
-st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide")
+# Configuração da página com layout wide
+st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
 
-# CSS para personalizar o menu lateral e deixar o texto branco
+# --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
     <style>
+    /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
+        color: white;
     }
     
     /* Regras para garantir que TODO o texto no sidebar seja branco */
@@ -31,26 +33,25 @@ st.markdown(
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p, 
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j {
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
+    .stDownloadButton button p {
         color: white !important;
     }
-    
-    /* Estilos para o radio button, garantindo que o texto dele também seja branco */
+
+    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
     }
     
-    [data-testid="stSidebar"] .stMultiSelect label, 
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stTextInput label,
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2, 
-    [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] .stInfo {
+    /* Estilo para deixar a letra dos botões preta */
+    .stButton button p {
+        color: black !important;
+    }
+    .stDownloadButton button p {
         color: white !important;
     }
-    
+
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -58,6 +59,63 @@ st.markdown(
         width: 80%;
         border-radius: 10px;
         padding: 10px 0;
+    }
+
+    /* Estilo para o container principal da página */
+    .main-container {
+        background-color: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        color: #333;
+    }
+    
+    /* Estilo para o cabeçalho principal da página */
+    .header-container {
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: white;
+    }
+    
+    .header-container h1 {
+        color: white;
+        margin: 0;
+    }
+
+    .header-container p {
+        color: white;
+        margin: 5px 0 0 0;
+        font-size: 18px;
+    }
+    
+    /* Estilo para os sub-cabeçalhos dentro da área principal */
+    h2, h3 {
+        color: #1C4D86;
+        font-weight: 600;
+    }
+    
+    /* Estilo para os botões de ação */
+    .stButton button {
+        background-color: #0055a5;
+        color: white;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton button:hover {
+        background-color: #007ea7;
+    }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     </style>
     """,
@@ -75,12 +133,14 @@ def load_logo(url):
         st.error("Erro ao carregar a imagem do logo")
         return None
 
-logo_url = "https://media.licdn.com/dms/image/v2/C560BAQHJFSN_XUibJw/company-logo_200_200/company-logo_200_200/0/1675703958506/essencismg_logo?e=2147483647&v=beta&t=ZNEo5jZJnySYCy2VbJdq1AMvUVreiPP0V3sK4Ku1nX0"
+logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
 def carregar_dados():
-    """Carrega os dados do arquivo CSV ou cria um novo se não existir"""
-    arquivo_csv = "dados_almoxarifado.csv"
+    """
+    Carrega os dados do arquivo CSV, lidando com o caso de arquivo vazio.
+    """
+    arquivo_csv = "dados_pedidos.csv"
     
     if os.path.exists(arquivo_csv):
         try:
@@ -100,7 +160,7 @@ def carregar_dados():
                 "VALOR_JUROS": 0.0,
                 "DIAS_ATRASO": 0,
                 "VALOR_FRETE": 0.0,
-                "CONDICAO_FRETE": "CIF"
+                "DOC NF": ""
             }
             
             for col, default_val in colunas_necessarias.items():
@@ -108,6 +168,10 @@ def carregar_dados():
                     df[col] = default_val
             
             return df
+        except pd.errors.EmptyDataError:
+            # Se o arquivo existe mas está vazio, retorna um DataFrame vazio
+            st.warning("O arquivo de dados existe, mas está vazio. Adicione dados pelo Painel do Almoxarifado.")
+            return criar_dataframe_vazio()
         except Exception as e:
             st.error(f"Erro ao carregar arquivo: {e}")
             return criar_dataframe_vazio()
@@ -119,7 +183,7 @@ def criar_dataframe_vazio():
     return pd.DataFrame(columns=[
         "DATA", "FORNECEDOR", "NF", "PEDIDO", "VOLUME", "V. TOTAL NF",
         "VENCIMENTO", "DOC NF", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-        "VALOR_JUROS", "DIAS_ATRASO", "VALOR_FRETE", "CONDICAO_FRETE"
+        "VALOR_JUROS", "DIAS_ATRASO", "VALOR_FRETE"
     ])
 
 def salvar_dados(df):
@@ -130,13 +194,13 @@ def salvar_dados(df):
         if 'VENCIMENTO' in df_to_save.columns:
             df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
             
-        df_to_save.to_csv("dados_almoxarifado.csv", index=False, encoding='utf-8')
+        df_to_save.to_csv("dados_pedidos.csv", index=False, encoding='utf-8')
         return True
     except Exception as e:
         st.error(f"Erro ao salvar dados: {e}")
         return False
 
-# --- Lógica de Login ---
+# --- Lógica de Login (UNIFICADA) ---
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
     "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
@@ -151,6 +215,7 @@ def fazer_login(email, senha):
         st.session_state['logado'] = True
         st.session_state['nome_colaborador'] = USERS[email]["name"]
         st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
+        time.sleep(1) # Dá tempo para o usuário ver a mensagem antes de recarregar
         st.rerun()
     else:
         st.error("E-mail ou senha incorretos.")
@@ -160,13 +225,13 @@ def fazer_login(email, senha):
 if 'logado' not in st.session_state or not st.session_state.logado:
     st.title("Login - Painel de Notas Fiscais")
     with st.form("login_form"):
-        email = st.text_input("E-mail Office 365")
+        email = st.text_input("E-mail")
         senha = st.text_input("Senha", type="password")
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    if 'df' not in st.session_state:
-        st.session_state.df = carregar_dados()
+    st.session_state.df = carregar_dados()
+
     if 'ultimo_salvamento' not in st.session_state:
         st.session_state.ultimo_salvamento = None
     if 'alteracoes_pendentes' not in st.session_state:
@@ -192,22 +257,23 @@ else:
         )
         
         st.divider()
-        
         st.subheader("📊 Resumo Rápido")
         
         if not df.empty:
             total_nfs = len(df)
             total_valor = df['V. TOTAL NF'].sum() if 'V. TOTAL NF' in df.columns else 0
             nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]) if 'STATUS' in df.columns else 0
+            total_juros = df['VALOR_JUROS'].sum() if 'VALOR_JUROS' in df.columns else 0
+            total_frete = df['VALOR_FRETE'].sum() if 'VALOR_FRETE' in df.columns else 0
             
-            st.metric("Total de NFs", total_nfs)
-            st.metric("Valor Total", f"R$ {total_valor:,.2f}")
-            st.metric("Pendentes", nfs_pendentes)
+            st.markdown(f"**Total de NFs:** **{total_nfs}**")
+            st.markdown(f"**Valor Total:** **R$ {total_valor:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown(f"**Pendentes:** **{nfs_pendentes}**")
+            st.markdown(f"**Finalizadas:** **{total_nfs - nfs_pendentes}**")
+            st.markdown(f"**Juros:** **R$ {total_juros:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown(f"**Fretes:** **R$ {total_frete:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
         else:
             st.info("Nenhum dado disponível")
-            st.metric("Total de NFs", 0)
-            st.metric("Valor Total", "R$ 0,00")
-            st.metric("Pendentes", 0)
 
         st.divider()
         if st.button("Logout"):
@@ -216,12 +282,35 @@ else:
             
         st.caption("Sistema Financeiro Completo v1.0")
 
-    st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-            <h1 style='color: white; text-align: center; margin: 0;'>💼 PAINEL FINANCEIRO COMPLETO</h1>
-            <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Controle de NF, Fretes, Juros e Análise Financeira</p>
-        </div>
-    """, unsafe_allow_html=True)
+    # Adiciona o cabeçalho temático dependendo da opção do menu
+    if menu == "📋 Visualização de NFs":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📋 VISUALIZAÇÃO DE NOTAS FISCAIS</h1>
+                <p>Gerenciamento e acompanhamento financeiro de NFs</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "💰 Gestão de Juros":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>💰 GESTÃO DE JUROS E MULTAS</h1>
+                <p>Calcule e gerencie juros para notas em atraso</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "📊 Dashboards Financeiros":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📊 DASHBOARDS FINANCEIROS COMPLETOS</h1>
+                <p>Análise estratégica de custos e eficiências</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "⚙️ Configurações":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>⚙️ CONFIGURAÇÕES DO SISTEMA</h1>
+                <p>Parâmetros e manutenção de dados</p>
+            </div>
+        """, unsafe_allow_html=True)
 
     if menu == "📋 Visualização de NFs":
         col1, col2, col3, col4 = st.columns(4)
@@ -238,9 +327,7 @@ else:
                 st.session_state.df = carregar_dados()
                 st.rerun()
         with col3:
-            if st.button("➕ Nova NF", use_container_width=True):
-                st.session_state.nova_nf = True
-                st.rerun()
+            pass
         with col4:
             if st.session_state.ultimo_salvamento:
                 st.info(f"Último save: {st.session_state.ultimo_salvamento.strftime('%H:%M:%S')}")
@@ -248,192 +335,79 @@ else:
                 st.warning("Alterações não salvas")
 
         if not df.empty:
-            total_nfs = len(df)
-            total_valor = df['V. TOTAL NF'].sum() if 'V. TOTAL NF' in df.columns else 0
-            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]) if 'STATUS' in df.columns else 0
-            total_juros = df['VALOR_JUROS'].sum() if 'VALOR_JUROS' in df.columns else 0
-            total_frete = df['VALOR_FRETE'].sum() if 'VALOR_FRETE' in df.columns else 0
-            
             st.markdown("---")
             col1, col2, col3, col4, col5, col6 = st.columns(6)
             with col1:
-                st.metric("📊 Total de NFs", total_nfs)
+                st.metric("📊 Total de NFs", len(df))
             with col2:
-                st.metric("💰 Valor NFs", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.metric("💰 Valor NFs", f"R$ {df['V. TOTAL NF'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             with col3:
-                st.metric("⏳ Pendentes", nfs_pendentes)
+                st.metric("⏳ Pendentes", len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]))
             with col4:
-                st.metric("✅ Finalizadas", total_nfs - nfs_pendentes)
+                st.metric("✅ Finalizadas", len(df[df['STATUS'] == 'FINALIZADO']))
             with col5:
-                st.metric("💸 Juros", f"R$ {total_juros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.metric("💸 Juros", f"R$ {df['VALOR_JUROS'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             with col6:
-                st.metric("🚚 Fretes", f"R$ {total_frete:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.metric("🚚 Fretes", f"R$ {df['VALOR_FRETE'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-        if df.empty:
-            st.warning("Nenhuma nota fiscal cadastrada. Use o botão 'Nova NF' para adicionar.")
-            if st.session_state.get('nova_nf', False):
-                with st.form("nova_nf_form"):
-                    st.subheader("➕ Nova Nota Fiscal")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        nova_data = st.date_input("Data", datetime.date.today())
-                        novo_fornecedor = st.text_input("Fornecedor")
-                        novo_nf = st.text_input("Número da NF")
-                    with col2:
-                        novo_pedido = st.text_input("Número do Pedido")
-                        novo_volume = st.number_input("Volume", min_value=0)
-                        novo_valor = st.number_input("Valor Total", min_value=0.0, format="%.2f")
-                    
-                    if st.form_submit_button("Adicionar NF"):
-                        nova_linha = {
-                            "DATA": nova_data,
-                            "FORNECEDOR": novo_fornecedor,
-                            "NF": novo_nf,
-                            "PEDIDO": novo_pedido,
-                            "VOLUME": novo_volume,
-                            "V. TOTAL NF": novo_valor,
-                            "VENCIMENTO": pd.NaT,
-                            "DOC NF": "",
-                            "STATUS": "EM ANDAMENTO",
-                            "CONDICAO_PROBLEMA": "N/A",
-                            "REGISTRO_ADICIONAL": "",
-                            "VALOR_JUROS": 0.0,
-                            "DIAS_ATRASO": 0,
-                            "VALOR_FRETE": 0.0,
-                            "CONDICAO_FRETE": "CIF"
-                        }
-                        df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
-                        st.session_state.df = df
-                        st.session_state.alteracoes_pendentes = True
-                        st.session_state.nova_nf = False
-                        st.success("NF adicionada com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
+            st.markdown("---")
+            st.subheader("📋 Detalhes das Notas Fiscais")
+
+            def formatar_vencimento(venc):
+                try:
+                    if pd.isna(venc):
+                        return "N/A"
+                    venc_date = pd.to_datetime(venc).date()
+                    dias = (venc_date - datetime.date.today()).days
+                    if dias < 0:
+                        return f"🔴 {venc_date.strftime('%d/%m/%Y')}"
+                    elif dias <= 10:
+                        return f"🟡 {venc_date.strftime('%d/%m/%Y')}"
+                    else:
+                        return f"🟢 {venc_date.strftime('%d/%m/%Y')}"
+                except:
+                    return "N/A"
+
+            status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
+            problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
             
-            st.stop()
+            df_display = df.copy()
 
-        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
-        df['MES'] = df['DATA'].dt.month
-        df['ANO'] = df['DATA'].dt.year
+            edited_df = st.data_editor(
+                df_display[[
+                    "DATA", "FORNECEDOR", "NF", "PEDIDO", "V. TOTAL NF", "VENCIMENTO",
+                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF"
+                ]],
+                use_container_width=True,
+                column_config={
+                    "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY", disabled=True),
+                    "FORNECEDOR": "Fornecedor",
+                    "NF": "N° NF",
+                    "PEDIDO": "N° Pedido",
+                    "V. TOTAL NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
+                    "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
+                    "STATUS": st.column_config.SelectboxColumn("Status", options=status_options),
+                    "CONDICAO_PROBLEMA": st.column_config.SelectboxColumn("Problema", options=problema_options),
+                    "REGISTRO_ADICIONAL": "Obs.",
+                    "VALOR_JUROS": st.column_config.NumberColumn("Juros (R$)", format="%.2f", disabled=True),
+                    "VALOR_FRETE": st.column_config.NumberColumn("Frete (R$)", format="%.2f", disabled=True),
+                    "DOC NF": st.column_config.LinkColumn("DOC NF", display_text="📥")
+                }
+            )
 
-        meses_nomes = {
-            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-        }
+            if not edited_df.equals(df_display):
+                st.session_state.df.update(edited_df)
+                st.session_state.alteracoes_pendentes = True
+                if salvar_dados(st.session_state.df):
+                    st.session_state.ultimo_salvamento = datetime.datetime.now()
+                    st.session_state.alteracoes_pendentes = False
+                    st.success("Alterações salvas com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
 
-        st.markdown("---")
-        st.markdown("### 🔍 Filtros")
-        col1, col2, col3 = st.columns([1, 1, 2])
-        with col1:
-            mes_selecionado = st.selectbox("**Mês**", sorted(df['MES'].dropna().unique()), format_func=lambda x: meses_nomes.get(x))
-        with col2:
-            ano_selecionado = st.selectbox("**Ano**", sorted(df['ANO'].dropna().unique(), reverse=True))
-        with col3:
-            status_filtro = st.multiselect("**Filtrar por Status**", 
-                                            ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"],
-                                            placeholder="Todos os status")
-
-        df_filtrado = df[(df['MES'] == mes_selecionado) & (df['ANO'] == ano_selecionado)]
-
-        if status_filtro:
-            df_filtrado = df_filtrado[df_filtrado['STATUS'].isin(status_filtro)]
-
-        if df_filtrado.empty:
-            st.info("Nenhuma nota registrada neste período.")
-            st.stop()
-
-        status_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
-        problema_options = ["N/A", "REGISTRO CHAMADO", "CARTA CORRECAO", "AJUSTE NA ORDEM DE COMPRA", "RECUSA DE NOTA FISCAL"]
-        hoje = datetime.date.today()
-
-        def formatar_vencimento(venc):
-            try:
-                if pd.isna(venc):
-                    return "⚪ N/A"
-                venc_date = pd.to_datetime(venc).date()
-                dias = (venc_date - hoje).days
-                if dias < 0:
-                    return f"🔴 {venc_date.strftime('%d/%m/%Y')}"
-                elif dias <= 10:
-                    return f"🟡 {venc_date.strftime('%d/%m/%Y')}"
-                else:
-                    return f"🟢 {venc_date.strftime('%d/%m/%Y')}"
-            except:
-                return "⚪ N/A"
-
-        st.markdown("---")
-        st.markdown(f"### 📋 Notas Fiscais - {meses_nomes[mes_selecionado]}/{ano_selecionado}")
-        st.markdown(f"*Total: {len(df_filtrado)} nota(s) fiscal(is)*")
-
-        def atualizar_dados(indice, coluna, valor):
-            df.at[indice, coluna] = valor
-            st.session_state.df = df
-            st.session_state.alteracoes_pendentes = True
-            if salvar_dados(df):
-                st.session_state.ultimo_salvamento = datetime.datetime.now()
-                st.session_state.alteracoes_pendentes = False
-
-        for idx, row in df_filtrado.iterrows():
-            with st.container():
-                col1, col2, col3, col4, col5, col6, col7, col8, col9, col10 = st.columns([1, 2, 1, 1, 1, 2, 2, 1, 1, 1])
-                
-                with col1:
-                    st.text_input("NF", value=str(row['NF']), key=f"nf_{idx}", disabled=True, label_visibility="collapsed")
-                with col2:
-                    st.text_input("Fornecedor", value=str(row['FORNECEDOR']), key=f"fornecedor_{idx}", disabled=True, label_visibility="collapsed")
-                with col3:
-                    st.text_input("Pedido", value=str(row['PEDIDO']), key=f"pedido_{idx}", disabled=True, label_visibility="collapsed")
-                with col4:
-                    valor = f"R$ {float(row['V. TOTAL NF']):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    st.text_input("Valor", value=valor, key=f"valor_{idx}", disabled=True, label_visibility="collapsed")
-                with col5:
-                    venc = formatar_vencimento(row['VENCIMENTO'])
-                    st.text_input("Vencimento", value=venc, key=f"venc_{idx}", disabled=True, label_visibility="collapsed")
-                with col6:
-                    novo_status = st.selectbox(
-                        "Status", status_options,
-                        index=status_options.index(row['STATUS']) if row['STATUS'] in status_options else 0,
-                        key=f"status_{idx}",
-                        label_visibility="collapsed",
-                        on_change=lambda idx=idx: atualizar_dados(idx, 'STATUS', st.session_state[f"status_{idx}"])
-                    )
-                with col7:
-                    novo_problema = st.selectbox(
-                        "Problema", problema_options,
-                        index=problema_options.index(row['CONDICAO_PROBLEMA']) if row['CONDICAO_PROBLEMA'] in problema_options else 0,
-                        key=f"problema_{idx}",
-                        label_visibility="collapsed",
-                        on_change=lambda idx=idx: atualizar_dados(idx, 'CONDICAO_PROBLEMA', st.session_state[f"problema_{idx}"])
-                    )
-                with col8:
-                    novo_registro = st.text_input(
-                        "Registro",
-                        value=str(row['REGISTRO_ADICIONAL']),
-                        key=f"registro_{idx}",
-                        label_visibility="collapsed",
-                        on_change=lambda idx=idx: atualizar_dados(idx, 'REGISTRO_ADICIONAL', st.session_state[f"registro_{idx}"])
-                    )
-                with col9:
-                    if row['VALOR_JUROS'] > 0:
-                        juros_text = f"💸 R$ {row['VALOR_JUROS']:,.2f}"
-                        st.text_input("Juros", value=juros_text, key=f"juros_{idx}", disabled=True, label_visibility="collapsed")
-                    else:
-                        st.text_input("Juros", value="Sem juros", key=f"juros_{idx}", disabled=True, label_visibility="collapsed")
-                with col10:
-                    if pd.notna(row['DOC NF']) and str(row['DOC NF']).strip() != "":
-                        st.markdown(f"""
-                            <a href="{row['DOC NF']}" target="_blank" style="
-                                background-color:#0d6efd; color:white; padding:4px 8px; 
-                                border-radius:5px; text-decoration:none; display: block; 
-                                text-align: center; margin-top: 8px;">
-                                📥
-                            </a>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.text("N/A")
-                
-                st.markdown("---")
-
+        else:
+            st.info("📝 Nenhuma nota fiscal registrada no sistema. As notas cadastradas no Painel do Almoxarifado aparecerão aqui.")
+        
     elif menu == "💰 Gestão de Juros":
         st.header("💰 Gestão de Juros e Multas")
         
@@ -444,7 +418,7 @@ else:
                 st.subheader("Notas com Possibilidade de Juros")
                 
                 for idx, row in nfs_com_problema.iterrows():
-                    with st.expander(f"NF {row['NF']} - {row['FORNECEDOR']} - R$ {row['V. TOTAL NF']:,.2f}"):
+                    with st.expander(f"NF {row['NF']} - {row['FORNECEDOR']} - R$ {row['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")):
                         col1, col2, col3, col4 = st.columns(4)
                         
                         with col1:
@@ -457,7 +431,7 @@ else:
                             )
                         
                         with col2:
-                            st.info(f"**Valor Original:** R$ {row['V. TOTAL NF']:,.2f}")
+                            st.info(f"**Valor Original:** R$ {row['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                             taxa_juros = st.number_input(
                                 "Taxa de Juros (%)",
                                 min_value=0.0,
@@ -469,7 +443,7 @@ else:
                         
                         with col3:
                             valor_juros = (row['V. TOTAL NF'] * taxa_juros / 100) * dias_atraso
-                            st.metric("Valor de Juros", f"R$ {valor_juros:,.2f}")
+                            st.metric("Valor de Juros", f"R$ {valor_juros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                         
                         with col4:
                             if st.button("Aplicar Juros", key=f"apply_{idx}"):
@@ -479,33 +453,36 @@ else:
                                 st.success("Juros aplicados com sucesso!")
                                 time.sleep(1)
                                 st.rerun()
+                
+                st.subheader("📈 Resumo de Juros Aplicados")
+                juros_por_mes = df.groupby(df['DATA'].dt.to_period('M'))['VALOR_JUROS'].sum().reset_index()
+                juros_por_mes['DATA'] = juros_por_mes['DATA'].dt.to_timestamp()
+                
+                if not juros_por_mes.empty:
+                    fig_juros = px.bar(
+                        juros_por_mes,
+                        x='DATA',
+                        y='VALOR_JUROS',
+                        title='Evolução dos Juros Mensais',
+                        labels={'VALOR_JUROS': 'Valor de Juros (R$)', 'DATA': 'Mês'}
+                    )
+                    st.plotly_chart(fig_juros, use_container_width=True)
+                
+                juros_por_fornecedor = df.groupby('FORNECEDOR')['VALOR_JUROS'].sum().nlargest(10).reset_index()
+                if not juros_por_fornecedor.empty:
+                    fig_fornecedor = px.pie(
+                        juros_por_fornecedor,
+                        values='VALOR_JUROS',
+                        names='FORNECEDOR',
+                        title='Distribuição de Juros por Fornecedor (Top 10)'
+                    )
+                    st.plotly_chart(fig_fornecedor, use_container_width=True)
             
-            st.subheader("📈 Resumo de Juros Aplicados")
-            juros_por_mes = df.groupby(df['DATA'].dt.to_period('M'))['VALOR_JUROS'].sum().reset_index()
-            juros_por_mes['DATA'] = juros_por_mes['DATA'].dt.to_timestamp()
-            
-            if not juros_por_mes.empty:
-                fig_juros = px.bar(
-                    juros_por_mes,
-                    x='DATA',
-                    y='VALOR_JUROS',
-                    title='Evolução dos Juros Mensais',
-                    labels={'VALOR_JUROS': 'Valor de Juros (R$)', 'DATA': 'Mês'}
-                )
-                st.plotly_chart(fig_juros, use_container_width=True)
-            
-            juros_por_fornecedor = df.groupby('FORNECEDOR')['VALOR_JUROS'].sum().nlargest(10).reset_index()
-            if not juros_por_fornecedor.empty:
-                fig_fornecedor = px.pie(
-                    juros_por_fornecedor,
-                    values='VALOR_JUROS',
-                    names='FORNECEDOR',
-                    title='Distribuição de Juros por Fornecedor (Top 10)'
-                )
-                st.plotly_chart(fig_fornecedor, use_container_width=True)
-        
+            else:
+                st.info("Nenhuma nota fiscal para calcular juros.")
+
         else:
-            st.info("Nenhuma nota fiscal para calcular juros.")
+            st.info("Nenhum dado disponível.")
 
     elif menu == "📊 Dashboards Financeiros":
         st.header("📊 Dashboards Financeiros Completos")
@@ -563,15 +540,16 @@ else:
             col1, col2 = st.columns(2)
             
             with col1:
-                frete_tipo = df.groupby('CONDICAO_FRETE')['VALOR_FRETE'].sum().reset_index()
-                if not frete_tipo.empty:
-                    fig_frete_tipo = px.pie(
-                        frete_tipo,
-                        values='VALOR_FRETE',
-                        names='CONDICAO_FRETE',
-                        title='Distribuição por Tipo de Frete'
-                    )
-                    st.plotly_chart(fig_frete_tipo, use_container_width=True)
+                if 'CONDICAO_FRETE' in df.columns:
+                    frete_tipo = df.groupby('CONDICAO_FRETE')['VALOR_FRETE'].sum().reset_index()
+                    if not frete_tipo.empty:
+                        fig_frete_tipo = px.pie(
+                            frete_tipo,
+                            values='VALOR_FRETE',
+                            names='CONDICAO_FRETE',
+                            title='Distribuição por Tipo de Frete'
+                        )
+                        st.plotly_chart(fig_frete_tipo, use_container_width=True)
             
             with col2:
                 if not dados_mensais.empty:
@@ -604,7 +582,7 @@ else:
             
             with col_met1:
                 custo_total = df['V. TOTAL NF'].sum() + df['VALOR_FRETE'].sum() + df['VALOR_JUROS'].sum()
-                st.metric("Custo Total", f"R$ {custo_total:,.2f}")
+                st.metric("Custo Total", f"R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             
             with col_met2:
                 perc_frete = (df['VALOR_FRETE'].sum() / df['V. TOTAL NF'].sum() * 100) if df['V. TOTAL NF'].sum() > 0 else 0
@@ -628,15 +606,21 @@ else:
         taxa_padrao = st.number_input("Taxa de Juros Padrão (% ao dia)", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
         dias_carencia = st.number_input("Dias de Carência para Juros", min_value=0, value=5)
         
+        st.subheader("Manutenção de Dados")
+        if st.button("🔄 Forçar Recarregamento de Dados"):
+            st.cache_data.clear()
+            st.session_state.df = carregar_dados()
+            st.success("Cache limpo e dados recarregados com sucesso!")
+            st.rerun()
+
         st.subheader("Exportação de Dados")
-        if st.button("📤 Exportar Dados Completos"):
-            csv = df.to_csv(index=False, encoding='utf-8')
-            st.download_button(
-                label="⬇️ Download CSV",
-                data=csv,
-                file_name="dados_financeiros_completos.csv",
-                mime="text/csv"
-            )
+        csv = df.to_csv(index=False, encoding='utf-8')
+        st.download_button(
+            label="⬇️ Download CSV",
+            data=csv,
+            file_name="dados_financeiros_completos.csv",
+            mime="text/csv"
+        )
         
         st.subheader("Limpeza de Dados")
         if st.button("🧹 Limpar Dados de Teste"):
@@ -647,8 +631,10 @@ else:
                 salvar_dados(df_limpo)
                 st.success("Dados limpos com sucesso!")
                 st.rerun()
-
-    # Rodapé
-    st.markdown("---")
-    st.caption(f"💰 Sistema Financeiro Completo | Última atualização: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | "
-               f"Total de registros: {len(df)}")
+        
+        st.subheader("Log de Atividades")
+        if 'log_messages' in st.session_state:
+            log_text = "\n".join(st.session_state['log_messages'])
+            st.text_area("Log de Atividades", value=log_text, height=300, disabled=True)
+        else:
+            st.info("Nenhum log disponível.")
