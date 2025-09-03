@@ -364,7 +364,7 @@ else:
                 except:
                     return "N/A"
 
-            # Opções para os Selectboxes
+            # Adicionei a definição das opções de status e problema aqui
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
             
