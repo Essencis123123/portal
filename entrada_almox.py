@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import os
+import time
 import plotly.express as px
 from pandas.errors import EmptyDataError
 import numpy as np
-import os
 import requests
 from PIL import Image
 from io import BytesIO
@@ -15,12 +16,14 @@ from email.mime.multipart import MIMEMultipart
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
-# CSS para personalizar o menu lateral e garantir que todo o texto seja branco
+# --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
     <style>
+    /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
+        color: white;
     }
     
     /* Regras para garantir que TODO o texto no sidebar seja branco */
@@ -30,19 +33,23 @@ st.markdown(
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p, 
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j {
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
+    .stDownloadButton button p {
         color: white !important;
     }
-    
-    /* Estilos para o radio button, garantindo que o texto dele também seja branco */
+
+    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
     }
     
     /* Estilo para deixar a letra dos botões preta */
-    [data-testid="stSidebar"] .stButton button p {
+    .stButton button p {
         color: black !important;
+    }
+    .stDownloadButton button p {
+        color: white !important;
     }
 
     [data-testid="stSidebar"] img {
@@ -52,6 +59,63 @@ st.markdown(
         width: 80%;
         border-radius: 10px;
         padding: 10px 0;
+    }
+
+    /* Estilo para o container principal da página */
+    .main-container {
+        background-color: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        color: #333;
+    }
+    
+    /* Estilo para o cabeçalho principal da página */
+    .header-container {
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: white;
+    }
+    
+    .header-container h1 {
+        color: white;
+        margin: 0;
+    }
+
+    .header-container p {
+        color: white;
+        margin: 5px 0 0 0;
+        font-size: 18px;
+    }
+    
+    /* Estilo para os sub-cabeçalhos dentro da área principal */
+    h2, h3 {
+        color: #1C4D86;
+        font-weight: 600;
+    }
+    
+    /* Estilo para os botões de ação */
+    .stButton button {
+        background-color: #0055a5;
+        color: white;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton button:hover {
+        background-color: #007ea7;
+    }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     </style>
     """,
@@ -76,7 +140,8 @@ def carregar_dados_almoxarifado():
         
         dtype_dict = {'FORNECEDOR': str, 'ORDEM_COMPRA': str, 'MATERIAL': str, 'RECEBEDOR': str,
                       'OBSERVACAO': str, 'DOC NF': str, 'CONDICAO_FRETE': str, 'REQUISICAO': str,
-                      'SOLICITANTE': str, 'DEPARTAMENTO': str, 'FILIAL': str, 'NF': str}
+                      'SOLICITANTE': str, 'DEPARTAMENTO': str, 'FILIAL': str, 'NF': str,
+                      'VALOR_FRETE': float}
         for col in dtype_dict:
             if col in df.columns:
                 df[col] = df[col].astype(dtype_dict[col])
@@ -192,7 +257,7 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
     "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
-    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAURA SOARES"},
     "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
     "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
     "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
@@ -216,7 +281,7 @@ if 'logado' not in st.session_state or not st.session_state['logado']:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    logo_img = load_logo("https://media.licdn.com/dms/image/v2/C560BAQHJFSN_XUibJw/company-logo_200_200/company-logo_200_200/0/1675703958506/essencismg_logo?e=2147483647&v=beta&t=ZNEo5jZJnySYCy2VbJdq1AMvUVreiPP0V3sK4Ku1nX0")
+    logo_img = load_logo(logo_url)
     if logo_img:
         st.sidebar.image(logo_img, use_container_width=True)
     
@@ -238,9 +303,9 @@ else:
 
     if menu_option == "📝 Registrar NF":
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-                <h1 style='color: white; text-align: center; margin: 0;'>🏭 REGISTRAR NOTA FISCAL</h1>
-                <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            <div class='header-container'>
+                <h1>🏭 REGISTRAR NOTA FISCAL</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -250,7 +315,16 @@ else:
                 
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
-                    fornecedor_nf = st.text_input("Fornecedor da NF*", placeholder="Nome do fornecedor...")
+                    
+                    # Carrega a lista de fornecedores
+                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+                    fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                    
+                    if fornecedor_nf == '':
+                         fornecedor_manual = st.text_input("Novo Fornecedor (opcional)", placeholder="Digite o nome se não estiver na lista...")
+                    else:
+                         fornecedor_manual = ""
+                    
                     nf_numero = st.text_input("Número da NF*")
                     
                 with col2:
@@ -266,9 +340,8 @@ else:
                 with col3:
                     valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
                     condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
-                    valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00") if condicao_frete_nf == "FOB" else "0,00"
+                    valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
                 
-                # ADIÇÃO DO NOVO CAMPO DE LINK
                 doc_nf_link = st.text_input("Link da Nota Fiscal (URL)", placeholder="Cole o link de acesso aqui...")
                 
                 observacao = st.text_area("Observações", placeholder="Informações adicionais...")
@@ -277,8 +350,11 @@ else:
                 enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
                 
                 if enviar:
+                    # Lógica para determinar o nome do fornecedor a ser usado
+                    nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
+
                     campos_validos = all([
-                        fornecedor_nf.strip(), nf_numero.strip(), ordem_compra_nf.strip(), 
+                        nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
                         valor_total_nf.strip() not in ["", "0,00"]
                     ])
                     
@@ -308,8 +384,8 @@ else:
                                     df_pedidos_orig.loc[original_index, 'OBSERVACAO'] = observacao
                                     df_pedidos_orig.loc[original_index, 'VENCIMENTO'] = pd.to_datetime(vencimento_nf)
                                     df_pedidos_orig.loc[original_index, 'RECEBEDOR'] = recebedor
-                                    # ATUALIZAÇÃO DO CAMPO LINK
                                     df_pedidos_orig.loc[original_index, 'DOC NF'] = doc_nf_link
+                                    df_pedidos_orig.loc[original_index, 'FORNECEDOR'] = nome_final_fornecedor # Atualiza o nome do fornecedor
 
                                 solicitante_nome = df_update.iloc[0]['SOLICITANTE']
                                 adicionar_log(f"Buscando e-mail para o solicitante '{solicitante_nome}'.")
@@ -331,7 +407,7 @@ else:
                                 novo_registro = {
                                     "DATA": pd.to_datetime(data_recebimento),
                                     "RECEBEDOR": recebedor,
-                                    "FORNECEDOR": fornecedor_nf,
+                                    "FORNECEDOR": nome_final_fornecedor, # Salva o nome do novo fornecedor
                                     "NF": nf_numero,
                                     "REQUISICAO": np.nan,
                                     "VOLUME": volume_nf,
@@ -339,7 +415,7 @@ else:
                                     "CONDICAO_FRETE": condicao_frete_nf,
                                     "VALOR_FRETE": valor_frete_float,
                                     "OBSERVACAO": observacao,
-                                    "DOC NF": doc_nf_link, # SALVANDO O NOVO CAMPO
+                                    "DOC NF": doc_nf_link,
                                     "VENCIMENTO": pd.to_datetime(vencimento_nf),
                                     "STATUS_FINANCEIRO": "EM ANDAMENTO",
                                     "STATUS_PEDIDO": "PENDENTE",
@@ -356,21 +432,20 @@ else:
                             st.balloons()
                             st.cache_data.clear()
                             st.rerun()
-                        
+                            
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
                             adicionar_log("Erro: Falha na conversão de valores numéricos do formulário.")
 
     elif menu_option == "📊 Dashboard":
-        df = carregar_dados_almoxarifado()
-
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-                <h1 style='color: white; text-align: center; margin: 0;'>🏭 DASHBOARD ALMOXARIFADO</h1>
-                <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            <div class='header-container'>
+                <h1>📊 DASHBOARD ALMOXARIFADO</h1>
+                <p>Análise estratégica dos custos por departamento</p>
             </div>
         """, unsafe_allow_html=True)
         
+        df = carregar_dados_almoxarifado()
         if not df.empty:
             df_almoxarifado = df.copy()
             
@@ -412,15 +487,14 @@ else:
             st.write("Nenhum dado disponível.")
 
     elif menu_option == "🔍 Consultar NFs":
-        df = carregar_dados_almoxarifado()
-
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-                <h1 style='color: white; text-align: center; margin: 0;'>🏭 CONSULTAR NOTAS FISCAIS</h1>
-                <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            <div class='header-container'>
+                <h1>🔍 CONSULTAR NOTAS FISCAIS</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
             </div>
         """, unsafe_allow_html=True)
         
+        df = carregar_dados_almoxarifado()
         if not df.empty:
             st.subheader("🔎 Consulta Avançada")
             col1, col2 = st.columns(2)
@@ -451,7 +525,7 @@ else:
             if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
             
             df_consulta = df_consulta[
-                (df_consulta['DATA'].dt.date >= data_inicio_consulta) & 
+                (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
                 (df_consulta['DATA'].dt.date <= data_fim_consulta)
             ]
             
@@ -459,13 +533,16 @@ else:
             
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
-                    'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'REQUISICAO', 'V. TOTAL NF', 
-                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF' # INCLUINDO DOC NF NA VISUALIZAÇÃO
+                    'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'REQUISICAO', 'V. TOTAL NF',
+                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR_FRETE'
                 ]].copy()
                 
                 df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['VENCIMENTO'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
+                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
+                df_exibir_consulta['VALOR_FRETE'] = df_exibir_consulta['VALOR_FRETE'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
                 
@@ -483,14 +560,14 @@ else:
             st.info("📝 Nenhum dado disponível para consulta.")
 
     elif menu_option == "⚙️ Configurações":
-        df = carregar_dados_almoxarifado()
-
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-                <h1 style='color: white; text-align: center; margin: 0;'>🏭 CONFIGURAÇÕES DO SISTEMA</h1>
-                <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            <div class='header-container'>
+                <h1>⚙️ CONFIGURAÇÕES DO SISTEMA</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
             </div>
         """, unsafe_allow_html=True)
+        
+        df = carregar_dados_almoxarifado()
         
         st.subheader("⚙️ Configurações Gerais")
         col1, col2 = st.columns(2)
