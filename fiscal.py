@@ -158,7 +158,7 @@ def carregar_dados():
                 "VALOR_JUROS": 0.0,
                 "DIAS_ATRASO": 0,
                 "VALOR_FRETE": 0.0,
-                "CONDICAO_FRETE": "CIF"
+                "DOC NF": ""
             }
             
             for col, default_val in colunas_necessarias.items():
@@ -177,7 +177,7 @@ def criar_dataframe_vazio():
     return pd.DataFrame(columns=[
         "DATA", "FORNECEDOR", "NF", "PEDIDO", "VOLUME", "V. TOTAL NF",
         "VENCIMENTO", "DOC NF", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-        "VALOR_JUROS", "DIAS_ATRASO", "VALOR_FRETE", "CONDICAO_FRETE"
+        "VALOR_JUROS", "DIAS_ATRASO", "VALOR_FRETE"
     ])
 
 def salvar_dados(df):
@@ -382,8 +382,7 @@ else:
                             "REGISTRO_ADICIONAL": "",
                             "VALOR_JUROS": 0.0,
                             "DIAS_ATRASO": 0,
-                            "VALOR_FRETE": 0.0,
-                            "CONDICAO_FRETE": "CIF"
+                            "VALOR_FRETE": 0.0
                         }
                         st.session_state.df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
                         st.session_state.alteracoes_pendentes = True
@@ -714,14 +713,13 @@ else:
         dias_carencia = st.number_input("Dias de Carência para Juros", min_value=0, value=5)
         
         st.subheader("Exportação de Dados")
-        if st.button("📤 Exportar Dados Completos"):
-            csv = df.to_csv(index=False, encoding='utf-8')
-            st.download_button(
-                label="⬇️ Download CSV",
-                data=csv,
-                file_name="dados_financeiros_completos.csv",
-                mime="text/csv"
-            )
+        csv = df.to_csv(index=False, encoding='utf-8')
+        st.download_button(
+            label="⬇️ Download CSV",
+            data=csv,
+            file_name="dados_financeiros_completos.csv",
+            mime="text/csv"
+        )
         
         st.subheader("Limpeza de Dados")
         if st.button("🧹 Limpar Dados de Teste"):
