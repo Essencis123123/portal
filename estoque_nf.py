@@ -137,7 +137,6 @@ def carregar_dados_almoxarifado():
     try:
         df = pd.read_csv("dados_almoxarifado.csv")
         
-        # Converte colunas para os tipos corretos
         dtype_dict = {
             'FORNECEDOR': str, 'NF': str, 'RECEBEDOR': str, 'OBSERVACAO': str, 
             'DOC NF': str, 'VENCIMENTO': pd.NaT, 'STATUS_FINANCEIRO': str, 
@@ -497,7 +496,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        # Leitura dos dois arquivos para mesclagem
         df_almox = st.session_state.df_almoxarifado.copy()
         df_ped = st.session_state.df_pedidos.copy()
         
@@ -505,7 +503,6 @@ else:
         df_almox['ORDEM_COMPRA'] = df_almox['ORDEM_COMPRA'].astype(str)
         df_ped['ORDEM_COMPRA'] = df_ped['ORDEM_COMPRA'].astype(str)
 
-        # Mescla os dois DataFrames para a consulta
         df_mesclado = pd.merge(
             df_almox, 
             df_ped[[
