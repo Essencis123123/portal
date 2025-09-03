@@ -139,28 +139,26 @@ def adicionar_log(mensagem):
     st.session_state['log_messages'].append(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {mensagem}")
     print(st.session_state['log_messages'][-1])
 
+# Credenciais fixas da conta do Gmail para envio de e-mails
+GMAIL_EMAIL = "suprimentosessencis@gmail.com"
+GMAIL_APP_PASSWORD = "wvap juiz axkf xqcw"
+
 def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao, material):
-    remetente = st.session_state.get('email')
-    senha = st.session_state.get('senha')
+    remetente = GMAIL_EMAIL
+    senha = GMAIL_APP_PASSWORD
     destinatario = email_solicitante
 
     adicionar_log(f"Tentando enviar e-mail para: {destinatario}...")
-    adicionar_log(f"Nome do solicitante no pedido: {solicitante_nome}")
-    adicionar_log(f"E-mail encontrado: {email_solicitante}")
-    
-    if not remetente or not senha:
-        adicionar_log("Credenciais de e-mail não encontradas na sessão. O e-mail não foi enviado.")
-        return False
     
     corpo_mensagem = f"""
     Olá, {solicitante_nome}.
 
-    Gostaríamos de informar que o material **{material}** da requisição **{numero_requisicao}** já foi entregue ao almoxarifado.
+    Gostaríamos de informar que o material **{material}** da requisição **{numero_requisicao}** se encontra disponível para retirada no almoxarifado.
 
-    Por favor, entre em contato com o setor de compras para mais informações.
+    Por favor, entre em contato com o setor responsavel para mais informações.
 
     Atenciosamente,
-    Equipe de Compras
+    Equipe de Suprimentos
     """
     mensagem = MIMEMultipart()
     mensagem['From'] = remetente
@@ -169,7 +167,7 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
     mensagem.attach(MIMEText(corpo_mensagem, 'plain'))
     
     try:
-        servidor_smtp = smtplib.SMTP('smtp.office365.com', 587)
+        servidor_smtp = smtplib.SMTP('smtp.gmail.com', 587)
         servidor_smtp.starttls()
         servidor_smtp.login(remetente, senha)
         texto = mensagem.as_string()
@@ -178,7 +176,8 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
         adicionar_log(f"E-mail de confirmação enviado para {destinatario}.")
         return True
     except Exception as e:
-        adicionar_log(f"Erro ao enviar e-mail: {e}. Verifique as credenciais.")
+        adicionar_log(f"Erro ao enviar e-mail: {e}.")
+        st.error(f"❌ Erro ao enviar e-mail: {e}. O problema pode ser na conexão ou credenciais do Gmail.")
         return False
 
 def obter_nome_do_email(email):
@@ -189,26 +188,30 @@ def obter_nome_do_email(email):
         return "Colaborador"
 
 # --- LÓGICA DE LOGIN ---
+# Dicionário de usuários e senhas para login no aplicativo
+USERS = {
+    "eassis@essencis.com.br": "Essencis01",
+    "agsantos@essencis.com.br": "Essencis01",
+    "isoares@essencis.com.br": "Essencis01",
+    "acsouza@essencis.com.br": "Essencis01",
+    "bcampos@essencis.com.br": "Essencis01",
+    "earaujo@essencis.com.br": "Essencis01"
+}
+
 def fazer_login(email, senha):
-    try:
-        server = smtplib.SMTP('smtp.office365.com', 587)
-        server.starttls()
-        server.login(email, senha)
-        server.quit()
-        st.session_state['email'] = email
-        st.session_state['senha'] = senha
+    if email in USERS and USERS[email] == senha:
         st.session_state['logado'] = True
         st.session_state['nome_colaborador'] = obter_nome_do_email(email)
-        st.success("Login bem-sucedido! Você pode registrar as notas fiscais.")
+        st.success("Login bem-sucedido!")
         st.rerun()
-    except Exception as e:
-        st.error(f"Falha no login: {e}. Verifique seu e-mail e senha.")
+    else:
+        st.error("E-mail ou senha incorretos.")
 
 # --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state['logado']:
     st.title("🏭 Login do Almoxarifado")
     with st.form("login_form"):
-        email = st.text_input("E-mail Office 365")
+        email = st.text_input("E-mail")
         senha = st.text_input("Senha", type="password")
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
@@ -227,8 +230,6 @@ else:
     st.sidebar.divider()
     if st.sidebar.button("Logout"):
         st.session_state['logado'] = False
-        st.session_state.pop('email', None)
-        st.session_state.pop('senha', None)
         st.session_state.pop('nome_colaborador', None)
         st.rerun()
     
@@ -346,7 +347,7 @@ else:
                                 salvar_dados_almoxarifado(df_pedidos_orig)
                                 st.warning(f"ℹ️ Nota fiscal registrada. A OC '{ordem_compra_nf}' não foi encontrada para atualização automática. Os dados foram salvos como um novo registro.")
                                 adicionar_log(f"Aviso: OC '{ordem_compra_nf}' não encontrada, nota registrada como novo registro.")
-                            
+                        
                             st.balloons()
                             st.cache_data.clear()
                             st.rerun()
