@@ -16,20 +16,31 @@ from email.mime.multipart import MIMEMultipart
 # Configuração da página
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide")
 
-# CSS para personalizar o menu lateral
+# CSS para personalizar o menu lateral e deixar o texto branco
 st.markdown(
     """
     <style>
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
     }
-    [data-testid="stSidebar"] .stRadio > div {
-        background-color: #1C4D86;
-        color: white;
+    
+    /* Regras para garantir que TODO o texto no sidebar seja branco */
+    [data-testid="stSidebar"] *,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p, 
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j {
+        color: white !important;
     }
-    [data-testid="stSidebar"] .stRadio label {
-        color: white;
+    
+    /* Estilos para o radio button, garantindo que o texto dele também seja branco */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
+        color: white !important;
     }
+    
     [data-testid="stSidebar"] .stMultiSelect label, 
     [data-testid="stSidebar"] .stSelectbox label,
     [data-testid="stSidebar"] .stTextInput label,
@@ -39,6 +50,7 @@ st.markdown(
     [data-testid="stSidebar"] .stInfo {
         color: white !important;
     }
+    
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -125,20 +137,23 @@ def salvar_dados(df):
         return False
 
 # --- Lógica de Login ---
+USERS = {
+    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
+    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
+    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
+    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
+    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
+}
+
 def fazer_login(email, senha):
-    try:
-        server = smtplib.SMTP('smtp.office365.com', 587)
-        server.starttls()
-        server.login(email, senha)
-        server.quit()
-        st.session_state['email'] = email
-        st.session_state['senha'] = senha
+    if email in USERS and USERS[email]["password"] == senha:
         st.session_state['logado'] = True
-        st.session_state['nome_colaborador'] = email.split('@')[0].replace('.', ' ').title()
-        st.success("Login bem-sucedido! Você pode acessar o painel.")
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
         st.rerun()
-    except Exception as e:
-        st.error(f"Falha no login: {e}. Verifique seu e-mail e senha.")
+    else:
+        st.error("E-mail ou senha incorretos.")
 
 # --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
 
@@ -163,7 +178,7 @@ else:
         if logo_img:
             st.image(logo_img, use_container_width=True)
         
-        st.write(f"Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!")
+        st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
         st.title("💼 Menu Financeiro")
         
         menu = st.radio(
@@ -627,7 +642,7 @@ else:
         if st.button("🧹 Limpar Dados de Teste"):
             st.warning("Esta ação não pode ser desfeita!")
             if st.button("Confirmar Limpeza"):
-                df_limpo = df[df['V. TOTAL NF'] > 0]  # Mantém apenas dados válidos
+                df_limpo = df[df['V. TOTAL NF'] > 0]
                 st.session_state.df = df_limpo
                 salvar_dados(df_limpo)
                 st.success("Dados limpos com sucesso!")
@@ -636,4 +651,4 @@ else:
     # Rodapé
     st.markdown("---")
     st.caption(f"💰 Sistema Financeiro Completo | Última atualização: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | "
-              f"Total de registros: {len(df)}")
+               f"Total de registros: {len(df)}")
