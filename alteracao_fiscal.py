@@ -134,10 +134,12 @@ logo_img = load_logo(logo_url)
 
 # Funções de carregamento e salvamento de dados
 def carregar_dados():
-    """Carrega os dados do arquivo CSV ou cria um novo se não existir"""
+    """
+    Carrega os dados do arquivo CSV, garantindo que as colunas existam.
+    O decorator @st.cache_data foi removido para evitar problemas de sincronização.
+    """
     arquivo_csv = "dados_pedidos.csv"
     
-    # Variável definida fora dos blocos try/except
     colunas_necessarias = {
         "STATUS_FINANCEIRO": "N/A",
         "CONDICAO_PROBLEMA": "N/A",
