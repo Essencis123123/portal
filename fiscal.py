@@ -138,7 +138,7 @@ logo_img = load_logo(logo_url)
 
 def carregar_dados():
     """Carrega os dados do arquivo CSV ou cria um novo se não existir"""
-    arquivo_csv = "dados_pedidos.csv"  # CORRIGIDO: Agora aponta para o arquivo correto
+    arquivo_csv = "dados_pedidos.csv"
     
     if os.path.exists(arquivo_csv):
         try:
@@ -188,7 +188,7 @@ def salvar_dados(df):
         if 'VENCIMENTO' in df_to_save.columns:
             df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
             
-        df_to_save.to_csv("dados_pedidos.csv", index=False, encoding='utf-8') # CORRIGIDO: Salva no arquivo correto
+        df_to_save.to_csv("dados_pedidos.csv", index=False, encoding='utf-8')
         return True
     except Exception as e:
         st.error(f"Erro ao salvar dados: {e}")
@@ -331,28 +331,80 @@ else:
                 st.warning("Alterações não salvas")
 
         if not df.empty:
-            total_nfs = len(df)
-            total_valor = df['V. TOTAL NF'].sum() if 'V. TOTAL NF' in df.columns else 0
-            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]) if 'STATUS' in df.columns else 0
-            total_juros = df['VALOR_JUROS'].sum() if 'VALOR_JUROS' in df.columns else 0
-            total_frete = df['VALOR_FRETE'].sum() if 'VALOR_FRETE' in df.columns else 0
-            
             st.markdown("---")
             col1, col2, col3, col4, col5, col6 = st.columns(6)
             with col1:
-                st.metric("📊 Total de NFs", total_nfs)
+                st.metric("📊 Total de NFs", len(df))
             with col2:
-                st.metric("💰 Valor NFs", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.metric("💰 Valor NFs", f"R$ {df['V. TOTAL NF'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             with col3:
-                st.metric("⏳ Pendentes", nfs_pendentes)
+                st.metric("⏳ Pendentes", len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]))
             with col4:
-                st.metric("✅ Finalizadas", total_nfs - nfs_pendentes)
+                st.metric("✅ Finalizadas", len(df[df['STATUS'] == 'FINALIZADO']))
             with col5:
-                st.metric("💸 Juros", f"R$ {total_juros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.metric("💸 Juros", f"R$ {df['VALOR_JUROS'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             with col6:
-                st.metric("🚚 Fretes", f"R$ {total_frete:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.metric("🚚 Fretes", f"R$ {df['VALOR_FRETE'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-        if df.empty:
+            # --- Visualização da Tabela de Notas Fiscais ---
+            st.markdown("---")
+            st.subheader("📋 Detalhes das Notas Fiscais")
+
+            def formatar_vencimento(venc):
+                try:
+                    if pd.isna(venc):
+                        return "N/A"
+                    venc_date = pd.to_datetime(venc).date()
+                    dias = (venc_date - datetime.date.today()).days
+                    if dias < 0:
+                        return f"🔴 {venc_date.strftime('%d/%m/%Y')}"
+                    elif dias <= 10:
+                        return f"🟡 {venc_date.strftime('%d/%m/%Y')}"
+                    else:
+                        return f"🟢 {venc_date.strftime('%d/%m/%Y')}"
+                except:
+                    return "N/A"
+
+            # Aplica a formatação de vencimento ao DataFrame antes de exibir
+            df['VENCIMENTO_FORMATADO'] = df['VENCIMENTO'].apply(formatar_vencimento)
+            df['VALOR_NF_FORMATADO'] = df['V. TOTAL NF'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            df['VALOR_JUROS_FORMATADO'] = df['VALOR_JUROS'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            df['VALOR_FRETE_FORMATADO'] = df['VALOR_FRETE'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+            edited_df = st.data_editor(
+                df[[
+                    "DATA", "FORNECEDOR", "NF", "PEDIDO", "V. TOTAL NF", "VENCIMENTO",
+                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF"
+                ]],
+                use_container_width=True,
+                column_config={
+                    "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY", disabled=True),
+                    "FORNECEDOR": "Fornecedor",
+                    "NF": "N° NF",
+                    "PEDIDO": "N° Pedido",
+                    "V. TOTAL NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
+                    "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
+                    "STATUS": st.column_config.SelectboxColumn("Status", options=status_options),
+                    "CONDICAO_PROBLEMA": st.column_config.SelectboxColumn("Problema", options=problema_options),
+                    "REGISTRO_ADICIONAL": "Obs.",
+                    "VALOR_JUROS": st.column_config.NumberColumn("Juros (R$)", format="%.2f", disabled=True),
+                    "VALOR_FRETE": st.column_config.NumberColumn("Frete (R$)", format="%.2f", disabled=True),
+                    "DOC NF": st.column_config.LinkColumn("DOC NF", display_text="📥")
+                }
+            )
+
+            # Lógica de atualização e salvamento
+            if not edited_df.equals(df):
+                st.session_state.df.update(edited_df)
+                st.session_state.alteracoes_pendentes = True
+                if salvar_dados(st.session_state.df):
+                    st.session_state.ultimo_salvamento = datetime.datetime.now()
+                    st.session_state.alteracoes_pendentes = False
+                    st.success("Alterações salvas com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
+
+        else:
             st.warning("Nenhuma nota fiscal cadastrada. Use o botão 'Nova NF' para adicionar.")
             if st.session_state.get('nova_nf', False):
                 with st.form("nova_nf_form"):
@@ -392,129 +444,7 @@ else:
                         st.rerun()
             
             st.stop()
-
-        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
-        df['MES'] = df['DATA'].dt.month
-        df['ANO'] = df['DATA'].dt.year
-
-        meses_nomes = {
-            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-        }
-
-        st.markdown("---")
-        st.markdown("### 🔍 Filtros")
-        col1, col2, col3 = st.columns([1, 1, 2])
-        with col1:
-            mes_selecionado = st.selectbox("**Mês**", sorted(df['MES'].dropna().unique()), format_func=lambda x: meses_nomes.get(x))
-        with col2:
-            ano_selecionado = st.selectbox("**Ano**", sorted(df['ANO'].dropna().unique(), reverse=True))
-        with col3:
-            status_filtro = st.multiselect("**Filtrar por Status**",
-                                            ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"],
-                                            placeholder="Todos os status")
-
-        df_filtrado = df[(df['MES'] == mes_selecionado) & (df['ANO'] == ano_selecionado)]
-
-        if status_filtro:
-            df_filtrado = df_filtrado[df_filtrado['STATUS'].isin(status_filtro)]
-
-        if df_filtrado.empty:
-            st.info("Nenhuma nota registrada neste período.")
-            st.stop()
-
-        status_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
-        problema_options = ["N/A", "REGISTRO CHAMADO", "CARTA CORRECAO", "AJUSTE NA ORDEM DE COMPRA", "RECUSA DE NOTA FISCAL"]
-        hoje = datetime.date.today()
-
-        def formatar_vencimento(venc):
-            try:
-                if pd.isna(venc):
-                    return "⚪ N/A"
-                venc_date = pd.to_datetime(venc).date()
-                dias = (venc_date - hoje).days
-                if dias < 0:
-                    return f"🔴 {venc_date.strftime('%d/%m/%Y')}"
-                elif dias <= 10:
-                    return f"🟡 {venc_date.strftime('%d/%m/%Y')}"
-                else:
-                    return f"🟢 {venc_date.strftime('%d/%m/%Y')}"
-            except:
-                return "⚪ N/A"
-
-        st.markdown("---")
-        st.markdown(f"### 📋 Notas Fiscais - {meses_nomes[mes_selecionado]}/{ano_selecionado}")
-        st.markdown(f"*Total: {len(df_filtrado)} nota(s) fiscal(is)*")
-
-        def atualizar_dados(indice, coluna, valor):
-            df.at[indice, coluna] = valor
-            st.session_state.df = df
-            st.session_state.alteracoes_pendentes = True
-            if salvar_dados(df):
-                st.session_state.ultimo_salvamento = datetime.datetime.now()
-                st.session_state.alteracoes_pendentes = False
-
-        for idx, row in df_filtrado.iterrows():
-            with st.container():
-                col1, col2, col3, col4, col5, col6, col7, col8, col9, col10 = st.columns([1, 2, 1, 1, 1, 2, 2, 1, 1, 1])
-                
-                with col1:
-                    st.text_input("NF", value=str(row['NF']), key=f"nf_{idx}", disabled=True, label_visibility="collapsed")
-                with col2:
-                    st.text_input("Fornecedor", value=str(row['FORNECEDOR']), key=f"fornecedor_{idx}", disabled=True, label_visibility="collapsed")
-                with col3:
-                    st.text_input("Pedido", value=str(row['PEDIDO']), key=f"pedido_{idx}", disabled=True, label_visibility="collapsed")
-                with col4:
-                    valor = f"R$ {float(row['V. TOTAL NF']):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    st.text_input("Valor", value=valor, key=f"valor_{idx}", disabled=True, label_visibility="collapsed")
-                with col5:
-                    venc = formatar_vencimento(row['VENCIMENTO'])
-                    st.text_input("Vencimento", value=venc, key=f"venc_{idx}", disabled=True, label_visibility="collapsed")
-                with col6:
-                    novo_status = st.selectbox(
-                        "Status", status_options,
-                        index=status_options.index(row['STATUS']) if row['STATUS'] in status_options else 0,
-                        key=f"status_{idx}",
-                        label_visibility="collapsed",
-                        on_change=lambda idx=idx: atualizar_dados(idx, 'STATUS', st.session_state[f"status_{idx}"])
-                    )
-                with col7:
-                    novo_problema = st.selectbox(
-                        "Problema", problema_options,
-                        index=problema_options.index(row['CONDICAO_PROBLEMA']) if row['CONDICAO_PROBLEMA'] in problema_options else 0,
-                        key=f"problema_{idx}",
-                        label_visibility="collapsed",
-                        on_change=lambda idx=idx: atualizar_dados(idx, 'CONDICAO_PROBLEMA', st.session_state[f"problema_{idx}"])
-                    )
-                with col8:
-                    novo_registro = st.text_input(
-                        "Registro",
-                        value=str(row['REGISTRO_ADICIONAL']),
-                        key=f"registro_{idx}",
-                        label_visibility="collapsed",
-                        on_change=lambda idx=idx: atualizar_dados(idx, 'REGISTRO_ADICIONAL', st.session_state[f"registro_{idx}"])
-                    )
-                with col9:
-                    if row['VALOR_JUROS'] > 0:
-                        juros_text = f"💸 R$ {row['VALOR_JUROS']:,.2f}"
-                        st.text_input("Juros", value=juros_text, key=f"juros_{idx}", disabled=True, label_visibility="collapsed")
-                    else:
-                        st.text_input("Juros", value="Sem juros", key=f"juros_{idx}", disabled=True, label_visibility="collapsed")
-                with col10:
-                    if pd.notna(row['DOC NF']) and str(row['DOC NF']).strip() != "":
-                        st.markdown(f"""
-                            <a href="{row['DOC NF']}" target="_blank" style="
-                                background-color:#0d6efd; color:white; padding:4px 8px;
-                                border-radius:5px; text-decoration:none; display: block;
-                                text-align: center; margin-top: 8px;">
-                                📥
-                            </a>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.text("N/A")
-                
-                st.markdown("---")
-
+        
     elif menu == "💰 Gestão de Juros":
         st.header("💰 Gestão de Juros e Multas")
         
