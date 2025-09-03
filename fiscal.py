@@ -13,22 +13,16 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Configuração da página
-st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide")
+# Configuração da página com layout wide
+st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
     <style>
-    /* Estilos globais */
-    .stApp {
-        background-color: #f0f2f5;
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Estilo para a barra lateral */
+    /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
-        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        background-color: #1C4D86;
         color: white;
     }
     
@@ -39,6 +33,8 @@ st.markdown(
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
     .stDownloadButton button p {
         color: white !important;
     }
@@ -48,7 +44,14 @@ st.markdown(
         color: white !important;
     }
     
-    /* Estilo para a logo no sidebar */
+    /* Estilo para deixar a letra dos botões preta */
+    .stButton button p {
+        color: black !important;
+    }
+    .stDownloadButton button p {
+        color: white !important;
+    }
+
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -69,22 +72,22 @@ st.markdown(
     
     /* Estilo para o cabeçalho principal da página */
     .header-container {
-        background-color: white;
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
         padding: 25px;
         border-radius: 15px;
         margin-bottom: 20px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         text-align: center;
-        color: #333;
+        color: white;
     }
     
     .header-container h1 {
-        color: #1C4D86;
+        color: white;
         margin: 0;
     }
 
     .header-container p {
-        color: #333;
+        color: white;
         margin: 5px 0 0 0;
         font-size: 18px;
     }
@@ -259,7 +262,7 @@ else:
             total_frete = df['VALOR_FRETE'].sum() if 'VALOR_FRETE' in df.columns else 0
             
             st.metric("Total de NFs", total_nfs)
-            st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+            st.metric("Valor Total", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             st.metric("Pendentes", nfs_pendentes)
         else:
             st.info("Nenhum dado disponível")
@@ -274,12 +277,35 @@ else:
             
         st.caption("Sistema Financeiro Completo v1.0")
 
-    st.markdown("""
-        <div style='background: white; padding: 25px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);'>
-            <h1 style='color: #1C4D86; text-align: center; margin: 0;'>💼 PAINEL FINANCEIRO COMPLETO</h1>
-            <p style='color: #333; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Controle de NF, Fretes, Juros e Análise Financeira</p>
-        </div>
-    """, unsafe_allow_html=True)
+    # Adiciona o cabeçalho temático dependendo da opção do menu
+    if menu == "📋 Visualização de NFs":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📋 VISUALIZAÇÃO DE NOTAS FISCAIS</h1>
+                <p>Gerenciamento e acompanhamento financeiro de NFs</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "💰 Gestão de Juros":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>💰 GESTÃO DE JUROS E MULTAS</h1>
+                <p>Calcule e gerencie juros para notas em atraso</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "📊 Dashboards Financeiros":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📊 DASHBOARDS FINANCEIROS COMPLETOS</h1>
+                <p>Análise estratégica de custos e eficiências</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "⚙️ Configurações":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>⚙️ CONFIGURAÇÕES DO SISTEMA</h1>
+                <p>Parâmetros e manutenção de dados</p>
+            </div>
+        """, unsafe_allow_html=True)
 
     if menu == "📋 Visualização de NFs":
         col1, col2, col3, col4 = st.columns(4)
@@ -501,7 +527,7 @@ else:
                 st.subheader("Notas com Possibilidade de Juros")
                 
                 for idx, row in nfs_com_problema.iterrows():
-                    with st.expander(f"NF {row['NF']} - {row['FORNECEDOR']} - R$ {row['V. TOTAL NF']:,.2f}"):
+                    with st.expander(f"NF {row['NF']} - {row['FORNECEDOR']} - R$ {row['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")):
                         col1, col2, col3, col4 = st.columns(4)
                         
                         with col1:
@@ -514,7 +540,7 @@ else:
                             )
                         
                         with col2:
-                            st.info(f"**Valor Original:** R$ {row['V. TOTAL NF']:,.2f}")
+                            st.info(f"**Valor Original:** R$ {row['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                             taxa_juros = st.number_input(
                                 "Taxa de Juros (%)",
                                 min_value=0.0,
@@ -526,7 +552,7 @@ else:
                         
                         with col3:
                             valor_juros = (row['V. TOTAL NF'] * taxa_juros / 100) * dias_atraso
-                            st.metric("Valor de Juros", f"R$ {valor_juros:,.2f}")
+                            st.metric("Valor de Juros", f"R$ {valor_juros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                         
                         with col4:
                             if st.button("Aplicar Juros", key=f"apply_{idx}"):
@@ -664,7 +690,7 @@ else:
             
             with col_met1:
                 custo_total = df['V. TOTAL NF'].sum() + df['VALOR_FRETE'].sum() + df['VALOR_JUROS'].sum()
-                st.metric("Custo Total", f"R$ {custo_total:,.2f}")
+                st.metric("Custo Total", f"R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             
             with col_met2:
                 perc_frete = (df['VALOR_FRETE'].sum() / df['V. TOTAL NF'].sum() * 100) if df['V. TOTAL NF'].sum() > 0 else 0
