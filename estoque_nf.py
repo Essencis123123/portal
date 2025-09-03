@@ -137,6 +137,7 @@ def carregar_dados_almoxarifado():
     try:
         df = pd.read_csv("dados_almoxarifado.csv")
         
+        # Converte colunas para os tipos corretos
         dtype_dict = {
             'FORNECEDOR': str, 'NF': str, 'RECEBEDOR': str, 'OBSERVACAO': str, 
             'DOC NF': str, 'VENCIMENTO': pd.NaT, 'STATUS_FINANCEIRO': str, 
@@ -497,24 +498,12 @@ else:
         """, unsafe_allow_html=True)
         
         df_almox = st.session_state.df_almoxarifado.copy()
-        df_ped = st.session_state.df_pedidos.copy()
         
-        # Garante que as colunas de mesclagem são do mesmo tipo
-        df_almox['ORDEM_COMPRA'] = df_almox['ORDEM_COMPRA'].astype(str)
-        df_ped['ORDEM_COMPRA'] = df_ped['ORDEM_COMPRA'].astype(str)
-
-        df_mesclado = pd.merge(
-            df_almox, 
-            df_ped[[
-                'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'FILIAL', 'MATERIAL', 
-                'ORDEM_COMPRA', 'VALOR_ITEM'
-            ]],
-            on='ORDEM_COMPRA',
-            how='left',
-            suffixes=('_almox', '_pedido')
-        )
+        # O df_pedidos é necessário para obter a requisição e outros dados do comprador,
+        # mas como você quer apenas os dados do almoxarifado, vamos criar uma versão simplificada
+        # sem fazer a junção. No entanto, a coluna 'REQUISICAO' não estará disponível.
+        df = df_almox.copy()
         
-        df = df_mesclado
         if not df.empty:
             st.subheader("🔎 Consulta Avançada")
             col1, col2 = st.columns(2)
@@ -553,7 +542,7 @@ else:
             
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
-                    'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'REQUISICAO', 'V. TOTAL NF',
+                    'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
                     'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR_FRETE'
                 ]].copy()
                 
