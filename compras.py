@@ -11,15 +11,17 @@ from PIL import Image
 from io import BytesIO
 import numpy as np
 
-# Configuração da página
-st.set_page_config(page_title="Painel do Comprador", layout="wide")
+# Configuração da página com layout wide e ícone
+st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
 
-# CSS para personalizar o menu lateral e deixar o texto branco
+# --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
     <style>
+    /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
+        color: white;
     }
     
     /* Regras para garantir que TODO o texto no sidebar seja branco */
@@ -29,19 +31,23 @@ st.markdown(
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p, 
-    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j {
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
+    .stDownloadButton button p {
         color: white !important;
     }
-    
-    /* Estilos para o radio button, garantindo que o texto dele também seja branco */
+
+    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
     }
     
-    /* Estilo para deixar a letra dos botões preta, como você pediu */
-    [data-testid="stSidebar"] .stButton button p {
+    /* Estilo para deixar a letra dos botões preta */
+    .stButton button p {
         color: black !important;
+    }
+    .stDownloadButton button p {
+        color: white !important;
     }
 
     [data-testid="stSidebar"] img {
@@ -51,6 +57,63 @@ st.markdown(
         width: 80%;
         border-radius: 10px;
         padding: 10px 0;
+    }
+
+    /* Estilo para o container principal da página */
+    .main-container {
+        background-color: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        color: #333;
+    }
+    
+    /* Estilo para o cabeçalho principal da página */
+    .header-container {
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: white;
+    }
+    
+    .header-container h1 {
+        color: white;
+        margin: 0;
+    }
+
+    .header-container p {
+        color: white;
+        margin: 5px 0 0 0;
+        font-size: 18px;
+    }
+    
+    /* Estilo para os sub-cabeçalhos dentro da área principal */
+    h2, h3 {
+        color: #1C4D86;
+        font-weight: 600;
+    }
+    
+    /* Estilo para os botões de ação */
+    .stButton button {
+        background-color: #0055a5;
+        color: white;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton button:hover {
+        background-color: #007ea7;
+    }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     </style>
     """,
@@ -180,14 +243,56 @@ else:
             ["📝 Registrar Requisição", "✍️ Atualizar Pedidos (OC)", "📜 Histórico e Edição", "👤 Cadastro de Solicitante", "📊 Dashboards de Desempenho", "📊 Performance Local"]
         )
         st.divider()
+        if st.sidebar.button("Logout"):
+            st.session_state['logado'] = False
+            st.session_state.pop('nome_colaborador', None)
+            st.rerun()
 
-    st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px;'>
-            <h1 style='color: white; text-align: center; margin: 0;'>📝 CONTROLE DO COMPRADOR</h1>
-            <p style='color: white; text-align: center; margin: 5px 0 0 0; font-size: 18px;'>Registro e Análise de Pedidos de Compras</p>
-        </div>
-    """, unsafe_allow_html=True)
+    # Novo cabeçalho unificado com o tema Essencis
+    if menu == "📝 Registrar Requisição":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📝 REGISTRAR REQUISIÇÃO DE COMPRA</h1>
+                <p>Sistema de Controle e Análise de Pedidos</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "✍️ Atualizar Pedidos (OC)":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1>
+                <p>Vincule as Ordens de Compra às Requisições Pendentes</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "📜 Histórico e Edição":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
+                <p>Gerencie e Edite os Registros Anteriores</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "👤 Cadastro de Solicitante":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>👤 CADASTRO DE SOLICITANTES</h1>
+                <p>Adicione novos Solicitantes ao Sistema</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "📊 Dashboards de Desempenho":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📊 DASHBOARD DE DESEMPENHO</h1>
+                <p>Análise de Prazos e Custos de Pedidos</p>
+            </div>
+        """, unsafe_allow_html=True)
+    elif menu == "📊 Performance Local":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📊 PERFORMANCE DE NEGOCIAÇÃO LOCAL</h1>
+                <p>Análise de Economia em Pedidos Locais</p>
+            </div>
+        """, unsafe_allow_html=True)
 
+    # O resto do código (lógica das páginas) permanece inalterado
     if menu == "📝 Registrar Requisição":
         st.header("📝 Registrar Nova Requisição de Compra")
         
