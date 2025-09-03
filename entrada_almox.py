@@ -133,7 +133,7 @@ def load_logo(url):
         return None
 
 # Funções de carregamento e salvamento de dados
-@st.cache_data
+# O decorator @st.cache_data foi removido para evitar problemas de sincronização
 def carregar_dados_almoxarifado():
     try:
         df = pd.read_csv("dados_pedidos.csv")
@@ -189,7 +189,7 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados: {e}")
         return False
 
-@st.cache_data
+# O decorator @st.cache_data foi removido para evitar problemas de sincronização
 def carregar_dados_solicitantes():
     try:
         df = pd.read_csv("dados_solicitantes.csv", dtype={'NOME': str, 'DEPARTAMENTO': str, 'EMAIL': str, 'FILIAL': str})
@@ -281,6 +281,11 @@ if 'logado' not in st.session_state or not st.session_state['logado']:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
+    # A chamada para a função de carregamento agora não usa cache
+    # para garantir que o arquivo seja lido a cada vez.
+    if 'df_pedidos' not in st.session_state:
+        st.session_state.df_pedidos = carregar_dados_almoxarifado()
+
     logo_img = load_logo(logo_url)
     if logo_img:
         st.sidebar.image(logo_img, use_container_width=True)
@@ -298,7 +303,7 @@ else:
         st.session_state.pop('nome_colaborador', None)
         st.rerun()
     
-    df_pedidos = carregar_dados_almoxarifado()
+    df_pedidos = st.session_state.df_pedidos
     df_solicitantes = carregar_dados_solicitantes()
 
     if menu_option == "📝 Registrar NF":
@@ -430,12 +435,22 @@ else:
                                 adicionar_log(f"Aviso: OC '{ordem_compra_nf}' não encontrada, nota registrada como novo registro.")
                         
                             st.balloons()
-                            st.cache_data.clear()
+                            st.session_state.df_pedidos = carregar_dados_almoxarifado() # Atualiza a sessão com os novos dados
                             st.rerun()
                             
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
                             adicionar_log("Erro: Falha na conversão de valores numéricos do formulário.")
+        
+        # Feedback visual imediato para o usuário
+        st.markdown("---")
+        st.subheader("Últimas Notas Registradas")
+        if not st.session_state.df_pedidos.empty:
+            df_ultimas_nfs = st.session_state.df_pedidos[st.session_state.df_pedidos['NF'].astype(str) != ''].tail(10)
+            st.dataframe(df_ultimas_nfs, use_container_width=True)
+        else:
+            st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
+
 
     elif menu_option == "📊 Dashboard":
         st.markdown("""
@@ -592,6 +607,7 @@ else:
             
             if st.button("🔄 Recarregar Dados"):
                 st.cache_data.clear()
+                st.session_state.df_pedidos = carregar_dados_almoxarifado()
                 st.success("Dados recarregados com sucesso!")
                 st.rerun()
         
