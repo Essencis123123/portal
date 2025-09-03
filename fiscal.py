@@ -251,7 +251,6 @@ else:
         )
         
         st.divider()
-        
         st.subheader("📊 Resumo Rápido")
         
         if not df.empty:
@@ -261,14 +260,14 @@ else:
             total_juros = df['VALOR_JUROS'].sum() if 'VALOR_JUROS' in df.columns else 0
             total_frete = df['VALOR_FRETE'].sum() if 'VALOR_FRETE' in df.columns else 0
             
-            st.metric("Total de NFs", total_nfs)
-            st.metric("Valor Total", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            st.metric("Pendentes", nfs_pendentes)
+            st.markdown(f"**Total de NFs:** **{total_nfs}**")
+            st.markdown(f"**Valor Total:** **R$ {total_valor:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown(f"**Pendentes:** **{nfs_pendentes}**")
+            st.markdown(f"**Finalizadas:** **{total_nfs - nfs_pendentes}**")
+            st.markdown(f"**Juros:** **R$ {total_juros:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown(f"**Fretes:** **R$ {total_frete:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
         else:
             st.info("Nenhum dado disponível")
-            st.metric("Total de NFs", 0)
-            st.metric("Valor Total", "R$ 0,00")
-            st.metric("Pendentes", 0)
 
         st.divider()
         if st.button("Logout"):
