@@ -284,11 +284,11 @@ else:
             st.image(logo_img, use_container_width=True)
 
         st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
-        st.title("💼 Financeiro")
+        st.title("💼 Menu Financeiro")
 
         menu = st.radio(
             "📌 Navegação",
-            ["📋 Lançamentos", "💰 Gestão de Juros", "📊 Dashboards ", "⚙️ Configurações"]
+            ["📋 Visualização de NFs", "💰 Gestão de Juros", "📊 Dashboards Financeiros", "⚙️ Configurações"]
         )
         st.divider()
 
@@ -334,9 +334,9 @@ else:
 
     # Cabeçalhos por menu
     headers = {
-        "📋 Lançamentos": ("📋 VISUALIZAÇÃO DE NOTAS FISCAIS", "Gerenciamento e acompanhamento financeiro de NFs"),
+        "📋 Visualização de NFs": ("📋 VISUALIZAÇÃO DE NOTAS FISCAIS", "Gerenciamento e acompanhamento financeiro de NFs"),
         "💰 Gestão de Juros": ("💰 GESTÃO DE JUROS E MULTAS", "Calcule e gerencie juros para notas em atraso"),
-        "📊 Dashboards": ("📊 DASHBOARDS FINANCEIROS COMPLETOS", "Análise estratégica de custos e eficiências"),
+        "📊 Dashboards Financeiros": ("📊 DASHBOARDS FINANCEIROS COMPLETOS", "Análise estratégica de custos e eficiências"),
         "⚙️ Configurações": ("⚙️ CONFIGURAÇÕES DO SISTEMA", "Parâmetros e manutenção de dados"),
     }
     titulo, subtitulo = headers.get(menu)
@@ -405,9 +405,6 @@ else:
             st.subheader("📋 Detalhes das Notas Fiscais")
 
             # --- CORREÇÃO AQUI: Lógica para as bolinhas visuais nas colunas ---
-            # Define as opções para o seletor de Problema
-            problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
-
             # Mapeia Status para bolinhas
             status_map = {
                 'FINALIZADO': '🟢 FINALIZADO',
@@ -442,6 +439,9 @@ else:
             
             # Aplica a lógica condicional
             df_display['PROBLEMA_VISUAL'] = df_display.apply(lambda row: formatar_problema_visual(row), axis=1)
+
+            status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
+            problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
             edited_df = st.data_editor(
                 df_display,
