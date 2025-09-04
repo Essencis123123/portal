@@ -223,6 +223,29 @@ def carregar_dados_pedidos():
         st.error(f"Erro ao carregar dados de pedidos: {e}")
         return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA"])
 
+def salvar_dados_pedidos(df):
+    """Salva os dados de pedidos no Google Sheets."""
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(0)
+
+        df_copy = df.copy()
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        
+        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados de pedidos: {e}")
+        return False
+
 @st.cache_data
 def carregar_dados_solicitantes():
     try:
@@ -241,8 +264,25 @@ def carregar_dados_solicitantes():
 
 # Funções de E-mail
 status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
-logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-logo_img = load_logo(logo_url)
+
+# --- LÓGICA DE LOGIN ---
+USERS = {
+    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
+    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAURA SOARES"},
+    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
+    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
+    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
+}
+
+def fazer_login(email, senha):
+    if email in USERS and USERS[email]["password"] == senha:
+        st.session_state['logado'] = True
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
+        st.rerun()
+    else:
+        st.error("E-mail ou senha incorretos.")
 
 # Credenciais de e-mail agora vêm de st.secrets
 def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao, material):
@@ -274,25 +314,6 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
         st.error(f"❌ Erro ao enviar e-mail: {e}. O problema pode ser na conexão ou credenciais do Gmail.")
         return False
 
-# --- LÓGICA DE LOGIN ---
-USERS = {
-    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
-    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
-    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAURA SOARES"},
-    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
-    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
-    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
-}
-
-def fazer_login(email, senha):
-    if email in USERS and USERS[email]["password"] == senha:
-        st.session_state['logado'] = True
-        st.session_state['nome_colaborador'] = USERS[email]["name"]
-        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
-        st.rerun()
-    else:
-        st.error("E-mail ou senha incorretos.")
-
 # --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state['logado']:
     st.title("🏭 Login do Almoxarifado")
@@ -302,6 +323,9 @@ if 'logado' not in st.session_state or not st.session_state['logado']:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
+    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
+    logo_img = load_logo(logo_url)
+    
     # O carregamento de dados é feito na inicialização do script para evitar cache inconsistente
     df_pedidos = carregar_dados_pedidos()
     df_almoxarifado = carregar_dados_almoxarifado()
@@ -314,8 +338,6 @@ else:
     # Carrega dados dos solicitantes de forma separada
     df_solicitantes = carregar_dados_solicitantes()
 
-    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-    logo_img = load_logo(logo_url)
     if logo_img:
         st.sidebar.image(logo_img, use_container_width=True)
     
