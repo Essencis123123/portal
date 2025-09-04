@@ -536,17 +536,21 @@ else:
             suffixes=('_pedido', '_nf')
         )
         
-        # O problema era aqui. Agora criamos uma única coluna 'FORNECEDOR' que o usuário pediu,
-        # tomando o valor da coluna 'FORNECEDOR_pedido' que é a primária.
-        df_combinado.rename(columns={'FORNECEDOR_pedido': 'FORNECEDOR'}, inplace=True)
-        
+        # A nova lógica de renomear as colunas é mais robusta
+        if 'FORNECEDOR_pedido' in df_combinado.columns:
+            df_combinado.rename(columns={'FORNECEDOR_pedido': 'FORNECEDOR'}, inplace=True)
+        if 'DATA_pedido' in df_combinado.columns:
+            df_combinado.rename(columns={'DATA_pedido': 'DATA'}, inplace=True)
+        if 'V. TOTAL NF_nf' in df_combinado.columns:
+            df_combinado.rename(columns={'V. TOTAL NF_nf': 'V. TOTAL NF'}, inplace=True)
+
         # Tratar valores nulos de 'NF' para facilitar a consulta
         # Adiciona a coluna 'NF' se ela não existir
         if 'NF' not in df_combinado.columns:
             df_combinado['NF'] = 'NÃO RECEBIDA'
         else:
             df_combinado['NF'].fillna('NÃO RECEBIDA', inplace=True)
-        
+
         if not df_combinado.empty:
             st.subheader("🔎 Consulta Avançada")
             col1, col2 = st.columns(2)
@@ -559,9 +563,9 @@ else:
             with col2:
                 status_consulta = st.multiselect("Filtrar por Status (Pedido)", options=["Todos", "ENTREGUE", "PENDENTE"], default=["Todos"])
                 
-                if not df_combinado['DATA_pedido'].isnull().all():
-                    data_minima = df_combinado['DATA_pedido'].min().date() if pd.notna(df_combinado['DATA_pedido'].min()) else datetime.date.today()
-                    data_maxima = df_combinado['DATA_pedido'].max().date() if pd.notna(df_combinado['DATA_pedido'].max()) else datetime.date.today()
+                if 'DATA' in df_combinado.columns and not df_combinado['DATA'].isnull().all():
+                    data_minima = df_combinado['DATA'].min().date() if pd.notna(df_combinado['DATA'].min()) else datetime.date.today()
+                    data_maxima = df_combinado['DATA'].max().date() if pd.notna(df_combinado['DATA'].max()) else datetime.date.today()
                 else:
                     data_minima = datetime.date.today()
                     data_maxima = datetime.date.today()
@@ -577,16 +581,18 @@ else:
             if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR'] == fornecedor_consulta]
             if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_PEDIDO'].isin(status_consulta)]
             
-            df_consulta = df_consulta[
-                (df_consulta['DATA_pedido'].dt.date >= data_inicio_consulta) &
-                (df_consulta['DATA_pedido'].dt.date <= data_fim_consulta)
-            ]
-            
+            # Checa se 'DATA' existe antes de aplicar o filtro de data
+            if 'DATA' in df_consulta.columns:
+                 df_consulta = df_consulta[
+                    (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
+                    (df_consulta['DATA'].dt.date <= data_fim_consulta)
+                ]
+
             st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} itens encontrados)")
             
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
-                    'REQUISICAO', 'DATA_pedido', 'SOLICITANTE', 'MATERIAL', 'QUANTIDADE', 
+                    'REQUISICAO', 'DATA', 'SOLICITANTE', 'MATERIAL', 'QUANTIDADE', 
                     'FORNECEDOR', 'ORDEM_COMPRA', 'STATUS_PEDIDO', 
                     'NF', 'V. TOTAL NF', 'VENCIMENTO', 'DOC NF', 'STATUS_FINANCEIRO'
                 ]].copy()
@@ -597,8 +603,13 @@ else:
                     'Nº NF', 'Valor Total NF', 'Vencimento NF', 'Link NF', 'Status Financeiro'
                 ]
                 
-                df_exibir_consulta['Data Pedido'] = df_exibir_consulta['DATA_pedido'].dt.strftime('%d/%m/%Y')
-                df_exibir_consulta['Vencimento NF'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+                # Checa se 'DATA' e 'VENCIMENTO' existem antes de formatar
+                if 'DATA' in df_exibir_consulta.columns:
+                    df_exibir_consulta['Data Pedido'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
+                
+                if 'VENCIMENTO' in df_exibir_consulta.columns:
+                    df_exibir_consulta['Vencimento NF'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+
                 df_exibir_consulta['Valor Total NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
                 )
