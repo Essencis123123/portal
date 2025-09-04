@@ -114,21 +114,17 @@ def carregar_dados() -> pd.DataFrame:
                 "DOC_NF", "RECEBEDOR", "VENCIMENTO", "DIAS_VENCIMENTO"
             ])
 
-        # Mapeia nomes problemáticos para nomes padronizados internos
-        col_mapping = {
-            'STATUS FINANCEIRO': 'STATUS',
+        # Padroniza todas as colunas em uma única etapa para evitar inconsistências
+        df.columns = df.columns.str.strip().str.upper().str.replace('.', '').str.replace(' ', '_').str.replace('/', '_')
+
+        # Renomeia com um mapeamento explícito para garantir nomes internos consistentes
+        df = df.rename(columns={
+            'STATUS_FINANCEIRO': 'STATUS',
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
             'FORNECEDOR_NF': 'FORNECEDOR',
-            'V._TOTAL_NF': 'V_TOTAL_NF',
-            'V_TOTAL_NF': 'V_TOTAL_NF',
-            'DOC_NF': 'DOC_NF'
-        }
-
-        # Padroniza todas as colunas removendo espaços, pontos e convertendo para maiúsculas
-        df.columns = df.columns.str.strip().str.upper().str.replace(' ', '_').str.replace('.', '').str.replace('/', '_')
-        
-        # Renomeia com o mapeamento para garantir nomes consistentes
-        df = df.rename(columns=col_mapping, errors='ignore')
+            'V_TOTAL_NF': 'V_TOTAL_NF', # Reafirma para consistência
+            'DOC_NF': 'DOC_NF', # Reafirma para consistência
+        }, errors='ignore')
 
         # Remove linhas totalmente vazias, aparar espaços
         df = df.dropna(how='all')
