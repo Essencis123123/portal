@@ -39,6 +39,9 @@ st.markdown(
     /* Estilo para o texto do multiselect no sidebar */
     [data-testid="stSidebar"] .stMultiSelect label p { color: white !important; }
     [data-testid="stSidebar"] .stMultiSelect div[role="listbox"] * { color: black !important; }
+    /* Estilo para o texto do date_input no sidebar */
+    [data-testid="stSidebar"] .stDateInput label p { color: white !important; }
+    [data-testid="stSidebar"] .stDateInput input { color: black !important; }
 
     .stButton button p { color: black !important; }
     .stDownloadButton button p { color: white !important; }
@@ -70,9 +73,10 @@ st.markdown(
 
     /* CORREÇÃO: Reduz o tamanho da fonte dos cards de métricas */
     [data-testid="stMetric"] > div {
-        background-color: #f0f2f5; color: #1C4D86; padding: 20px; border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        font-size: 0.9rem; /* Tamanho da fonte do texto */
+        background-color: #f0f2f5; color: #1C4D86; padding: 10px; border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        text-align: center;
+        font-size: 0.8rem; /* Tamanho da fonte do texto */
     }
     [data-testid="stMetric"] > div > div:first-child {
         font-size: 1.1rem; /* Tamanho da fonte do valor */
@@ -145,7 +149,7 @@ def carregar_dados() -> pd.DataFrame:
             'STATUS_FINANCEIRO': 'STATUS',
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
             'FORNECEDOR_NF': 'FORNECEDOR',
-            'V_TOTAL_NF': 'V_TOTAL_NF',
+            'V_TOTAL_NF': 'V_TOTAL_NF', 
             'DOC_NF': 'DOC_NF',
         }, errors='ignore')
 
@@ -286,8 +290,18 @@ else:
         )
         st.divider()
 
+        # Filtros de Período
+        st.subheader("Filtros de Período")
+        if 'DATA' in df.columns and not df['DATA'].isnull().all():
+            data_minima = st.date_input("De:", value=df['DATA'].min() or datetime.date.today())
+            data_maxima = st.date_input("Até:", value=df['DATA'].max() or datetime.date.today())
+        else:
+            data_minima = None
+            data_maxima = None
+            st.info("Nenhum dado com data disponível para filtrar.")
+
+        # Filtros de Dados
         st.subheader("Filtros de Dados")
-        
         filtro_status = ['Todos']
         if 'STATUS' in df.columns and not df.empty:
             status_disponiveis = df['STATUS'].dropna().unique().tolist()
@@ -350,8 +364,11 @@ else:
                 st.warning("Alterações não salvas")
 
         if not df.empty:
-            # --- NOVO TRECHO DE CÓDIGO AQUI: Aplica os filtros ---
             df_filtrado = df.copy()
+
+            if 'DATA' in df_filtrado.columns and data_minima and data_maxima:
+                df_filtrado = df_filtrado[df_filtrado['DATA'].dt.date.between(data_minima, data_maxima)]
+
             if 'Todos' not in filtro_status:
                 df_filtrado = df_filtrado[df_filtrado['STATUS'].isin(filtro_status)]
             if 'Todos' not in filtro_fornecedor:
@@ -359,7 +376,6 @@ else:
             
             # Atualiza o df para a visualização após a filtragem
             df_display = df_filtrado
-            # --- FIM DO NOVO TRECHO ---
 
             st.markdown("---")
             c1, c2, c3, c4, c5, c6 = st.columns(6)
