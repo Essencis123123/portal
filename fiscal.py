@@ -288,7 +288,7 @@ else:
 
         menu = st.radio(
             "📌 Navegação",
-            ["📋 Visualização de NFs", "💰 Gestão de Juros", "📊 Dashboards Financeiros", "⚙️ Configurações"]
+            ["📋 Lançamentos", "💰 Gestão de Juros", "📊 Dashboards", "⚙️ Configurações"]
         )
         st.divider()
 
@@ -334,9 +334,9 @@ else:
 
     # Cabeçalhos por menu
     headers = {
-        "📋 Visualização de NFs": ("📋 VISUALIZAÇÃO DE NOTAS FISCAIS", "Gerenciamento e acompanhamento financeiro de NFs"),
+        "📋 Lançamentos": ("📋 VISUALIZAÇÃO DE NOTAS FISCAIS", "Gerenciamento e acompanhamento financeiro de NFs"),
         "💰 Gestão de Juros": ("💰 GESTÃO DE JUROS E MULTAS", "Calcule e gerencie juros para notas em atraso"),
-        "📊 Dashboards Financeiros": ("📊 DASHBOARDS FINANCEIROS COMPLETOS", "Análise estratégica de custos e eficiências"),
+        "📊 Dashboards": ("📊 DASHBOARDS FINANCEIROS COMPLETOS", "Análise estratégica de custos e eficiências"),
         "⚙️ Configurações": ("⚙️ CONFIGURAÇÕES DO SISTEMA", "Parâmetros e manutenção de dados"),
     }
     titulo, subtitulo = headers.get(menu)
@@ -347,7 +347,7 @@ else:
         </div>
     """, unsafe_allow_html=True)
 
-    if menu == "📋 Visualização de NFs":
+    if menu == "📋 Lançamentos":
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             if st.button("💾 Salvar Tudo", use_container_width=True):
@@ -563,7 +563,7 @@ else:
         else:
             st.info("Nenhum dado disponível.")
 
-    elif menu == "📊 Dashboards Financeiros":
+    elif menu == "📊 Dashboards":
         st.header("📊 Dashboards Financeiros Completos")
 
         if not df.empty:
