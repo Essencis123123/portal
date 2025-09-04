@@ -170,14 +170,19 @@ def carregar_dados():
             st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
             return pd.DataFrame(columns=[
                 "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
-                "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR", "VOLUME"
+                "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR"
             ])
+            
+        # Padroniza todos os nomes das colunas
+        df.columns = df.columns.str.strip().str.replace(' ', '_').str.upper()
 
         # Renomeia colunas para manter a compatibilidade com o código original
         df = df.rename(columns={
-            'STATUS_FINANCEIRO': 'STATUS',
+            'STATUS_FINANCEIRO': 'STATUS', 
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'VALOR FRETE': 'VALOR_FRETE'
+            'V._TOTAL_NF': 'V. TOTAL NF', # Renomeação para o formato original da exibição
+            'VALOR_FRETE': 'VALOR_FRETE',
+            'DOC_NF': 'DOC NF'
         })
         
         # Limpeza e conversão de dados
@@ -193,7 +198,7 @@ def carregar_dados():
         # Lista final das colunas que queremos no DataFrame
         colunas_final = [
             "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
-            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR", "VOLUME"
+            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR"
         ]
         
         # Garante que todas as colunas necessárias existam
@@ -203,17 +208,15 @@ def carregar_dados():
         
         # Seleciona apenas as colunas finais para remover duplicatas e manter a ordem
         df = df[colunas_final]
-
-        # Cria a coluna 'DIAS_ATRASO' se ela não existir
-        if 'DIAS_ATRASO' not in df.columns:
-            df['DIAS_ATRASO'] = 0
         
+        # Cria a coluna de dias até o vencimento
+        hoje = datetime.date.today()
+        df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
+
         # Converte colunas numéricas
         df['V. TOTAL NF'] = pd.to_numeric(df['V. TOTAL NF'], errors='coerce').fillna(0)
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
-        df['DIAS_ATRASO'] = pd.to_numeric(df['DIAS_ATRASO'], errors='coerce').fillna(0)
-        df['VOLUME'] = pd.to_numeric(df['VOLUME'], errors='coerce').fillna(0)
         
         return df
     except Exception as e:
