@@ -171,7 +171,7 @@ def carregar_dados_pedidos():
         gc = get_gspread_client()
         
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(0) # Pega a primeira aba
+        worksheet = spreadsheet.get_worksheet(0)
         
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -574,9 +574,10 @@ else:
         
         # --- CORREÇÃO AQUI ---
         # A coluna 'DOC NF' contém o link. Usamos ela diretamente no LinkColumn
-        # e definimos o texto de exibição para "📥 Anexo".
+        # e criamos uma nova coluna para o display_text, que será avaliada linha a linha.
         df_display['Anexo NF'] = df_display['DOC NF']
-        
+        df_display['Anexo Text'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
+
         edited_history_df = st.data_editor(
             df_display,
             use_container_width=True,
@@ -604,7 +605,7 @@ else:
                 "Anexo NF": st.column_config.LinkColumn(
                     "Anexo NF", 
                     help="Clique para visualizar o anexo",
-                    display_text="📥 Anexo" if pd.notna(df_history['DOC NF']) else "N/A"
+                    display_text="Anexo Text"
                 )
             },
             column_order=[
@@ -625,8 +626,7 @@ else:
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
             for index, row in edited_history_df.iterrows():
-                # A coluna "DOC NF" deve ser lida da fonte original para evitar perdas
-                cols_to_update = [col for col in edited_history_df.columns if col not in ['Anexo NF', 'DOC NF']]
+                cols_to_update = [col for col in edited_history_df.columns if col not in ['Anexo NF', 'Anexo Text']]
                 
                 for col in cols_to_update:
                     if col in st.session_state.df_pedidos.columns and col in edited_history_df.columns:
