@@ -8,6 +8,8 @@ from pandas.errors import EmptyDataError
 import requests
 from PIL import Image
 from io import BytesIO
+import gspread
+from google.oauth2.service_account import Credentials
 
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel do Solicitante", layout="wide", page_icon="📝")
@@ -132,34 +134,45 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Carregamento de Dados ---
-
 @st.cache_data
 def carregar_dados_pedidos():
-    """Carrega os dados de pedidos, garantindo que as colunas de data e status existam."""
-    arquivo_csv = "dados_pedidos.csv"
-    if os.path.exists(arquivo_csv):
-        try:
-            df = pd.read_csv(arquivo_csv, dtype={'REQUISICAO': str, 'SOLICITANTE': str, 'DEPARTAMENTO': str, 'STATUS_PEDIDO': str, 'VALOR_ITEM': float})
-            
-            for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
-                if col in df.columns:
-                    df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
-            
-            if 'STATUS_PEDIDO' not in df.columns:
-                df['STATUS_PEDIDO'] = 'PENDENTE'
-            if 'VALOR_ITEM' not in df.columns:
-                df['VALOR_ITEM'] = 0.0
-            
-            return df
-        except (FileNotFoundError, EmptyDataError):
-            return pd.DataFrame(columns=[
-                "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "MATERIAL",
-                "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM"
-            ])
-    return pd.DataFrame(columns=[
-        "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "MATERIAL",
-        "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM"
-    ])
+    """Carrega os dados de pedidos do Google Sheets."""
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(0)
+        
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+
+        # Garante que as colunas de data sejam do tipo datetime
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+            if col in df.columns and not df[col].empty:
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+        
+        # Garante que as colunas numéricas tenham o tipo correto
+        for col in ['QUANTIDADE', 'VALOR_ITEM']:
+            if col in df.columns and not df[col].empty:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # Garante que colunas importantes existam, se o arquivo estiver vazio
+        if 'STATUS_PEDIDO' not in df.columns:
+            df['STATUS_PEDIDO'] = ''
+        if 'ORDEM_COMPRA' not in df.columns:
+            df['ORDEM_COMPRA'] = ''
+
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        st.info("Verifique suas credenciais e a planilha. Criando um DataFrame vazio para continuar.")
+        return pd.DataFrame(columns=[
+            "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "MATERIAL",
+            "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM"
+        ])
 
 # --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
 df_pedidos = carregar_dados_pedidos()
@@ -189,7 +202,7 @@ with st.sidebar:
             meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
             anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                           7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+                             7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             filtro_mes_pedidos = st.selectbox("Selecione o Mês:", ['Todos'] + meses_disponiveis, format_func=lambda x: meses_nomes.get(x) if isinstance(x, int) else x)
             filtro_ano_pedidos = st.selectbox("Selecione o Ano:", ['Todos'] + anos_disponiveis)
         else:
@@ -226,7 +239,7 @@ with st.sidebar:
             meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
             anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                           7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+                             7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             
             filtro_mes_dash = st.selectbox("Selecione o Mês:", meses_disponiveis, format_func=lambda x: meses_nomes.get(x), index=len(meses_disponiveis)-1)
             filtro_ano_dash = st.selectbox("Selecione o Ano:", anos_disponiveis)
@@ -257,10 +270,11 @@ if menu_option == "📋 Acompanhar Pedidos":
     df_filtrado = df_pedidos.copy()
 
     # Aplicação dos filtros
-    if filtro_mes_pedidos != 'Todos':
-        df_filtrado = df_filtrado[df_filtrado['MES'] == filtro_mes_pedidos]
-    if filtro_ano_pedidos != 'Todos':
-        df_filtrado = df_filtrado[df_filtrado['ANO'] == filtro_ano_pedidos]
+    if 'MES' in df_filtrado.columns and 'ANO' in df_filtrado.columns:
+        if filtro_mes_pedidos != 'Todos':
+            df_filtrado = df_filtrado[df_filtrado['MES'] == filtro_mes_pedidos]
+        if filtro_ano_pedidos != 'Todos':
+            df_filtrado = df_filtrado[df_filtrado['ANO'] == filtro_ano_pedidos]
 
     if filtro_solicitante != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
