@@ -334,12 +334,18 @@ else:
         if not df.empty:
             st.markdown("---")
             c1, c2, c3, c4, c5, c6 = st.columns(6)
-            c1.metric("📊 Total de NFs", len(df))
-            c2.metric("💰 Valor NFs", f"R$ {df['V_TOTAL_NF'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            c3.metric("⏳ Pendentes", len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]))
-            c4.metric("✅ Finalizadas", len(df[df['STATUS'] == 'FINALIZADO']))
-            c5.metric("💸 Juros", f"R$ {df['VALOR_JUROS'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            c6.metric("🚚 Fretes", f"R$ {df['VALOR_FRETE'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            total_nfs = len(df)
+            total_valor = df['V_TOTAL_NF'].sum()
+            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])])
+            total_juros = df['VALOR_JUROS'].sum()
+            total_frete = df['VALOR_FRETE'].sum()
+
+            c1.metric("📊 Total de NFs", total_nfs)
+            c2.metric("💰 Valor NFs", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            c3.metric("⏳ Pendentes", nfs_pendentes)
+            c4.metric("✅ Finalizadas", total_nfs - nfs_pendentes)
+            c5.metric("💸 Juros", f"R$ {total_juros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            c6.metric("🚚 Fretes", f"R$ {total_frete:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
@@ -348,21 +354,6 @@ else:
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
 
             df_display = df.copy()
-
-            # --- CORREÇÃO AQUI: Garante que as colunas existam e na ordem correta
-            colunas_exibicao = [
-                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", 
-                "DIAS_VENCIMENTO", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", 
-                "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
-            ]
-            
-            # Garante que as colunas da planilha existem no DataFrame de exibição
-            for col in colunas_exibicao:
-                if col not in df_display.columns:
-                    df_display[col] = ''
-            
-            df_display = df_display.reindex(columns=colunas_exibicao, fill_value="")
-            # --- FIM DA CORREÇÃO ---
 
             edited_df = st.data_editor(
                 df_display,
@@ -383,7 +374,10 @@ else:
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
                 },
-                column_order=colunas_exibicao,
+                column_order=[
+                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
+                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+                ],
                 hide_index=True
             )
 
