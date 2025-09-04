@@ -71,17 +71,17 @@ st.markdown(
     }
     .stButton button:hover { background-color: #007ea7; }
 
-    /* CORREÇÃO: Reduz ainda mais o tamanho da fonte dos cards de métricas */
+    /* CORREÇÃO: Reduz o tamanho da fonte dos cards de métricas */
     [data-testid="stMetric"] > div {
         background-color: #f0f2f5; color: #1C4D86; padding: 5px; border-radius: 8px;
         box-shadow: 0 1px 4px rgba(0,0,0,0.1);
         text-align: center;
     }
     [data-testid="stMetric"] .stMetricValue {
-        font-size: 0.6rem;
+        font-size: 0.9rem;
     }
     [data-testid="stMetric"] .stMetricLabel {
-        font-size: 0.4rem; 
+        font-size: 0.6rem;
     }
     </style>
     """,
@@ -388,7 +388,7 @@ else:
             total_juros = df_display['VALOR_JUROS'].sum()
             total_frete = df_display['VALOR_FRETE'].sum()
 
-            # --- CORREÇÃO: Nova lógica para formatar valores com K ---
+            # --- CORREÇÃO AQUI: Nova lógica para formatar valores com K ---
             def formatar_milhar(valor):
                 if abs(valor) >= 1000:
                     return f"R$ {valor/1000:,.1f}K".replace(",", "X").replace(".", ",").replace("X", ".")
