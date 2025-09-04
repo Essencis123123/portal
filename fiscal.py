@@ -576,17 +576,17 @@ else:
                             title='Distribuição por Tipo de Frete'
                         )
                         st.plotly_chart(fig_frete_tipo, use_container_width=True)
-            
-            with col2:
-                if not dados_mensais.empty:
-                    fig_frete_evolucao = px.line(
-                        dados_mensais,
-                        x='MES_ANO',
-                        y='VALOR_FRETE',
-                        title='Evolução Mensal dos Gastos com Frete',
-                        labels={'VALOR_FRETE': 'Valor do Frete (R$)', 'MES_ANO': 'Mês'}
-                    )
-                    st.plotly_chart(fig_frete_evolucao, use_container_width=True)
+                
+                with col2:
+                    if not dados_mensais.empty:
+                        fig_frete_evolucao = px.line(
+                            dados_mensais,
+                            x='MES_ANO',
+                            y='VALOR_FRETE',
+                            title='Evolução Mensal dos Gastos com Frete',
+                            labels={'VALOR_FRETE': 'Valor do Frete (R$)', 'MES_ANO': 'Mês'}
+                        )
+                        st.plotly_chart(fig_frete_evolucao, use_container_width=True)
             
             st.subheader("💸 Análise de Custos")
             custos_totais = pd.DataFrame({
