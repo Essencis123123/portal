@@ -171,8 +171,8 @@ def carregar_dados():
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'V._TOTAL_NF': 'V_TOTAL_NF', # Corrigido aqui
-            'DOC_NF': 'DOC_NF' # Mantenha o padrão
+            'V._TOTAL_NF': 'V_TOTAL_NF',
+            'DOC_NF': 'DOC_NF'
         })
         
         # Limpa e converte tipos de dados
@@ -180,9 +180,7 @@ def carregar_dados():
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
 
         df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-        # Remove a coluna 'VENCIMENTO' se ela existir
-        if 'VENCIMENTO' in df.columns:
-            df = df.drop(columns=['VENCIMENTO'])
+        # A coluna VENCIMENTO foi removida, então não há necessidade de processá-la
         
         # Garante que as colunas essenciais existam
         colunas_necessarias = {
@@ -220,7 +218,7 @@ def salvar_dados(df):
         df_to_save = df.rename(columns={
             'STATUS': 'STATUS_FINANCEIRO', 
             'REGISTRO_ADICIONAL': 'OBSERVACAO',
-            'V_TOTAL_NF': 'V. TOTAL NF', # Corrigido aqui
+            'V_TOTAL_NF': 'V. TOTAL NF',
             'DOC_NF': 'DOC NF'
         })
         
