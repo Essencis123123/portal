@@ -388,7 +388,7 @@ else:
                     st.session_state.itens_requisicao_temp = pd.concat([st.session_state.itens_requisicao_temp, novo_item], ignore_index=True)
                     st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
                     # Limpa os campos de entrada após adicionar o item
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Por favor, preencha o material e a quantidade.")
         
