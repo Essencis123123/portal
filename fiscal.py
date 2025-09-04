@@ -171,8 +171,7 @@ def carregar_dados():
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'V._TOTAL_NF': 'V_TOTAL_NF',
-            'DOC_NF': 'DOC_NF'
+            'V_TOTAL_NF': 'V_TOTAL_NF' # Garante que o nome V_TOTAL_NF seja consistente
         })
         
         # Limpa e converte tipos de dados
@@ -397,7 +396,7 @@ else:
                     "FORNECEDOR": "Fornecedor",
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
-                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
+                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f"),
                     "STATUS": st.column_config.SelectboxColumn("Status", options=status_options),
                     "CONDICAO_PROBLEMA": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
