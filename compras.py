@@ -931,6 +931,3 @@ else:
         else:
             st.info("Dados de solicitantes locais insuficientes para gerar o ranking.")
 
-Chat veja meu codigo ele nao puxou o link no campo anexo NF
-
-O link esta no campo "DOC NF"
