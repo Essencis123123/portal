@@ -115,14 +115,6 @@ def carregar_dados() -> pd.DataFrame:
 
         df = pd.DataFrame(worksheet.get_all_records())
 
-        if df.empty or all(pd.Series(df.columns).isnull()):
-            st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
-            return pd.DataFrame(columns=[
-                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "STATUS",
-                "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
-                "DOC_NF", "RECEBEDOR", "VENCIMENTO", "DIAS_VENCIMENTO"
-            ])
-
         # Padroniza os nomes das colunas
         df.columns = df.columns.str.strip().str.upper().str.replace('.', '').str.replace(' ', '_').str.replace('/', '_')
 
@@ -134,6 +126,7 @@ def carregar_dados() -> pd.DataFrame:
         # --- FIM DA CORREÇÃO ---
 
         # Renomeia com um mapeamento explícito para garantir nomes internos consistentes
+        # Corrigido o mapeamento para "DOC NF"
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS',
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
@@ -144,7 +137,8 @@ def carregar_dados() -> pd.DataFrame:
 
         # Remove linhas totalmente vazias, apara espaços
         df = df.dropna(how='all')
-        df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+        if not df.empty:
+            df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
         # Garante colunas essenciais
         colunas_necessarias = {
@@ -156,6 +150,9 @@ def carregar_dados() -> pd.DataFrame:
         for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
                 df[col] = default_val
+        
+        # Reordena o DataFrame para corresponder à ordem esperada
+        df = df.reindex(columns=colunas_necessarias.keys(), fill_value="")
 
         # Tipos numéricos
         for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
@@ -173,6 +170,7 @@ def carregar_dados() -> pd.DataFrame:
 
     except Exception as e:
         st.error(f"Erro ao carregar dados da planilha. Verifique nome/aba/credenciais. Detalhe: {e}")
+        # Retorna um DataFrame vazio com as colunas esperadas em caso de erro
         return pd.DataFrame(columns=[
             "DATA","FORNECEDOR","NF","ORDEM_COMPRA","V_TOTAL_NF","STATUS",
             "CONDICAO_PROBLEMA","REGISTRO_ADICIONAL","VALOR_JUROS","VALOR_FRETE",
@@ -274,7 +272,7 @@ else:
         if not df.empty:
             total_nfs = len(df)
             total_valor = df['V_TOTAL_NF'].sum()
-            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])])
+            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]))
             total_juros = df['VALOR_JUROS'].sum()
             total_frete = df['VALOR_FRETE'].sum()
 
@@ -347,6 +345,16 @@ else:
 
             df_display = df.copy()
 
+            # --- CORREÇÃO AQUI: Garante que as colunas existam e na ordem correta
+            colunas_exibicao = [
+                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", 
+                "DIAS_VENCIMENTO", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", 
+                "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+            ]
+            
+            df_display = df_display.reindex(columns=colunas_exibicao, fill_value="")
+            # --- FIM DA CORREÇÃO ---
+
             edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
@@ -366,10 +374,7 @@ else:
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
                 },
-                column_order=[
-                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
-                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
-                ],
+                column_order=colunas_exibicao,
                 hide_index=True
             )
 
