@@ -40,7 +40,7 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
-
+    
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
@@ -147,24 +147,31 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
+        # Reordena as colunas do DataFrame para a ordem esperada
+        ordem_colunas = [
+            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
+            "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
+            "ORDEM_COMPRA"
+        ]
+        
+        # Cria um novo DataFrame com as colunas na ordem correta. Colunas ausentes serão preenchidas com NaN.
+        df_reordenado = df.reindex(columns=ordem_colunas)
+
         for col in ['DATA', 'VENCIMENTO']:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+            if col in df_reordenado.columns:
+                df_reordenado[col] = pd.to_datetime(df_reordenado[col], errors='coerce', dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            if col in df_reordenado.columns:
+                df_reordenado[col] = pd.to_numeric(df_reordenado[col], errors='coerce').fillna(0)
 
-        if 'CONDICAO_PROBLEMA' not in df.columns:
-            df['CONDICAO_PROBLEMA'] = ''
-        if 'REGISTRO_ADICIONAL' not in df.columns:
-            df['REGISTRO_ADICIONAL'] = ''
-        if 'ORDEM_COMPRA' not in df.columns:
-            df['ORDEM_COMPRA'] = ''
-        if 'STATUS_FINANCEIRO' not in df.columns:
-            df['STATUS_FINANCEIRO'] = ''
+        # Garante que colunas importantes existam, se o arquivo estiver vazio
+        for col in ordem_colunas:
+            if col not in df_reordenado.columns:
+                df_reordenado[col] = ''
 
-        return df
+        return df_reordenado
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
         return pd.DataFrame(columns=[
@@ -216,29 +223,6 @@ def carregar_dados_pedidos():
         st.error(f"Erro ao carregar dados de pedidos: {e}")
         return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA"])
 
-def salvar_dados_pedidos(df):
-    """Salva os dados de pedidos no Google Sheets."""
-    try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(0)
-
-        df_copy = df.copy()
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
-            if col in df_copy.columns:
-                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
-        
-        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
-        worksheet.clear()
-        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar dados de pedidos: {e}")
-        return False
-
 @st.cache_data
 def carregar_dados_solicitantes():
     try:
@@ -257,25 +241,8 @@ def carregar_dados_solicitantes():
 
 # Funções de E-mail
 status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
-
-# --- LÓGICA DE LOGIN ---
-USERS = {
-    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
-    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
-    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAURA SOARES"},
-    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
-    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
-    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
-}
-
-def fazer_login(email, senha):
-    if email in USERS and USERS[email]["password"] == senha:
-        st.session_state['logado'] = True
-        st.session_state['nome_colaborador'] = USERS[email]["name"]
-        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
-        st.rerun()
-    else:
-        st.error("E-mail ou senha incorretos.")
+logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
+logo_img = load_logo(logo_url)
 
 # Credenciais de e-mail agora vêm de st.secrets
 def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao, material):
@@ -306,6 +273,25 @@ def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao,
     except Exception as e:
         st.error(f"❌ Erro ao enviar e-mail: {e}. O problema pode ser na conexão ou credenciais do Gmail.")
         return False
+
+# --- LÓGICA DE LOGIN ---
+USERS = {
+    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
+    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAURA SOARES"},
+    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
+    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
+    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
+}
+
+def fazer_login(email, senha):
+    if email in USERS and USERS[email]["password"] == senha:
+        st.session_state['logado'] = True
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
+        st.rerun()
+    else:
+        st.error("E-mail ou senha incorretos.")
 
 # --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state['logado']:
@@ -415,10 +401,10 @@ else:
                                     for original_index in df_update_pedidos.index:
                                         st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
                                         st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
-                                    
-                                    salvar_dados_pedidos(st.session_state.df_pedidos)
-                                else:
-                                    st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada nos pedidos. O status não foi atualizado.")
+                                
+                                salvar_dados_pedidos(st.session_state.df_pedidos)
+                            else:
+                                st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada nos pedidos. O status não foi atualizado.")
                             
                             novo_registro_nf = {
                                 "DATA": pd.to_datetime(data_recebimento),
