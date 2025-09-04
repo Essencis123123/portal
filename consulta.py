@@ -36,6 +36,13 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
+    /* CORREÇÃO: Estilo para o texto do selectbox no sidebar ser visível */
+    [data-testid="stSidebar"] .st-emotion-cache-q2x8y4 {
+        color: white;
+    }
+    [data-testid="stSidebar"] .st-emotion-cache-1g0b2l {
+        color: white;
+    }
 
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
@@ -60,6 +67,12 @@ st.markdown(
     [data-testid="stSidebar"] .st-emotion-cache-1c1913f span {
         color: black !important;
     }
+
+    /* CORREÇÃO: Nova regra para mudar o fundo dos campos no sidebar */
+    [data-testid="stSidebar"] .st-emotion-cache-1g0b2l div, [data-testid="stSidebar"] .st-emotion-cache-q2x8y4 div {
+        background-color: #0d3862; /* Um tom de azul escuro para contrastar com a letra branca */
+    }
+
 
     [data-testid="stSidebar"] img {
         display: block;
@@ -399,7 +412,12 @@ if menu_option == "📋 Acompanhar Pedidos":
                f"Total de pedidos: {len(df_pedidos)}")
 
 elif menu_option == "📊 Dashboard de Custos":
-    if meses_disponiveis:
+    if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
+        meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
+        anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
+        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+                         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+        
         filtro_mes_dash = st.selectbox("Selecione o Mês:", meses_disponiveis, format_func=lambda x: meses_nomes.get(x), index=len(meses_disponiveis)-1)
         filtro_ano_dash = st.selectbox("Selecione o Ano:", anos_disponiveis)
     else:
