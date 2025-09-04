@@ -573,11 +573,11 @@ else:
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
         # --- CORREÇÃO AQUI ---
-        # A coluna 'Anexo NF' agora contém os links.
-        # Criamos uma nova coluna para o texto de exibição, com o ícone ou 'N/A' para exibição.
-        df_display['Anexo Display'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
+        # A coluna 'DOC NF' contém os links.
+        # Criamos a coluna 'Anexo' para ser a coluna de exibição e de link ao mesmo tempo.
+        df_display['Anexo'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
 
-edited_history_df = st.data_editor(
+        edited_history_df = st.data_editor(
             df_display,
             use_container_width=True,
             hide_index=False,
@@ -601,18 +601,15 @@ edited_history_df = st.data_editor(
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
-                "DOC NF": st.column_config.LinkColumn(
+                "Anexo": st.column_config.LinkColumn(
                     "Anexo NF",
-                    help="Clique para visualizar o anexo",
-                    # A correção é aqui: use o ícone diretamente como o display_text.
-                    # A coluna com os links continua sendo "DOC NF".
-                    display_text="📥"
+                    help="Clique para visualizar o anexo"
                 )
             },
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
                 "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-                "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+                "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "Anexo"
             ]
         )
 
@@ -627,7 +624,7 @@ edited_history_df = st.data_editor(
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
             for index, row in edited_history_df.iterrows():
-                cols_to_update = [col for col in edited_history_df.columns if col not in ['Anexo NF', 'Anexo Display']]
+                cols_to_update = [col for col in edited_history_df.columns if col not in ['DOC NF', 'Anexo', 'Anexo Display']]
                 
                 for col in cols_to_update:
                     if col in st.session_state.df_pedidos.columns and col in edited_history_df.columns:
