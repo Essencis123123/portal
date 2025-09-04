@@ -229,7 +229,7 @@ def salvar_dados_pedidos(df):
         worksheet = spreadsheet.get_worksheet(0)
 
         df_copy = df.copy()
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+        for col in ['DATA', 'DATA_APROVacao', 'DATA_ENTREGA']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         
@@ -542,6 +542,18 @@ else:
                     'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
                     'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE'
                 ]].copy()
+                
+                # Função para adicionar bolinhas coloridas aos status
+                def colorir_status(status):
+                    cores = {
+                        "EM ANDAMENTO": "🟡",  # Amarelo
+                        "NF PROBLEMA": "🔴",   # Vermelho  
+                        "CAPTURADO": "🟠",     # Laranja
+                        "FINALIZADO": "🟢"     # Verde
+                    }
+                    return f"{cores.get(status, '⚪')} {status}"
+                
+                df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
                 
                 df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['VENCIMENTO'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
