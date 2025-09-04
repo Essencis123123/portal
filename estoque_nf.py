@@ -154,6 +154,7 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
+@st.cache_data
 def carregar_dados_almoxarifado():
     try:
         gc = get_gspread_client()
@@ -639,6 +640,8 @@ else:
             st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
             
             if st.button("🔄 Recarregar Dados"):
+                # A correção está aqui: limpa o cache antes de recarregar
+                st.cache_data.clear()
                 st.session_state.df_pedidos = carregar_dados_pedidos()
                 st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
                 st.success("Dados recarregados com sucesso!")
