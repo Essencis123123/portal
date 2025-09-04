@@ -135,6 +135,7 @@ def load_logo(url):
         return None
 
 # Funções de carregamento e salvamento de dados para Google Sheets
+@st.cache_data(ttl=3600)  # Cache por 1 hora
 def carregar_dados_almoxarifado():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -196,7 +197,7 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
         return False
 
-# Removido o cache para garantir que os dados de pedidos sejam sempre os mais recentes
+@st.cache_data(ttl=3600) # Cache por 1 hora
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
@@ -239,6 +240,7 @@ def salvar_dados_pedidos(df):
         st.error(f"Erro ao salvar dados de pedidos: {e}")
         return False
 
+@st.cache_data(ttl=3600) # Cache por 1 hora
 def carregar_dados_solicitantes():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -408,51 +410,68 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            if 'ORDEM_COMPRA' in st.session_state.df_pedidos.columns:
-                                df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
+                            # 1. Encontrar a linha correspondente na planilha de pedidos
+                            df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
+                            
+                            if not df_update_pedidos.empty:
                                 
-                                if not df_update_pedidos.empty:
+                                # Coleta as informações do pedido (solicitante, material, etc.)
+                                solicitante_pedido = df_update_pedidos['SOLICITANTE'].iloc[0]
+                                material_pedido = df_update_pedidos['MATERIAL'].iloc[0]
+                                
+                                # 2. Encontrar o e-mail do solicitante usando o nome da coluna 'SOLICITANTE'
+                                email_solicitante = None
+                                if solicitante_pedido in df_solicitantes['NOME'].values:
+                                    email_solicitante = df_solicitantes[df_solicitantes['NOME'] == solicitante_pedido]['EMAIL'].iloc[0]
+                                
+                                # 3. Tentar enviar o e-mail
+                                email_enviado = False
+                                if email_solicitante:
+                                    st.info(f"💌 Enviando e-mail de confirmação para {solicitante_pedido}...")
+                                    email_enviado = enviar_email_entrega(solicitante_pedido, email_solicitante, ordem_compra_nf, material_pedido)
+                                else:
+                                    st.warning(f"⚠️ Aviso: O e-mail para o solicitante '{solicitante_pedido}' não foi encontrado. O e-mail não foi enviado.")
+
+                                # Se o e-mail foi enviado (ou não, e isso não for um erro crítico), continuar
+                                if email_enviado or not email_solicitante:
+                                    # 4. Atualizar o status do pedido
                                     for original_index in df_update_pedidos.index:
                                         st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
                                         st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
-                                
-                                salvar_dados_pedidos(st.session_state.df_pedidos)
+                                    
+                                    # 5. Salvar as alterações no Google Sheets
+                                    salvar_dados_pedidos(st.session_state.df_pedidos)
+                                    
+                                    # 6. Registrar a nova nota fiscal
+                                    novo_registro_nf = {
+                                        "DATA": pd.to_datetime(data_recebimento),
+                                        "RECEBEDOR": recebedor,
+                                        "FORNECEDOR": nome_final_fornecedor,
+                                        "NF": nf_numero,
+                                        "VOLUME": volume_nf,
+                                        "V. TOTAL NF": valor_total_float,
+                                        "CONDICAO FRETE": condicao_frete_nf,
+                                        "VALOR FRETE": valor_frete_float,
+                                        "OBSERVACAO": observacao,
+                                        "DOC NF": doc_nf_link,
+                                        "VENCIMENTO": pd.to_datetime(vencimento_nf),
+                                        "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                                        "CONDICAO_PROBLEMA": "N/A",
+                                        "REGISTRO_ADICIONAL": "",
+                                        "ORDEM_COMPRA": ordem_compra_nf
+                                    }
+                                    st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                                    
+                                    if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                                        st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
+                                    else:
+                                        st.error("Erro ao salvar os dados da nota fiscal.")
                             else:
                                 st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada nos pedidos. O status não foi atualizado.")
                             
-                            novo_registro_nf = {
-                                "DATA": pd.to_datetime(data_recebimento),
-                                "RECEBEDOR": recebedor,
-                                "FORNECEDOR": nome_final_fornecedor,
-                                "NF": nf_numero,
-                                "VOLUME": volume_nf,
-                                "V. TOTAL NF": valor_total_float,
-                                "CONDICAO FRETE": condicao_frete_nf,
-                                "VALOR FRETE": valor_frete_float,
-                                "OBSERVACAO": observacao,
-                                "DOC NF": doc_nf_link,
-                                "VENCIMENTO": pd.to_datetime(vencimento_nf),
-                                "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                                "CONDICAO_PROBLEMA": "N/A",
-                                "REGISTRO_ADICIONAL": "",
-                                "ORDEM_COMPRA": ordem_compra_nf
-                            }
-                            st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
-                            
-                            if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                                st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
-                                if 'NOME' in df_solicitantes.columns and 'EMAIL' in df_solicitantes.columns:
-                                    email_solicitante = df_solicitantes[df_solicitantes['NOME'] == recebedor]['EMAIL'].iloc[0] if recebedor in df_solicitantes['NOME'].values else None
-                                    if email_solicitante:
-                                        material_pedido = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf]['MATERIAL'].iloc[0] if not df_update_pedidos.empty and 'MATERIAL' in df_update_pedidos.columns else "N/A"
-                                        enviar_email_entrega(recebedor, email_solicitante, ordem_compra_nf, material_pedido)
-                                else:
-                                    st.warning("Aviso: As colunas 'NOME' ou 'EMAIL' não foram encontradas na planilha de solicitantes. O e-mail não foi enviado.")
-                            else:
-                                st.error("Erro ao salvar os dados da nota fiscal.")
-                        
                             st.balloons()
                             st.rerun()
+                        
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
         
