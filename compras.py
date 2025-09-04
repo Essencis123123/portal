@@ -528,13 +528,17 @@ else:
         # Adição da correção: Converte a coluna 'DATA' para o tipo datetime
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
 
-        # Adiciona os links do DOC NF da planilha do almoxarifado
+        # Mescla os dados do almoxarifado para obter o link do DOC NF
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
-            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left')
-        else:
-            df_history['DOC NF'] = ''
-
+            # Renomeia para evitar conflito
+            df_almox.rename(columns={'DOC NF': 'DOC NF_almox'}, inplace=True)
+            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF_almox']], on='ORDEM_COMPRA', how='left')
+            # Usa o link da tabela almoxarifado se existir, senão mantém o valor original
+            df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
+            df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+        
+        # Filtros
         if not df_history['DATA'].isnull().all():
             with col_filter_h1:
                 meses_disponiveis = df_history['DATA'].dt.month.unique()
@@ -582,6 +586,7 @@ else:
             df_display,
             use_container_width=True,
             hide_index=False,
+            key='history_editor',
             column_config={
                 "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
                 "DATA": st.column_config.DateColumn("Data Requisição"),
@@ -601,7 +606,7 @@ else:
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
-                "DOC NF": st.column_config.LinkColumn("Anexo NF", display_text="📥 Anexo")
+                "DOC NF": st.column_config.LinkColumn("Anexo NF", display_text="📥 Anexo", disabled=True)
             },
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
@@ -612,7 +617,7 @@ else:
 
         if not edited_history_df.equals(df_display):
             st.info("Salvando alterações...")
-
+            
             # Desconverte o status de exibição para o valor original
             edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
                 '🟢 ENTREGUE': 'ENTREGUE',
@@ -629,7 +634,11 @@ else:
                 
                 # Obtém os valores editados, mas não atualiza a coluna 'DOC NF'
                 cols_to_update = [col for col in edited_history_df.columns if col != 'DOC NF']
-                st.session_state.df_pedidos.loc[index, cols_to_update] = row[cols_to_update]
+                
+                # Atualiza as colunas editáveis no DataFrame de sessão
+                for col in cols_to_update:
+                    if col in st.session_state.df_pedidos.columns and col in edited_history_df.columns:
+                        st.session_state.df_pedidos.loc[index, col] = edited_history_df.loc[index, col]
 
                 # Recalcula os dias de emissão e atraso
                 if pd.notna(st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO']) and pd.notna(st.session_state.df_pedidos.loc[index, 'DATA']):
