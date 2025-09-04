@@ -537,10 +537,15 @@ else:
         )
         
         # A nova lógica de renomear as colunas é mais robusta
+        # Renomeia FORNECEDOR_pedido para FORNECEDOR, mas verifica antes para não dar KeyError
         if 'FORNECEDOR_pedido' in df_combinado.columns:
             df_combinado.rename(columns={'FORNECEDOR_pedido': 'FORNECEDOR'}, inplace=True)
+        
+        # Renomeia DATA_pedido para DATA, mas verifica antes para não dar KeyError
         if 'DATA_pedido' in df_combinado.columns:
             df_combinado.rename(columns={'DATA_pedido': 'DATA'}, inplace=True)
+        
+        # Renomeia V. TOTAL NF_nf para V. TOTAL NF, mas verifica antes para não dar KeyError
         if 'V. TOTAL NF_nf' in df_combinado.columns:
             df_combinado.rename(columns={'V. TOTAL NF_nf': 'V. TOTAL NF'}, inplace=True)
 
@@ -587,6 +592,9 @@ else:
                     (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
                     (df_consulta['DATA'].dt.date <= data_fim_consulta)
                 ]
+            else:
+                st.warning("⚠️ A coluna 'DATA' não foi encontrada para aplicar o filtro de data.")
+
 
             st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} itens encontrados)")
             
@@ -609,10 +617,11 @@ else:
                 
                 if 'VENCIMENTO' in df_exibir_consulta.columns:
                     df_exibir_consulta['Vencimento NF'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-
-                df_exibir_consulta['Valor Total NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
-                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
-                )
+                
+                if 'V. TOTAL NF' in df_exibir_consulta.columns:
+                    df_exibir_consulta['Valor Total NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
+                        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
+                    )
                 
                 st.dataframe(
                     df_exibir_consulta,
