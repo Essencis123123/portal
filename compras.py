@@ -275,7 +275,7 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # Reordena e limpa as colunas para evitar KeyErrors
+        # Garante que as colunas existam, reordenando-as.
         ordem_colunas = ['ORDEM_COMPRA', 'DOC NF']
         df = df.reindex(columns=ordem_colunas)
         
@@ -438,21 +438,10 @@ else:
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
             st.stop()
         
-        # Pega a nota fiscal da aba de almoxarifado
-        df_almox = st.session_state.df_almoxarifado.copy()
-        if not df_almox.empty:
-            df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
-            
-            # Faz a junção com o dataframe de pedidos pendentes para preencher automaticamente o campo DOC NF
-            pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
-            pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
-            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
-
-
         cols_para_editar = [
             "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "QUANTIDADE",
             "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-            "DATA_APROVACAO", "CONDICAO_FRETE", "DOC NF"
+            "DATA_APROVACAO", "CONDICAO_FRETE"
         ]
         
         df_editavel = pedidos_pendentes_oc[cols_para_editar].copy()
@@ -475,11 +464,6 @@ else:
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-                    "DOC NF": st.column_config.LinkColumn(
-                        "DOC NF",
-                        help="Link do anexo da Nota Fiscal.",
-                        display_text="📎 Anexo"
-                    )
                 }
             )
             
@@ -506,7 +490,6 @@ else:
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
                     st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
                     st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
-                    st.session_state.df_pedidos.loc[original_index, 'DOC NF'] = edited_row['DOC NF']
                     
                     if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
                         data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
@@ -536,6 +519,14 @@ else:
 
         # Adição da correção: Converte a coluna 'DATA' para o tipo datetime
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+
+        # Adiciona os links do DOC NF da planilha do almoxarifado
+        df_almox = st.session_state.df_almoxarifado.copy()
+        if not df_almox.empty:
+            df_history = pd.merge(df_history, df_almox, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
+            df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+
 
         if not df_history['DATA'].isnull().all():
             with col_filter_h1:
@@ -599,7 +590,9 @@ else:
             for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
                 edited_history_df[col] = pd.to_datetime(edited_history_df[col], errors='coerce', dayfirst=True)
 
-            st.session_state.df_pedidos.update(edited_history_df)
+            # Para que as edições não apaguem o link do DOC NF, precisamos separá-las
+            df_history_merged = edited_history_df.drop(columns=['DOC NF'], errors='ignore')
+            st.session_state.df_pedidos.update(df_history_merged)
             
             for index, row in edited_history_df.iterrows():
                 if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
