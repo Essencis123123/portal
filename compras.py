@@ -531,10 +531,7 @@ else:
         # Mescla os dados do almoxarifado para obter o link do DOC NF
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
-            # Renomeia para evitar conflito
-            df_almox.rename(columns={'DOC NF': 'DOC NF_almox'}, inplace=True)
-            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF_almox']], on='ORDEM_COMPRA', how='left')
-            # Usa o link da tabela almoxarifado se existir, senão mantém o valor original
+            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
             df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
             df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
         
@@ -628,10 +625,6 @@ else:
             
             # Para cada linha editada, encontre a linha correspondente no DataFrame original e atualize
             for index, row in edited_history_df.iterrows():
-                # Encontra o índice da linha original no DataFrame de sessão
-                # Garantimos que a linha de índice `index` do edited_history_df corresponde
-                # à linha de índice `index` do df_history original
-                
                 # Obtém os valores editados, mas não atualiza a coluna 'DOC NF'
                 cols_to_update = [col for col in edited_history_df.columns if col != 'DOC NF']
                 
