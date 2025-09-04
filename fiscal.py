@@ -161,103 +161,68 @@ def carregar_dados():
             st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
             return pd.DataFrame(columns=[
                 "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF",
-                "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+                "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR",
+                "VENCIMENTO"
             ])
-        
-        # DEBUG: Mostrar colunas originais para diagnóstico
-        st.write("🔍 Colunas originais na planilha:", df.columns.tolist())
         
         # Padroniza todos os nomes das colunas para letras maiúsculas e sem espaços
         df.columns = df.columns.str.strip().str.replace(' ', '_').str.upper()
-        
-        # DEBUG: Mostrar colunas após padronização
-        st.write("🔍 Colunas após padronização:", df.columns.tolist())
 
-        # MAPEAMENTO CORRETO baseado nos nomes REAIS das colunas
-        mapeamento_colunas = {
+        # Renomeia colunas da planilha para nomes internos consistentes
+        df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'V._TOTAL_NF': 'V_TOTAL_NF',  # Isso vai capturar "V. TOTAL NF" -> "V_TOTAL_NF"
-            'DOC_NF': 'DOC_NF',
-            'VALOR_FRETE': 'VALOR_FRETE',
-            'CONDICAO_FRETE': 'CONDICAO_FRETE',
-            'VOLUME': 'VOLUME',
-            'VENCIMENTO': 'VENCIMENTO'
-        }
+            'V._TOTAL_NF': 'V_TOTAL_NF'
+        })
         
-        # Aplicar renomeação apenas para colunas que existem
-        renomear = {k: v for k, v in mapeamento_colunas.items() if k in df.columns}
-        df = df.rename(columns=renomear)
-        
-        # DEBUG: Mostrar colunas após renomeação
-        st.write("🔍 Colunas após renomeação:", df.columns.tolist())
-
         # Limpa e converte tipos de dados
         df = df.dropna(how='all')
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
 
-        # Verificar se a coluna 'DATA' existe
-        if 'DATA' not in df.columns:
-            st.error(f"Coluna 'DATA' não encontrada. Colunas disponíveis: {df.columns.tolist()}")
+        # Garante que a coluna 'DATA' e 'VENCIMENTO' existam antes de tentar convertê-las
+        if 'DATA' not in df.columns or 'VENCIMENTO' not in df.columns:
+            st.error("Colunas 'DATA' ou 'VENCIMENTO' não encontradas na planilha.")
             return pd.DataFrame()
 
-        # Conversão de data (formato brasileiro DD/MM/YYYY)
-        try:
-            df['DATA'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce')
-            # Se ainda tiver problemas, tentar método mais flexível
-            if df['DATA'].isna().sum() > 0:
-                df['DATA'] = pd.to_datetime(df['DATA'], dayfirst=True, errors='coerce')
-        except Exception as e:
-            st.error(f"Erro na conversão de data: {e}")
-            return pd.DataFrame()
+        # Conversão de data mais robusta com dayfirst=True
+        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
         
-        # Garante que as colunas essenciais existam com valores padrão
-        colunas_padrao = {
-            "STATUS": "EM ANDAMENTO", 
-            "CONDICAO_PROBLEMA": "N/A",
-            "REGISTRO_ADICIONAL": "", 
-            "VALOR_JUROS": 0.0,  # Esta coluna pode não existir na planilha original
-            "VALOR_FRETE": 0.0, 
-            "DOC_NF": "",
-            "V_TOTAL_NF": 0.0, 
-            "NF": "", 
-            "RECEBEDOR": "",
-            "FORNECEDOR": "",
-            "ORDEM_COMPRA": ""
+        # Garante que as colunas essenciais existam
+        colunas_necessarias = {
+            "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A",
+            "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0,
+            "VALOR_FRETE": 0.0, "DOC_NF": "",
+            "V_TOTAL_NF": 0.0, "NF": "", "RECEBEDOR": "", "VENCIMENTO": None
         }
-        
-        for col, default_val in colunas_padrao.items():
+        for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
                 df[col] = default_val
-                if col == "VALOR_JUROS":  # Coluna específica para juros
-                    st.info(f"Coluna '{col}' adicionada para cálculo de juros")
 
-        # Converte colunas numéricas
-        for col_num in ['V_TOTAL_NF', 'VALOR_JUROS', 'VALOR_FRETE']:
-            if col_num in df.columns:
-                df[col_num] = pd.to_numeric(df[col_num], errors='coerce').fillna(0)
-        
-        # Seleciona apenas as colunas que serão usadas no painel fiscal
-        colunas_finais = [
-            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF",
-            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", 
-            "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
-        ]
-        
-        # Garante que todas as colunas finais existam
-        for col in colunas_finais:
-            if col not in df.columns:
-                df[col] = "" if col != "VALOR_JUROS" else 0.0
-        
+        # Seleciona e reordena apenas as colunas que o painel fiscal irá usar
+        colunas_finais = list(colunas_necessarias.keys())
         df = df[colunas_finais]
         
-        st.success("✅ Dados carregados com sucesso!")
-        return df
+        # Converte colunas numéricas
+        df['V_TOTAL_NF'] = pd.to_numeric(df['V_TOTAL_NF'], errors='coerce').fillna(0)
+        df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
+        df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         
+        # Certifica-se de que as colunas de data são do tipo datetime antes de usá-las
+        if not pd.api.types.is_datetime64_any_dtype(df['DATA']):
+            st.error("Erro na conversão da coluna 'DATA' para o tipo de data. Verifique o formato na planilha.")
+            return pd.DataFrame()
+        if not pd.api.types.is_datetime64_any_dtype(df['VENCIMENTO']):
+            st.error("Erro na conversão da coluna 'VENCIMENTO' para o tipo de data. Verifique o formato na planilha.")
+            return pd.DataFrame()
+        
+        # Calcula os dias de vencimento
+        hoje = datetime.date.today()
+        df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
+
+        return df
     except Exception as e:
-        st.error(f"Erro ao carregar dados da planilha: {e}")
-        import traceback
-        st.error(f"Detalhes do erro: {traceback.format_exc()}")
+        st.error(f"Erro ao carregar dados da planilha. Verifique o nome/URL da planilha, o nome da aba e se as credenciais estão corretas. Erro: {e}")
         return pd.DataFrame()
 
 def salvar_dados(df):
@@ -272,13 +237,19 @@ def salvar_dados(df):
             'STATUS': 'STATUS_FINANCEIRO', 
             'REGISTRO_ADICIONAL': 'OBSERVACAO',
             'V_TOTAL_NF': 'V. TOTAL NF',
-            'DOC_NF': 'DOC NF'
+            'DOC_NF': 'DOC NF',
+            'VALOR_FRETE': 'VALOR FRETE'
         })
         
         # Converte as datas de volta para string antes de salvar
         if 'DATA' in df_to_save.columns:
             df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
-        
+        if 'VENCIMENTO' in df_to_save.columns:
+            df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+
+        # Remove colunas de cálculo antes de salvar
+        df_to_save = df_to_save.drop(columns=['DIAS_VENCIMENTO'], errors='ignore')
+
         set_with_dataframe(worksheet, df_to_save)
         return True
     except Exception as e:
@@ -453,6 +424,8 @@ else:
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
                     "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
+                    "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
+                    "DIAS_VENCIMENTO": st.column_config.NumberColumn("Dias Vencimento", disabled=True),
                     "STATUS": st.column_config.SelectboxColumn("Status", options=status_options),
                     "CONDICAO_PROBLEMA": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
@@ -462,7 +435,7 @@ else:
                     "RECEBEDOR": "Recebedor",
                 },
                 column_order=[
-                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF",
+                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
                     "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
                 ]
             )
@@ -496,10 +469,11 @@ else:
                         col1, col2, col3 = st.columns(3)
                         
                         with col1:
+                            st.info(f"**Vencimento:** {row['VENCIMENTO'].strftime('%d/%m/%Y') if pd.notna(row['VENCIMENTO']) else 'N/A'}")
                             dias_atraso = st.number_input(
                                 "Dias em Atraso",
                                 min_value=0,
-                                value=0,
+                                value=-row['DIAS_VENCIMENTO'] if row['DIAS_VENCIMENTO'] < 0 else 0,
                                 key=f"dias_{idx}"
                             )
                         
@@ -620,17 +594,17 @@ else:
                             title='Distribuição por Tipo de Frete'
                         )
                         st.plotly_chart(fig_frete_tipo, use_container_width=True)
-                
-                with col2:
-                    if not dados_mensais.empty:
-                        fig_frete_evolucao = px.line(
-                            dados_mensais,
-                            x='MES_ANO',
-                            y='VALOR_FRETE',
-                            title='Evolução Mensal dos Gastos com Frete',
-                            labels={'VALOR_FRETE': 'Valor do Frete (R$)', 'MES_ANO': 'Mês'}
-                        )
-                        st.plotly_chart(fig_frete_evolucao, use_container_width=True)
+            
+            with col2:
+                if not dados_mensais.empty:
+                    fig_frete_evolucao = px.line(
+                        dados_mensais,
+                        x='MES_ANO',
+                        y='VALOR_FRETE',
+                        title='Evolução Mensal dos Gastos com Frete',
+                        labels={'VALOR_FRETE': 'Valor do Frete (R$)', 'MES_ANO': 'Mês'}
+                    )
+                    st.plotly_chart(fig_frete_evolucao, use_container_width=True)
             
             st.subheader("💸 Análise de Custos")
             custos_totais = pd.DataFrame({
