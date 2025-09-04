@@ -601,11 +601,20 @@ else:
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
-                "Anexo": st.column_config.LinkColumn(
+                "DOC NF": st.column_config.LinkColumn(
                     "Anexo NF",
-                    help="Clique para visualizar o anexo"
+                    help="Clique para visualizar o anexo",
+                    # A correção é aqui: usa o nome da coluna que contém a URL
+                    # e o texto de exibição como uma string literal.
+                    display_text="📥 Anexo"
                 )
             },
+            column_order=[
+                "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
+                "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
+                "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+            ]
+        )
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
                 "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
