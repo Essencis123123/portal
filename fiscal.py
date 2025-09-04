@@ -408,16 +408,13 @@ else:
             # Define as opções para o seletor de Problema
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
-            # Cria a coluna visual para STATUS
-            def formatar_status_visual(status):
-                if status == 'FINALIZADO':
-                    return '🟢 ' + status
-                elif status == 'EM ANDAMENTO':
-                    return '🟡 ' + status
-                elif status == 'NF PROBLEMA':
-                    return '🔴 ' + status
-                return status
-            df_display['STATUS_VISUAL'] = df_display['STATUS'].apply(formatar_status_visual)
+            # Mapeia Status para bolinhas
+            status_map = {
+                'FINALIZADO': '🟢 FINALIZADO',
+                'EM ANDAMENTO': '🟡 EM ANDAMENTO',
+                'NF PROBLEMA': '🔴 NF PROBLEMA'
+            }
+            df_display['STATUS_VISUAL'] = df_display['STATUS'].map(status_map).fillna(df_display['STATUS'])
             
             # Lógica para Dias de Vencimento
             def formatar_vencimento_visual(dias):
@@ -429,15 +426,22 @@ else:
                 return str(dias)
             df_display['DIAS_VENCIMENTO_VISUAL'] = df_display['DIAS_VENCIMENTO'].apply(formatar_vencimento_visual)
 
-            # Lógica para Problema com 'Chamado'
-            def formatar_problema_visual(problema, dias_atraso=0):
-                if problema == 'CHAMADO' and dias_atraso > 5:
-                    return f"🔴 {problema}"
-                return problema
-            # Adiciona a lógica no DataFrame de exibição
-            df_display['PROBLEMA_VISUAL'] = df_display.apply(lambda row: formatar_problema_visual(row['CONDICAO_PROBLEMA'], row['DIAS_VENCIMENTO']), axis=1)
-
-            status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
+            # Lógica para Problema com 'Chamado' vencido
+            # É necessário ter uma coluna 'DATA_PROBLEMA' na planilha para que a lógica funcione
+            # Se você ainda não tem, crie uma coluna chamada DATA_PROBLEMA
+            def formatar_problema_visual(row):
+                if row['CONDICAO_PROBLEMA'] == 'CHAMADO':
+                    # A lógica aqui depende de uma coluna de data de problema, que não existe no seu df
+                    # Vamos assumir que você adicionará uma. Por enquanto, usamos uma data fixa.
+                    # Adapte a linha abaixo para usar sua coluna de data real, se houver
+                    data_problema = datetime.date(2025, 9, 29) # Substitua pela sua coluna de data real, se houver
+                    dias_passados = (datetime.date.today() - data_problema).days
+                    if dias_passados > 5:
+                        return f"🔴 {row['CONDICAO_PROBLEMA']}"
+                return row['CONDICAO_PROBLEMA']
+            
+            # Aplica a lógica condicional
+            df_display['PROBLEMA_VISUAL'] = df_display.apply(lambda row: formatar_problema_visual(row), axis=1)
 
             edited_df = st.data_editor(
                 df_display,
@@ -450,7 +454,7 @@ else:
                     "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
                     "DIAS_VENCIMENTO_VISUAL": st.column_config.Column("Dias Vencimento", disabled=True),
-                    "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=status_options, default="EM ANDAMENTO"),
+                    "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=list(status_map.values()), default="EM ANDAMENTO"),
                     "PROBLEMA_VISUAL": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
                     "VALOR_JUROS": st.column_config.NumberColumn("Juros (R$)", format="%.2f"),
@@ -475,6 +479,7 @@ else:
                 edited_df["VENCIMENTO"] = _to_datetime(edited_df["VENCIMENTO"])
                 for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
                     edited_df[c] = pd.to_numeric(edited_df[c], errors="coerce").fillna(0.0)
+                
                 # Recalcula dias
                 ref = pd.Timestamp.today().normalize()
                 edited_df["DIAS_VENCIMENTO"] = (edited_df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
@@ -483,7 +488,6 @@ else:
                 edited_df["STATUS"] = edited_df["STATUS_VISUAL"].str.replace('🟢 ', '').str.replace('🟡 ', '').str.replace('🔴 ', '')
                 edited_df["CONDICAO_PROBLEMA"] = edited_df["PROBLEMA_VISUAL"].str.replace('🔴 ', '')
                 
-                # Remove as colunas visuais antes de salvar
                 edited_df.drop(columns=['STATUS_VISUAL', 'DIAS_VENCIMENTO_VISUAL', 'PROBLEMA_VISUAL'], inplace=True, errors='ignore')
                 # --- FIM DA CORREÇÃO ---
                 
