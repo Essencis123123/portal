@@ -115,26 +115,30 @@ def carregar_dados() -> pd.DataFrame:
 
         df = pd.DataFrame(worksheet.get_all_records())
 
-        # Colunas esperadas no DataFrame final
-        colunas_esperadas = [
-            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "STATUS",
-            "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
-            "DOC_NF", "RECEBEDOR", "VENCIMENTO"
-        ]
+        if df.empty or all(pd.Series(df.columns).isnull()):
+            st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
+            return pd.DataFrame(columns=[
+                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "STATUS",
+                "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
+                "DOC_NF", "RECEBEDOR", "VENCIMENTO", "DIAS_VENCIMENTO"
+            ])
 
-        # Se o DataFrame estiver vazio, retorna um DataFrame com as colunas esperadas
-        if df.empty:
-            return pd.DataFrame(columns=colunas_esperadas)
-        
-        # Padroniza todas as colunas
+        # Padroniza os nomes das colunas
         df.columns = df.columns.str.strip().str.upper().str.replace('.', '').str.replace(' ', '_').str.replace('/', '_')
 
-        # Renomeia com um mapeamento explícito
+        # --- CORREÇÃO AQUI: Trata colunas duplicadas ---
+        cols = pd.Series(df.columns)
+        for dup in cols[cols.duplicated()].unique():
+            cols[cols[cols == dup].index.values.tolist()] = [f"{dup}_{i}" for i in range(1, len(cols[cols == dup]) + 1)]
+        df.columns = cols
+        # --- FIM DA CORREÇÃO ---
+
+        # Renomeia com um mapeamento explícito para garantir nomes internos consistentes
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS',
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
             'FORNECEDOR_NF': 'FORNECEDOR',
-            'V_TOTAL_NF': 'V_TOTAL_NF',
+            'V_TOTAL_NF': 'V_TOTAL_NF', 
             'DOC_NF': 'DOC_NF',
         }, errors='ignore')
 
@@ -142,8 +146,16 @@ def carregar_dados() -> pd.DataFrame:
         df = df.dropna(how='all')
         df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
-        # Reindexa para garantir que todas as colunas esperadas existem, preenchendo com NaN se não houver
-        df = df.reindex(columns=colunas_esperadas, fill_value="")
+        # Garante colunas essenciais
+        colunas_necessarias = {
+            "DATA": None, "FORNECEDOR": "", "NF": "", "ORDEM_COMPRA": "", "V_TOTAL_NF": 0.0, 
+            "VENCIMENTO": None, "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A", 
+            "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0, "VALOR_FRETE": 0.0, "DOC_NF": "",
+            "RECEBEDOR": "", "DIAS_VENCIMENTO": 0 # Adicionado aqui para garantir que exista
+        }
+        for col, default_val in colunas_necessarias.items():
+            if col not in df.columns:
+                df[col] = default_val
 
         # Tipos numéricos
         for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
