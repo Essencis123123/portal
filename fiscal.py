@@ -126,45 +126,39 @@ def carregar_dados() -> pd.DataFrame:
         # Padroniza os nomes das colunas de forma mais robusta
         df.columns = df.columns.str.strip().str.upper().str.replace('.', '').str.replace(' ', '_').str.replace('/', '_')
 
-        # Dicionário de mapeamento para nomes internos e padronizados
-        mapeamento = {
+        # Renomeia com um mapeamento explícito para garantir nomes internos consistentes
+        df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS',
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
             'FORNECEDOR_NF': 'FORNECEDOR',
-            'V_TOTAL_NF': 'V_TOTAL_NF',
+            'V_TOTAL_NF': 'V_TOTAL_NF', 
             'DOC_NF': 'DOC_NF',
-            'V_TOTAL_NF': 'V_TOTAL_NF',
-            'CONDICAO_FRETE': 'CONDICAO_FRETE',
-            'VALOR_FRETE': 'VALOR_FRETE'
-        }
-        
-        # Aplica o mapeamento e trata as colunas não mapeadas
-        novos_nomes = [mapeamento.get(col, col) for col in df.columns]
-        df.columns = novos_nomes
+        }, errors='ignore')
 
-        # Trata colunas duplicadas após a padronização
-        cols = pd.Series(df.columns)
-        for dup in cols[cols.duplicated()].unique():
-            cols[cols[cols == dup].index.values.tolist()] = [f"{dup}_{i}" for i in range(1, len(cols[cols == dup]) + 1)]
-        df.columns = cols
+        # --- NOVA CORREÇÃO AQUI: Remove colunas duplicadas ou indesejadas
+        df = df.loc[:,~df.columns.duplicated()]
+        
+        # Define a lista final de colunas na ordem desejada
+        colunas_finais = [
+            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
+            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
+            "DOC_NF", "RECEBEDOR"
+        ]
+        
+        # Garante que as colunas existam antes de reindexar
+        for col in colunas_finais:
+            if col not in df.columns:
+                df[col] = None
+        
+        # Reindexa para a ordem e colunas desejadas, eliminando o erro de duplicatas
+        df = df.reindex(columns=colunas_finais)
+        # --- FIM DA NOVA CORREÇÃO ---
 
         # Remove linhas totalmente vazias, apara espaços
         df = df.dropna(how='all')
         if not df.empty:
             df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
-        # Garante colunas essenciais
-        colunas_necessarias = [
-            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", 
-            "VENCIMENTO", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", 
-            "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
-        ]
-
-        # Garante que todas as colunas esperadas existam
-        for col in colunas_necessarias:
-            if col not in df.columns:
-                df[col] = ''
-        
         # Tipos numéricos
         for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
@@ -176,9 +170,6 @@ def carregar_dados() -> pd.DataFrame:
         # DIAS_VENCIMENTO (robusto)
         ref = pd.Timestamp.today().normalize()
         df["DIAS_VENCIMENTO"] = (df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
-        
-        # Reordena para o st.data_editor
-        df = df.reindex(columns=colunas_necessarias + ["DIAS_VENCIMENTO"], fill_value="")
 
         return df
 
@@ -285,7 +276,7 @@ else:
         if not df.empty:
             total_nfs = len(df)
             total_valor = df['V_TOTAL_NF'].sum()
-            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])])
+            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]))
             total_juros = df['VALOR_JUROS'].sum()
             total_frete = df['VALOR_FRETE'].sum()
 
@@ -358,6 +349,21 @@ else:
 
             df_display = df.copy()
 
+            # --- CORREÇÃO AQUI: Garante que as colunas existam e na ordem correta
+            colunas_exibicao = [
+                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", 
+                "DIAS_VENCIMENTO", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", 
+                "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+            ]
+            
+            # Garante que as colunas da planilha existem no DataFrame de exibição
+            for col in colunas_exibicao:
+                if col not in df_display.columns:
+                    df_display[col] = ''
+            
+            df_display = df_display.reindex(columns=colunas_exibicao, fill_value="")
+            # --- FIM DA CORREÇÃO ---
+
             edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
@@ -377,10 +383,7 @@ else:
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
                 },
-                column_order=[
-                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
-                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
-                ],
+                column_order=colunas_exibicao,
                 hide_index=True
             )
 
