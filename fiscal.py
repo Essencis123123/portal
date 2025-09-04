@@ -170,9 +170,7 @@ def carregar_dados():
         # Renomeia colunas da planilha para nomes internos consistentes
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
-            'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'V._TOTAL_NF': 'V_TOTAL_NF',
-            'DOC_NF': 'DOC_NF'
+            'OBSERVACAO': 'REGISTRO_ADICIONAL'
         })
         
         # Limpa e converte tipos de dados
@@ -180,7 +178,6 @@ def carregar_dados():
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
 
         df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-        # A coluna VENCIMENTO foi removida, então não há necessidade de processá-la
         
         # Garante que as colunas essenciais existam
         colunas_necessarias = {
