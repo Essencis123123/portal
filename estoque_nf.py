@@ -182,6 +182,8 @@ def carregar_dados_almoxarifado():
             df['STATUS_FINANCEIRO'] = ''
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
+        if 'NF' not in df.columns:
+             df['NF'] = ''
 
         return df
     except Exception as e:
@@ -538,7 +540,11 @@ else:
         )
         
         # Tratar valores nulos de 'NF' para facilitar a consulta
-        df_combinado['NF'].fillna('NÃO RECEBIDA', inplace=True)
+        # Adiciona a coluna 'NF' se ela não existir
+        if 'NF' not in df_combinado.columns:
+            df_combinado['NF'] = 'NÃO RECEBIDA'
+        else:
+            df_combinado['NF'].fillna('NÃO RECEBIDA', inplace=True)
         
         if not df_combinado.empty:
             st.subheader("🔎 Consulta Avançada")
@@ -640,7 +646,6 @@ else:
             st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
             
             if st.button("🔄 Recarregar Dados"):
-                # A correção está aqui: limpa o cache antes de recarregar
                 st.cache_data.clear()
                 st.session_state.df_pedidos = carregar_dados_pedidos()
                 st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
