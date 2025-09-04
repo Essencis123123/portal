@@ -172,53 +172,43 @@ def carregar_dados():
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'V._TOTAL_NF': 'V_TOTAL_NF'
+            'FORNECEDOR_NF': 'FORNECEDOR', # Mapeamento da coluna real para o nome interno
+            'V._TOTAL_NF': 'V_TOTAL_NF',
+            'VALOR_FRETE': 'VALOR_FRETE',
+            'DOC_NF': 'DOC_NF'
         })
         
         # Limpa e converte tipos de dados
         df = df.dropna(how='all')
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
 
-        # Garante que a coluna 'DATA' e 'VENCIMENTO' existam antes de tentar convertê-las
-        if 'DATA' not in df.columns or 'VENCIMENTO' not in df.columns:
-            st.error("Colunas 'DATA' ou 'VENCIMENTO' não encontradas na planilha.")
-            return pd.DataFrame()
-
-        # Conversão de data mais robusta com dayfirst=True
-        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-        df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
-        
         # Garante que as colunas essenciais existam
         colunas_necessarias = {
-            "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A",
+            "STATUS": "EM ANDAMENTO", "CONDICAo_PROBLEMA": "N/A",
             "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0,
             "VALOR_FRETE": 0.0, "DOC_NF": "",
-            "V_TOTAL_NF": 0.0, "NF": "", "RECEBEDOR": "", "VENCIMENTO": None
+            "V_TOTAL_NF": 0.0, "NF": "", "RECEBEDOR": "",
+            "DATA": None, "VENCIMENTO": None, "FORNECEDOR": "", "ORDEM_COMPRA": ""
         }
         for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
                 df[col] = default_val
 
-        # Seleciona e reordena apenas as colunas que o painel fiscal irá usar
-        colunas_finais = list(colunas_necessarias.keys())
-        df = df[colunas_finais]
-        
         # Converte colunas numéricas
         df['V_TOTAL_NF'] = pd.to_numeric(df['V_TOTAL_NF'], errors='coerce').fillna(0)
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         
-        # Certifica-se de que as colunas de data são do tipo datetime antes de usá-las
-        if not pd.api.types.is_datetime64_any_dtype(df['DATA']):
-            st.error("Erro na conversão da coluna 'DATA' para o tipo de data. Verifique o formato na planilha.")
-            return pd.DataFrame()
-        if not pd.api.types.is_datetime64_any_dtype(df['VENCIMENTO']):
-            st.error("Erro na conversão da coluna 'VENCIMENTO' para o tipo de data. Verifique o formato na planilha.")
-            return pd.DataFrame()
+        # Conversão de data mais robusta com dayfirst=True
+        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
         
-        # Calcula os dias de vencimento
-        hoje = datetime.date.today()
-        df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
+        # Verifica e calcula os dias até o vencimento
+        if pd.api.types.is_datetime64_any_dtype(df['VENCIMENTO']):
+            hoje = datetime.date.today()
+            df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
+        else:
+            df['DIAS_VENCIMENTO'] = 0
 
         return df
     except Exception as e:
@@ -238,7 +228,8 @@ def salvar_dados(df):
             'REGISTRO_ADICIONAL': 'OBSERVACAO',
             'V_TOTAL_NF': 'V. TOTAL NF',
             'DOC_NF': 'DOC NF',
-            'VALOR_FRETE': 'VALOR FRETE'
+            'FORNECEDOR': 'FORNECEDOR_NF',
+            'VALOR_FRETE': 'VALOR_FRETE'
         })
         
         # Converte as datas de volta para string antes de salvar
