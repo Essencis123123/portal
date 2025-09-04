@@ -11,7 +11,8 @@ from PIL import Image
 from io import BytesIO
 import gspread
 from gspread_dataframe import get_as_dataframe, set_with_dataframe
-import json # Importa a biblioteca JSON para lidar com as credenciais
+import json
+from oauth2client.service_account import ServiceAccountCredentials
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
@@ -49,7 +50,7 @@ st.markdown(
         color: black !important;
     }
     .stDownloadButton button p {
-    color: white !important;
+        color: white !important;
     }
 
     [data-testid="stSidebar"] img {
@@ -143,11 +144,12 @@ def get_gspread_client():
     from oauth2client.service_account import ServiceAccountCredentials
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     
-    # Lê a string JSON completa dos secrets
-    creds_json = st.secrets["gcp_service_account"]
+    creds_json = st.secrets.get("gcp_service_account")
     
-    # Converte a string JSON em um dicionário Python
-    creds_dict = json.loads(creds_json)
+    if isinstance(creds_json, str):
+        creds_dict = json.loads(creds_json)
+    else:
+        creds_dict = creds_json
     
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
@@ -160,7 +162,7 @@ def carregar_dados():
     try:
         client = get_gspread_client()
         sheet = client.open("dados_pedido")
-        worksheet = sheet.worksheet("Almoxarifado")
+        worksheet = sheet.worksheet("Almoxarifado") 
         
         df = get_as_dataframe(worksheet)
         
@@ -172,13 +174,17 @@ def carregar_dados():
             ])
 
         # Renomeia colunas para manter a compatibilidade com o código original
-        df = df.rename(columns={'STATUS_FINANCEIRO': 'STATUS', 'OBSERVACAO': 'REGISTRO_ADICIONAL'})
-
+        # Isso garante que a lógica de "STATUS", "REGISTRO_ADICIONAL" e "VALOR_FRETE" funcione
+        df = df.rename(columns={
+            'STATUS_FINANCEIRO': 'STATUS', 
+            'OBSERVACAO': 'REGISTRO_ADICIONAL',
+            'VALOR FRETE': 'VALOR_FRETE'
+        })
+        
         # Limpeza e conversão de dados
         df = df.dropna(how='all')
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
 
-        # Conversão para tipos corretos
         df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
         if 'VENCIMENTO' in df.columns:
             df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
@@ -197,8 +203,8 @@ def carregar_dados():
             "V. TOTAL NF": 0.0,
             "NF": "",
             "VENCIMENTO": None,
-            "RECEBEDOR": "",
-            "VOLUME": 0
+            "RECEBEDOR": "", 
+            "VOLUME": 0 
         }
         for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
@@ -223,8 +229,7 @@ def salvar_dados(df):
         sheet = client.open("dados_pedido")
         worksheet = sheet.worksheet("Almoxarifado")
 
-        # Renomeia colunas para o formato original da planilha antes de salvar
-        df_to_save = df.rename(columns={'STATUS': 'STATUS_FINANCEIRO', 'REGISTRO_ADICIONAL': 'OBSERVACAO'})
+        df_to_save = df.rename(columns={'STATUS': 'STATUS_FINANCEIRO', 'REGISTRO_ADICIONAL': 'OBSERVACAO', 'VALOR_FRETE': 'VALOR FRETE'})
         
         # Converte as datas de volta para string antes de salvar
         df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
@@ -392,6 +397,11 @@ else:
 
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
+
+            # Linha de debug para verificar se o DataFrame está sendo carregado
+            st.write("--- DataFrame para debug ---")
+            st.write(df.head())
+            st.write("--- Fim do debug ---")
 
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
