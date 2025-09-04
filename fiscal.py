@@ -388,7 +388,6 @@ else:
             total_juros = df_display['VALOR_JUROS'].sum()
             total_frete = df_display['VALOR_FRETE'].sum()
 
-            # --- CORREÇÃO AQUI: Nova lógica para formatar valores com K ---
             def formatar_milhar(valor):
                 if abs(valor) >= 1000:
                     return f"R$ {valor/1000:,.1f}K".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -401,12 +400,14 @@ else:
             c4.metric("✅ Finalizadas", total_nfs - nfs_pendentes)
             c5.metric("💸 Juros", formatar_milhar(total_juros))
             c6.metric("🚚 Fretes", formatar_milhar(total_frete))
-            # --- FIM DA CORREÇÃO ---
 
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
 
             # --- CORREÇÃO AQUI: Lógica para as bolinhas visuais nas colunas ---
+            # Define as opções para o seletor de Problema
+            problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
+
             # Cria a coluna visual para STATUS
             def formatar_status_visual(status):
                 if status == 'FINALIZADO':
@@ -418,8 +419,9 @@ else:
                 return status
             df_display['STATUS_VISUAL'] = df_display['STATUS'].apply(formatar_status_visual)
             
-            # Cria a coluna visual para DIAS_VENCIMENTO
+            # Lógica para Dias de Vencimento
             def formatar_vencimento_visual(dias):
+                if pd.isna(dias): return "N/A"
                 if dias <= 7:
                     return f"🔴 {dias}"
                 elif dias <= 10:
@@ -427,8 +429,15 @@ else:
                 return str(dias)
             df_display['DIAS_VENCIMENTO_VISUAL'] = df_display['DIAS_VENCIMENTO'].apply(formatar_vencimento_visual)
 
+            # Lógica para Problema com 'Chamado'
+            def formatar_problema_visual(problema, dias_atraso=0):
+                if problema == 'CHAMADO' and dias_atraso > 5:
+                    return f"🔴 {problema}"
+                return problema
+            # Adiciona a lógica no DataFrame de exibição
+            df_display['PROBLEMA_VISUAL'] = df_display.apply(lambda row: formatar_problema_visual(row['CONDICAO_PROBLEMA'], row['DIAS_VENCIMENTO']), axis=1)
+
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
-            problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
             edited_df = st.data_editor(
                 df_display,
@@ -441,8 +450,8 @@ else:
                     "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
                     "DIAS_VENCIMENTO_VISUAL": st.column_config.Column("Dias Vencimento", disabled=True),
-                    "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=status_options),
-                    "CONDICAO_PROBLEMA": st.column_config.SelectboxColumn("Problema", options=problema_options),
+                    "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=status_options, default="EM ANDAMENTO"),
+                    "PROBLEMA_VISUAL": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
                     "VALOR_JUROS": st.column_config.NumberColumn("Juros (R$)", format="%.2f"),
                     "VALOR_FRETE": st.column_config.NumberColumn("Frete (R$)", format="%.2f"),
@@ -451,7 +460,7 @@ else:
                 },
                 column_order=[
                     "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO_VISUAL",
-                    "STATUS_VISUAL", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+                    "STATUS_VISUAL", "PROBLEMA_VISUAL", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
                 ],
                 hide_index=True
             )
@@ -472,7 +481,10 @@ else:
 
                 # --- CORREÇÃO: Mapeia as colunas visuais de volta para as originais antes de salvar ---
                 edited_df["STATUS"] = edited_df["STATUS_VISUAL"].str.replace('🟢 ', '').str.replace('🟡 ', '').str.replace('🔴 ', '')
-                edited_df.drop(columns=['STATUS_VISUAL', 'DIAS_VENCIMENTO_VISUAL'], inplace=True, errors='ignore')
+                edited_df["CONDICAO_PROBLEMA"] = edited_df["PROBLEMA_VISUAL"].str.replace('🔴 ', '')
+                
+                # Remove as colunas visuais antes de salvar
+                edited_df.drop(columns=['STATUS_VISUAL', 'DIAS_VENCIMENTO_VISUAL', 'PROBLEMA_VISUAL'], inplace=True, errors='ignore')
                 # --- FIM DA CORREÇÃO ---
                 
                 st.session_state.df = edited_df.copy()
