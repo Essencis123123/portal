@@ -21,6 +21,11 @@ st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide",
 st.markdown(
     """
     <style>
+    /* Aumenta o tamanho da fonte de todo o corpo do aplicativo */
+    html, body, [data-testid="stAppViewContainer"] {
+        font-size: 1.1rem;
+    }
+
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
         color: white;
@@ -30,6 +35,10 @@ st.markdown(
     .stDownloadButton button p { color: white !important; }
 
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span { color: white !important; }
+
+    /* Estilo para o texto do multiselect no sidebar */
+    [data-testid="stSidebar"] .stMultiSelect label p { color: white !important; }
+    [data-testid="stSidebar"] .stMultiSelect div[role="listbox"] * { color: black !important; }
 
     .stButton button p { color: black !important; }
     .stDownloadButton button p { color: white !important; }
@@ -59,9 +68,14 @@ st.markdown(
     }
     .stButton button:hover { background-color: #007ea7; }
 
+    /* CORREÇÃO: Reduz o tamanho da fonte dos cards de métricas */
     [data-testid="stMetric"] > div {
         background-color: #f0f2f5; color: #1C4D86; padding: 20px; border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        font-size: 0.9rem; /* Tamanho da fonte do texto */
+    }
+    [data-testid="stMetric"] > div > div:first-child {
+        font-size: 1.1rem; /* Tamanho da fonte do valor */
     }
     </style>
     """,
@@ -131,7 +145,7 @@ def carregar_dados() -> pd.DataFrame:
             'STATUS_FINANCEIRO': 'STATUS',
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
             'FORNECEDOR_NF': 'FORNECEDOR',
-            'V_TOTAL_NF': 'V_TOTAL_NF', 
+            'V_TOTAL_NF': 'V_TOTAL_NF',
             'DOC_NF': 'DOC_NF',
         }, errors='ignore')
 
@@ -258,6 +272,7 @@ else:
 
     df = st.session_state.df
 
+    # --- LAYOUT E FILTROS DO SIDEBAR (NOVO) ---
     with st.sidebar:
         if logo_img:
             st.image(logo_img, use_container_width=True)
@@ -269,25 +284,27 @@ else:
             "📌 Navegação",
             ["📋 Visualização de NFs", "💰 Gestão de Juros", "📊 Dashboards Financeiros", "⚙️ Configurações"]
         )
-
         st.divider()
-        st.subheader("📊 Resumo Rápido")
 
-        if not df.empty:
-            total_nfs = len(df)
-            total_valor = df['V_TOTAL_NF'].sum()
-            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])])
-            total_juros = df['VALOR_JUROS'].sum()
-            total_frete = df['VALOR_FRETE'].sum()
+        st.subheader("Filtros de Dados")
+        
+        filtro_status = ['Todos']
+        if 'STATUS' in df.columns and not df.empty:
+            status_disponiveis = df['STATUS'].dropna().unique().tolist()
+            filtro_status = st.multiselect(
+                "Filtrar por Status:",
+                options=['Todos'] + sorted(status_disponiveis),
+                default=['Todos']
+            )
 
-            st.markdown(f"**Total de NFs:** **{total_nfs}**")
-            st.markdown(f"**Valor Total:** **R$ {total_valor:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
-            st.markdown(f"**Pendentes:** **{nfs_pendentes}**")
-            st.markdown(f"**Finalizadas:** **{total_nfs - nfs_pendentes}**")
-            st.markdown(f"**Juros:** **R$ {total_juros:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
-            st.markdown(f"**Fretes:** **R$ {total_frete:,.2f}**".replace(",", "X").replace(".", ",").replace("X", "."))
-        else:
-            st.info("Nenhum dado disponível")
+        filtro_fornecedor = ['Todos']
+        if 'FORNECEDOR' in df.columns and not df.empty:
+            fornecedores_disponiveis = df['FORNECEDOR'].dropna().unique().tolist()
+            filtro_fornecedor = st.multiselect(
+                "Filtrar por Fornecedor:",
+                options=['Todos'] + sorted(fornecedores_disponiveis),
+                default=['Todos']
+            )
 
         st.divider()
         if st.button("Logout"):
@@ -295,6 +312,7 @@ else:
             st.rerun()
 
         st.caption("Sistema Financeiro Completo v1.0")
+    # --- FIM DA REORGANIZAÇÃO DO SIDEBAR ---
 
     # Cabeçalhos por menu
     headers = {
@@ -332,13 +350,24 @@ else:
                 st.warning("Alterações não salvas")
 
         if not df.empty:
+            # --- NOVO TRECHO DE CÓDIGO AQUI: Aplica os filtros ---
+            df_filtrado = df.copy()
+            if 'Todos' not in filtro_status:
+                df_filtrado = df_filtrado[df_filtrado['STATUS'].isin(filtro_status)]
+            if 'Todos' not in filtro_fornecedor:
+                df_filtrado = df_filtrado[df_filtrado['FORNECEDOR'].isin(filtro_fornecedor)]
+            
+            # Atualiza o df para a visualização após a filtragem
+            df_display = df_filtrado
+            # --- FIM DO NOVO TRECHO ---
+
             st.markdown("---")
             c1, c2, c3, c4, c5, c6 = st.columns(6)
-            total_nfs = len(df)
-            total_valor = df['V_TOTAL_NF'].sum()
-            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])])
-            total_juros = df['VALOR_JUROS'].sum()
-            total_frete = df['VALOR_FRETE'].sum()
+            total_nfs = len(df_display)
+            total_valor = df_display['V_TOTAL_NF'].sum()
+            nfs_pendentes = len(df_display[df_display['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])])
+            total_juros = df_display['VALOR_JUROS'].sum()
+            total_frete = df_display['VALOR_FRETE'].sum()
 
             c1.metric("📊 Total de NFs", total_nfs)
             c2.metric("💰 Valor NFs", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -352,8 +381,6 @@ else:
 
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
-
-            df_display = df.copy()
 
             edited_df = st.data_editor(
                 df_display,
