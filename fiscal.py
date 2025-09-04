@@ -173,48 +173,45 @@ def carregar_dados():
                 "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR"
             ])
             
-        # Padroniza todos os nomes das colunas
+        # Padroniza todos os nomes das colunas para evitar duplicatas
         df.columns = df.columns.str.strip().str.replace(' ', '_').str.upper()
-
-        # Renomeia colunas para manter a compatibilidade com o código original
+        
+        # Renomeia as colunas necessárias para nomes internos consistentes
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
-            'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'V._TOTAL_NF': 'V. TOTAL NF', # Renomeação para o formato original da exibição
-            'VALOR_FRETE': 'VALOR_FRETE',
-            'DOC_NF': 'DOC NF'
+            'OBSERVACAO': 'REGISTRO_ADICIONAL'
         })
         
         # Limpeza e conversão de dados
         df = df.dropna(how='all')
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
-
+        
         df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
         if 'VENCIMENTO' in df.columns:
             df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
         else:
             df['VENCIMENTO'] = pd.NaT
         
-        # Lista final das colunas que queremos no DataFrame
-        colunas_final = [
-            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
-            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR"
+        # Lista final das colunas que queremos no DataFrame (usando nomes internos)
+        colunas_final_internas = [
+            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V._TOTAL_NF", "VENCIMENTO",
+            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
         ]
         
         # Garante que todas as colunas necessárias existam
-        for col in colunas_final:
+        for col in colunas_final_internas:
             if col not in df.columns:
                 df[col] = None
         
         # Seleciona apenas as colunas finais para remover duplicatas e manter a ordem
-        df = df[colunas_final]
+        df = df[colunas_final_internas]
         
         # Cria a coluna de dias até o vencimento
         hoje = datetime.date.today()
         df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
 
         # Converte colunas numéricas
-        df['V. TOTAL NF'] = pd.to_numeric(df['V. TOTAL NF'], errors='coerce').fillna(0)
+        df['V._TOTAL_NF'] = pd.to_numeric(df['V._TOTAL_NF'], errors='coerce').fillna(0)
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         
@@ -229,14 +226,24 @@ def salvar_dados(df):
         client = get_gspread_client()
         sheet = client.open("dados_pedido")
         worksheet = sheet.worksheet("Almoxarifado")
-
-        df_to_save = df.rename(columns={'STATUS': 'STATUS_FINANCEIRO', 'REGISTRO_ADICIONAL': 'OBSERVACAO', 'VALOR_FRETE': 'VALOR FRETE'})
+        
+        # Mapeia nomes internos para nomes da planilha antes de salvar
+        df_to_save = df.rename(columns={
+            'STATUS': 'STATUS_FINANCEIRO', 
+            'REGISTRO_ADICIONAL': 'OBSERVACAO',
+            'V._TOTAL_NF': 'V. TOTAL NF',
+            'VALOR_FRETE': 'VALOR FRETE',
+            'DOC_NF': 'DOC NF'
+        })
         
         # Converte as datas de volta para string antes de salvar
         df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
         if 'VENCIMENTO' in df_to_save.columns:
             df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-        
+            
+        # Remove colunas de cálculo antes de salvar
+        df_to_save = df_to_save.drop(columns=['DIAS_VENCIMENTO'], errors='ignore')
+
         worksheet.clear()
         
         set_with_dataframe(worksheet, df_to_save)
@@ -307,7 +314,7 @@ else:
         
         if not df.empty:
             total_nfs = len(df)
-            total_valor = df['V. TOTAL NF'].sum() if 'V. TOTAL NF' in df.columns else 0
+            total_valor = df['V._TOTAL_NF'].sum() if 'V._TOTAL_NF' in df.columns else 0
             nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]) if 'STATUS' in df.columns else 0
             total_juros = df['VALOR_JUROS'].sum() if 'VALOR_JUROS' in df.columns else 0
             total_frete = df['VALOR_FRETE'].sum() if 'VALOR_FRETE' in df.columns else 0
@@ -386,7 +393,7 @@ else:
             with col1:
                 st.metric("📊 Total de NFs", len(df))
             with col2:
-                st.metric("💰 Valor NFs", f"R$ {df['V. TOTAL NF'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.metric("💰 Valor NFs", f"R$ {df['V._TOTAL_NF'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             with col3:
                 st.metric("⏳ Pendentes", len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]))
             with col4:
@@ -410,27 +417,28 @@ else:
             df_display = df.copy()
 
             edited_df = st.data_editor(
-                df_display[[
-                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
-                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR", "VOLUME"
-                ]],
+                df_display,
                 use_container_width=True,
                 column_config={
                     "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY", disabled=True),
                     "FORNECEDOR": "Fornecedor",
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
-                    "V. TOTAL NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
+                    "V._TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
+                    "DIAS_VENCIMENTO": st.column_config.NumberColumn("Dias Vencimento", disabled=True),
                     "STATUS": st.column_config.SelectboxColumn("Status", options=status_options),
                     "CONDICAO_PROBLEMA": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
                     "VALOR_JUROS": st.column_config.NumberColumn("Juros (R$)", format="%.2f"),
-                    "VALOR_FRETE": st.column_config.NumberColumn("Frete (R$)", format="%.2f", disabled=True),
-                    "DOC NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
+                    "VALOR_FRETE": st.column_config.NumberColumn("Frete (R$)", format="%.2f"),
+                    "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
-                    "VOLUME": "Volume"
-                }
+                },
+                column_order=[
+                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V._TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
+                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+                ]
             )
 
             if not edited_df.equals(df_display):
@@ -458,7 +466,7 @@ else:
                 st.subheader("Notas com Possibilidade de Juros")
                 
                 for idx, row in nfs_com_problema.iterrows():
-                    with st.expander(f"NF {row['NF']} - {row['FORNECEDOR']} - R$ {row['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")):
+                    with st.expander(f"NF {row['NF']} - {row['FORNECEDOR']} - R$ {row['V._TOTAL_NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")):
                         col1, col2, col3, col4 = st.columns(4)
                         
                         with col1:
@@ -466,12 +474,12 @@ else:
                             dias_atraso = st.number_input(
                                 "Dias em Atraso",
                                 min_value=0,
-                                value=int(row['DIAS_ATRASO']) if pd.notna(row['DIAS_ATRASO']) else 0,
+                                value=-row['DIAS_VENCIMENTO'] if row['DIAS_VENCIMENTO'] < 0 else 0,
                                 key=f"dias_{idx}"
                             )
                         
                         with col2:
-                            st.info(f"**Valor Original:** R$ {row['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                            st.info(f"**Valor Original:** R$ {row['V._TOTAL_NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                             taxa_juros = st.number_input(
                                 "Taxa de Juros (%)",
                                 min_value=0.0,
@@ -482,13 +490,12 @@ else:
                             )
                         
                         with col3:
-                            valor_juros = (row['V. TOTAL NF'] * taxa_juros / 100) * dias_atraso
+                            valor_juros = (row['V._TOTAL_NF'] * taxa_juros / 100) * dias_atraso
                             st.metric("Valor de Juros", f"R$ {valor_juros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                         
                         with col4:
                             if st.button("Aplicar Juros", key=f"apply_{idx}"):
                                 df.at[idx, 'VALOR_JUROS'] = valor_juros
-                                df.at[idx, 'DIAS_ATRASO'] = dias_atraso
                                 st.session_state.alteracoes_pendentes = True
                                 st.success("Juros aplicados com sucesso!")
                                 time.sleep(1)
@@ -533,7 +540,7 @@ else:
             df['MES'] = df['DATA'].dt.month
             
             dados_mensais = df.groupby('MES_ANO').agg({
-                'V. TOTAL NF': 'sum',
+                'V._TOTAL_NF': 'sum',
                 'VALOR_FRETE': 'sum',
                 'VALOR_JUROS': 'sum',
                 'NF': 'count'
@@ -545,7 +552,7 @@ else:
                 st.subheader("📅 Comparativo Anual")
                 
                 comparativo_anual = df.groupby('ANO').agg({
-                    'V. TOTAL NF': 'sum',
+                    'V._TOTAL_NF': 'sum',
                     'VALOR_FRETE': 'sum',
                     'VALOR_JUROS': 'sum',
                     'NF': 'count'
@@ -554,7 +561,7 @@ else:
                 fig_comparativo = make_subplots(rows=2, cols=2, subplot_titles=('Valor Total', 'Custo com Fretes', 'Juros Pagos', 'Quantidade de NFs'))
                 
                 fig_comparativo.add_trace(
-                    go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['V. TOTAL NF'], name='Valor Total'),
+                    go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['V._TOTAL_NF'], name='Valor Total'),
                     row=1, col=1
                 )
                 
@@ -605,7 +612,7 @@ else:
             st.subheader("💸 Análise de Custos")
             custos_totais = pd.DataFrame({
                 'Tipo': ['Valor NFs', 'Fretes', 'Juros'],
-                'Valor': [df['V. TOTAL NF'].sum(), df['VALOR_FRETE'].sum(), df['VALOR_JUROS'].sum()]
+                'Valor': [df['V._TOTAL_NF'].sum(), df['VALOR_FRETE'].sum(), df['VALOR_JUROS'].sum()]
             })
             
             fig_custos = px.bar(
@@ -621,15 +628,15 @@ else:
             col_met1, col_met2, col_met3, col_met4 = st.columns(4)
             
             with col_met1:
-                custo_total = df['V. TOTAL NF'].sum() + df['VALOR_FRETE'].sum() + df['VALOR_JUROS'].sum()
+                custo_total = df['V._TOTAL_NF'].sum() + df['VALOR_FRETE'].sum() + df['VALOR_JUROS'].sum()
                 st.metric("Custo Total", f"R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             
             with col_met2:
-                perc_frete = (df['VALOR_FRETE'].sum() / df['V. TOTAL NF'].sum() * 100) if df['V. TOTAL NF'].sum() > 0 else 0
+                perc_frete = (df['VALOR_FRETE'].sum() / df['V._TOTAL_NF'].sum() * 100) if df['V._TOTAL_NF'].sum() > 0 else 0
                 st.metric("% Frete/NF", f"{perc_frete:.2f}%")
             
             with col_met3:
-                perc_juros = (df['VALOR_JUROS'].sum() / df['V. TOTAL NF'].sum() * 100) if df['V. TOTAL NF'].sum() > 0 else 0
+                perc_juros = (df['VALOR_JUROS'].sum() / df['V._TOTAL_NF'].sum() * 100) if df['V._TOTAL_NF'].sum() > 0 else 0
                 st.metric("% Juros/NF", f"{perc_juros:.2f}%")
             
             with col_met4:
