@@ -113,6 +113,15 @@ st.markdown(
     .stButton button:hover {
         background-color: #007ea7;
     }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -160,6 +169,10 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
+        # Garante que colunas importantes existam, se o arquivo estiver vazio
+        if 'DOC NF' not in df.columns:
+            df['DOC NF'] = ""
+        
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
@@ -171,7 +184,7 @@ def criar_dataframe_pedidos_vazio():
     return pd.DataFrame(columns=[
         "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO",
         "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-        "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO"
+        "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
     ])
 
 def salvar_dados_pedidos(df):
@@ -368,7 +381,7 @@ else:
                         "FORNECEDOR": "", "ORDEM_COMPRA": "", "VALOR_ITEM": 0.0, "VALOR_RENEGOCIADO": 0.0,
                         "DATA_APROVACAO": pd.NaT, "CONDICAO_FRETE": "",
                         "STATUS_PEDIDO": "PENDENTE", "DATA_ENTREGA": pd.NaT,
-                        "DIAS_ATRASO": 0, "DIAS_EMISSAO": 0
+                        "DIAS_ATRASO": 0, "DIAS_EMISSAO": 0, "DOC NF": ""
                     }
                     linhas_a_adicionar.append(nova_linha)
                 
@@ -402,7 +415,7 @@ else:
         cols_para_editar = [
             "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "QUANTIDADE",
             "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-            "DATA_APROVACAO", "CONDICAO_FRETE"
+            "DATA_APROVACAO", "CONDICAO_FRETE", "DOC NF"
         ]
         
         df_editavel = pedidos_pendentes_oc[cols_para_editar].copy()
@@ -424,7 +437,12 @@ else:
                     "VALOR_ITEM": st.column_config.NumberColumn("Valor do Item", format="%.2f"),
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
-                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"])
+                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
+                    "DOC NF": st.column_config.LinkColumn(
+                        "DOC NF",
+                        help="Link do anexo da Nota Fiscal.",
+                        display_text="📎 Anexo"
+                    )
                 }
             )
             
@@ -447,10 +465,11 @@ else:
                     
                     st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
                     st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
-                    st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_row['VALOR_ITEM']
+                    st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_df.loc[index, 'VALOR_ITEM']
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
                     st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
                     st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
+                    st.session_state.df_pedidos.loc[original_index, 'DOC NF'] = edited_row['DOC NF']
                     
                     if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
                         data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
@@ -532,7 +551,8 @@ else:
                 "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=["PENDENTE", "ENTREGUE"]),
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
-                "DIAS_EMISSAO": "Dias Emissão"
+                "DIAS_EMISSAO": "Dias Emissão",
+                "DOC NF": st.column_config.LinkColumn("Anexo NF", display_text="📥 Anexo")
             }
         )
 
@@ -771,12 +791,12 @@ else:
             ano_selecionado_p = col_filtro_p2.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
             ano_selecionado_p = None
-            
+
         if mes_selecionado_p and ano_selecionado_p:
             df_performance_local = df_performance_local[(df_performance_local['DATA'].dt.month.isin(mes_selecionado_p)) & (df_performance_local['DATA'].dt.year == ano_selecionado_p)]
         else:
             df_performance_local = pd.DataFrame()
-
+        
         if df_performance_local.empty:
             st.info("Nenhum pedido local com valores de negociação preenchidos para análise.")
             st.stop()
@@ -854,3 +874,6 @@ else:
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
             st.info("Dados de solicitantes locais insuficientes para gerar o ranking.")
+
+
+chat O PAINEL DE COMPRAS ESTA FUNCIONANDO NORMALMENTE MAS O DE ALMOXARIFADO ESTA APRESENTANDO UM ERRO O DE COMPRAS VAI REFRESH QUANDO EU REGISTRAR UMA NOTA FISCAL NO PAINEL DE ALMOXARIFADO? E QUERO O CODIGO PRA CORRIGIR O ERRO
