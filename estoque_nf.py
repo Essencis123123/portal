@@ -335,23 +335,28 @@ else:
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
-                    # --- Lógica de busca e preenchimento de fornecedor ---
                     ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
 
                     fornecedor_selecionado = ""
-                    # Procura a OC na planilha de pedidos
+                    
+                    # --- Lógica de busca e preenchimento de fornecedor ---
+                    # 1. Cria uma cópia da coluna para limpeza
+                    fornecedores_limpos = df_pedidos['FORNECEDOR'].astype(str).str.strip().str.replace('"', '').str.replace('\n', '')
+
+                    # 2. Procura a OC na planilha de pedidos
                     if ordem_compra_nf:
                         ordem_compra_existe = df_pedidos[
                             df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
                         ]
                         if not ordem_compra_existe.empty:
-                            fornecedor_selecionado = ordem_compra_existe['FORNECEDOR'].iloc[0]
+                            # Se a OC for encontrada, pega o fornecedor limpo
+                            fornecedor_selecionado = fornecedores_limpos.loc[ordem_compra_existe.index].iloc[0]
                     
-                    # Exibe o fornecedor com base na OC, ou permite seleção manual
+                    # 3. Exibe o fornecedor com base na OC, ou permite seleção manual
                     if fornecedor_selecionado:
                         st.text_input("Fornecedor da NF*", value=fornecedor_selecionado, disabled=True, key='fornecedor_oc')
                     else:
-                        fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
+                        fornecedores_disponiveis = fornecedores_limpos.dropna().unique().tolist()
                         fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                     # --- Fim da lógica de busca ---
 
