@@ -10,6 +10,8 @@ import requests
 from PIL import Image
 from io import BytesIO
 import numpy as np
+import gspread
+from google.oauth2.service_account import Credentials
 
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
@@ -111,7 +113,6 @@ st.markdown(
     .stButton button:hover {
         background-color: #007ea7;
     }
-
     </style>
     """,
     unsafe_allow_html=True
@@ -133,28 +134,37 @@ logo_img = load_logo(logo_url)
 # --- Funções de Carregamento e Salvamento de Dados ---
 
 def carregar_dados_pedidos():
-    """Carrega ou cria o DataFrame de pedidos."""
-    arquivo_csv = "dados_pedidos.csv"
-    if os.path.exists(arquivo_csv):
-        try:
-            df = pd.read_csv(arquivo_csv, dtype={'FORNECEDOR': str, 'ORDEM_COMPRA': str, 'MATERIAL': str})
-            
-            # Garante que as colunas de data sejam do tipo datetime
-            for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
-                if col in df.columns:
-                    df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
-            
-            if 'QUANTIDADE' not in df.columns:
-                df['QUANTIDADE'] = 1
-            
-            if 'VALOR_RENEGOCIADO' not in df.columns:
-                df['VALOR_RENEGOCIADO'] = 0.0
-            
-            return df
-        except Exception as e:
-            st.error(f"Erro ao carregar arquivo de pedidos: {e}")
-            return criar_dataframe_pedidos_vazio()
-    return criar_dataframe_pedidos_vazio()
+    """Carrega o DataFrame de pedidos do Google Sheets."""
+    try:
+        # Configuração das credenciais (usando st.secrets para segurança)
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        
+        # Abre a planilha pelo ID
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(0) # Pega a primeira aba
+        
+        # Lê os dados
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+
+        # Garante que as colunas de data sejam do tipo datetime
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+            if col in df.columns and not df[col].empty:
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+        
+        # Garante que as colunas numéricas tenham o tipo correto
+        for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
+            if col in df.columns and not df[col].empty:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
+        return criar_dataframe_pedidos_vazio()
 
 def criar_dataframe_pedidos_vazio():
     """Cria um DataFrame de pedidos vazio com a estrutura correta."""
@@ -165,14 +175,35 @@ def criar_dataframe_pedidos_vazio():
     ])
 
 def salvar_dados_pedidos(df):
-    """Salva o DataFrame de pedidos no arquivo CSV, lidando com datas nulas."""
-    df_to_save = df.copy()
-    for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
-        if col in df_to_save.columns:
-            df_to_save[col] = df_to_save[col].apply(
-                lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
-            )
-    df_to_save.to_csv("dados_pedidos.csv", index=False, encoding='utf-8')
+    """Salva o DataFrame de pedidos no Google Sheets."""
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(0)
+
+        # Prepara o DataFrame para salvar, convertendo datas para string
+        df_to_save = df.copy()
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+            if col in df_to_save.columns:
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+                )
+        
+        # Converte o DataFrame para uma lista de listas para salvar
+        data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
+        
+        # Limpa o conteúdo da planilha e atualiza com os novos dados
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        
+        st.success("Dados salvos na planilha com sucesso!")
+    except Exception as e:
+        st.error(f"Erro ao salvar dados no Google Sheets: {e}")
+
 
 def carregar_dados_solicitantes():
     """Carrega ou cria o DataFrame de solicitantes."""
@@ -679,13 +710,13 @@ else:
         if not df_entregues.empty:
             df_entregues['TEMPO_ENTREGA'] = (df_entregues['DATA_ENTREGA'] - df_entregues['DATA_APROVACAO']).dt.days
 
-            ranking_fornecedores = df_entregues.groupby('FORNECEDOR')['TEMPO_ENTREGA'].mean().sort_values().reset_index()
+            ranking_fornecedores = df_entregues.groupby('FORNECEDORES')['TEMPO_ENTREGA'].mean().sort_values().reset_index()
             fig_ranking = px.bar(
                 ranking_fornecedores,
-                x='FORNECEDOR',
+                x='FORNECEDORES',
                 y='TEMPO_ENTREGA',
                 title='Tempo Médio de Entrega por Fornecedor (dias)',
-                labels={'TEMPO_ENTREGA': 'Tempo Médio (dias)', 'FORNECEDOR': 'Fornecedor'}
+                labels={'TEMPO_ENTREGA': 'Tempo Médio (dias)', 'FORNECEDORES': 'Fornecedor'}
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
