@@ -113,15 +113,6 @@ st.markdown(
     .stButton button:hover {
         background-color: #007ea7;
     }
-    
-    /* Estilo para os cards de métricas */
-    [data-testid="stMetric"] > div {
-        background-color: #f0f2f5;
-        color: #1C4D86;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
     </style>
     """,
     unsafe_allow_html=True
