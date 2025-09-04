@@ -81,7 +81,7 @@ st.markdown(
         font-size: 0.9rem;
     }
     [data-testid="stMetric"] .stMetricLabel {
-        font-size: 0.6rem; 
+        font-size: 0.6rem;
     }
     </style>
     """,
@@ -391,6 +391,7 @@ else:
             total_frete = df_display['VALOR_FRETE'].sum()
 
             c1.metric("📊 Total de NFs", total_nfs)
+            # CORREÇÃO: Formatação dos valores com separador de milhar e vírgula decimal
             c2.metric("💰 Valor NFs", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             c3.metric("⏳ Pendentes", nfs_pendentes)
             c4.metric("✅ Finalizadas", total_nfs - nfs_pendentes)
@@ -405,7 +406,7 @@ else:
 
             edited_df = st.data_editor(
                 df_display,
-                use_container_width=True,
+                use_container_container_width=True,
                 column_config={
                     "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY", disabled=True),
                     "FORNECEDOR": "Fornecedor",
@@ -576,7 +577,7 @@ else:
                         title='Evolução Mensal dos Gastos com Frete',
                         labels={'VALOR_FRETE': 'Valor do Frete (R$)', 'MES_ANO': 'Mês'}
                     )
-                    st.plotly_chart(fig_frete_evolucão, use_container_width=True)
+                    st.plotly_chart(fig_frete_evolucao, use_container_width=True)
 
             st.subheader("💸 Análise de Custos")
             custos_totais = pd.DataFrame({
