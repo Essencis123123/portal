@@ -18,6 +18,11 @@ st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="�
 st.markdown(
     """
     <style>
+    /* Aumenta o tamanho da fonte de todo o corpo do aplicativo */
+    html, body, [data-testid="stAppViewContainer"] {
+        font-size: 1.1rem;
+    }
+    
     /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
@@ -106,15 +111,7 @@ st.markdown(
     .stButton button:hover {
         background-color: #007ea7;
     }
-    
-    /* Estilo para os cards de métricas */
-    [data-testid="stMetric"] > div {
-        background-color: #f0f2f5;
-        color: #1C4D86;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -142,6 +139,7 @@ def carregar_dados_pedidos():
         try:
             df = pd.read_csv(arquivo_csv, dtype={'FORNECEDOR': str, 'ORDEM_COMPRA': str, 'MATERIAL': str})
             
+            # Garante que as colunas de data sejam do tipo datetime
             for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
                 if col in df.columns:
                     df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
@@ -223,7 +221,6 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    # O restante da aplicação só é exibido se o usuário estiver logado
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
     if 'df_solicitantes' not in st.session_state:
@@ -236,11 +233,11 @@ else:
             st.image(logo_img, use_container_width=True)
         
         st.write(f"Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!")
-        st.title("👨‍💼 Painel do Comprador")
+        st.title("👨‍💼 Comprador")
         st.divider()
         menu = st.radio(
             "📌 Navegação",
-            ["📝 Registrar Requisição", "✍️ Atualizar Pedidos (OC)", "📜 Histórico e Edição", "👤 Cadastro de Solicitante", "📊 Dashboards de Desempenho", "📊 Performance Local"]
+            ["📝 Requisição", "✍️ Pedidos (OC)", "📜 Histórico ", "👤 Cadastro ", "📊 Dashboards ", "📊 Performance "]
         )
         st.divider()
         if st.sidebar.button("Logout"):
@@ -248,43 +245,42 @@ else:
             st.session_state.pop('nome_colaborador', None)
             st.rerun()
 
-    # Novo cabeçalho unificado com o tema Essencis
-    if menu == "📝 Registrar Requisição":
+    if menu == "📝 Requisição":
         st.markdown("""
             <div class='header-container'>
                 <h1>📝 REGISTRAR REQUISIÇÃO DE COMPRA</h1>
                 <p>Sistema de Controle e Análise de Pedidos</p>
             </div>
         """, unsafe_allow_html=True)
-    elif menu == "✍️ Atualizar Pedidos (OC)":
+    elif menu == "✍️ Pedidos (OC)":
         st.markdown("""
             <div class='header-container'>
                 <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1>
                 <p>Vincule as Ordens de Compra às Requisições Pendentes</p>
             </div>
         """, unsafe_allow_html=True)
-    elif menu == "📜 Histórico e Edição":
+    elif menu == "📜 Histórico ":
         st.markdown("""
             <div class='header-container'>
                 <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
                 <p>Gerencie e Edite os Registros Anteriores</p>
             </div>
         """, unsafe_allow_html=True)
-    elif menu == "👤 Cadastro de Solicitante":
+    elif menu == "👤 Cadastro ":
         st.markdown("""
             <div class='header-container'>
                 <h1>👤 CADASTRO DE SOLICITANTES</h1>
                 <p>Adicione novos Solicitantes ao Sistema</p>
             </div>
         """, unsafe_allow_html=True)
-    elif menu == "📊 Dashboards de Desempenho":
+    elif menu == "📊 Dashboards ":
         st.markdown("""
             <div class='header-container'>
                 <h1>📊 DASHBOARD DE DESEMPENHO</h1>
                 <p>Análise de Prazos e Custos de Pedidos</p>
             </div>
         """, unsafe_allow_html=True)
-    elif menu == "📊 Performance Local":
+    elif menu == "📊 Performance ":
         st.markdown("""
             <div class='header-container'>
                 <h1>📊 PERFORMANCE DE NEGOCIAÇÃO LOCAL</h1>
@@ -292,8 +288,7 @@ else:
             </div>
         """, unsafe_allow_html=True)
 
-    # O resto do código (lógica das páginas) permanece inalterado
-    if menu == "📝 Registrar Requisição":
+    if menu == "📝 Requisição":
         st.header("📝 Registrar Nova Requisição de Compra")
         
         solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist()
@@ -365,13 +360,13 @@ else:
             else:
                 st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
 
-    elif menu == "✍️ Atualizar Pedidos (OC)":
+    elif menu == "✍️ Pedidos (OC)":
         st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
         st.info("Edite os campos diretamente na tabela abaixo para adicionar os dados de Ordem de Compra. Eles serão salvos ao clicar no botão abaixo.")
         
         pedidos_pendentes_oc = st.session_state.df_pedidos[
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")
-        ]
+        ].copy()
         
         if pedidos_pendentes_oc.empty:
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
@@ -394,8 +389,8 @@ else:
                 column_config={
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
                     "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
-                    "SOLICITANTE": st.column_config.Column("Solicitante", disabled=True),
-                    "MATERIAL": st.column_config.Column("Material", disabled=True),
+                    "SOLICITANTE": "Solicitante",
+                    "MATERIAL": "Material",
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
@@ -411,48 +406,48 @@ else:
         if submitted:
             st.info("Detectando alterações...")
             
+            edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
+            edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
+            
             for index, edited_row in edited_df.iterrows():
-                if (edited_row['FORNECEDOR'] != '') and (edited_row['ORDEM_COMPRA'] != '') and \
-                   (pd.notna(edited_row['VALOR_ITEM'])) and (pd.notna(edited_row['DATA_APROVACAO'])) and \
-                   (edited_row['CONDICAO_FRETE'] != ''):
+                original_index = st.session_state.df_pedidos[
+                    (st.session_state.df_pedidos['REQUISICAO'] == edited_row['REQUISICAO']) & 
+                    (st.session_state.df_pedidos['MATERIAL'] == edited_row['MATERIAL'])
+                ].index
+                
+                if not original_index.empty:
+                    original_index = original_index[0]
                     
-                    original_index = st.session_state.df_pedidos[
-                        (st.session_state.df_pedidos['REQUISICAO'] == edited_row['REQUISICAO']) & 
-                        (st.session_state.df_pedidos['MATERIAL'] == edited_row['MATERIAL'])
-                    ].index
+                    st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
+                    st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
+                    st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_row['VALOR_ITEM']
+                    st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
+                    st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
+                    st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
                     
-                    if not original_index.empty:
-                        original_index = original_index[0]
-                        
-                        st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
-                        st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
-                        st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_row['VALOR_ITEM']
-                        st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
-                        st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
-                        st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
-                        
-                        if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
-                            data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
-                            data_aprovacao = st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']
-                            dias_emissao = (data_aprovacao.date() - data_requisicao.date()).days
-                            st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
-                        else:
-                            st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = 0
+                    if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
+                        data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
+                        data_aprovacao = st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']
+                        dias_emissao = (data_aprovacao - data_requisicao).days
+                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
+                    else:
+                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = 0
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Dados atualizados com sucesso!")
             st.rerun()
 
-    elif menu == "📜 Histórico e Edição":
+    elif menu == "📜 Histórico ":
         st.header("📜 Histórico de Requisições e Pedidos")
         st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
         
-        df_history = st.session_state.df_pedidos.copy()
-        
         col_filter_h1, col_filter_h2, col_filter_h3, col_filter_h4 = st.columns(4)
         
-        mes_selecionado_h = None
-        ano_selecionado_h = None
+        df_history = st.session_state.df_pedidos.copy()
+
+        # Adição da correção: Converte a coluna 'DATA' para o tipo datetime
+        df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+
         if not df_history['DATA'].isnull().all():
             with col_filter_h1:
                 meses_disponiveis = df_history['DATA'].dt.month.unique()
@@ -463,6 +458,9 @@ else:
                 ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
             
             df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
+        else:
+            mes_selecionado_h = None
+            ano_selecionado_h = None
 
         with col_filter_h3:
             solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
@@ -508,13 +506,18 @@ else:
         if not edited_history_df.equals(df_history):
             st.info("Salvando alterações...")
             
+            for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+                edited_history_df[col] = pd.to_datetime(edited_history_df[col], errors='coerce', dayfirst=True)
+
             st.session_state.df_pedidos.update(edited_history_df)
             
             for index, row in edited_history_df.iterrows():
-                if pd.notna(row['DATA_APROVACAO']):
+                if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
                     dias_emissao = (row['DATA_APROVACAO'] - row['DATA']).days
                     st.session_state.df_pedidos.loc[index, 'DIAS_EMISSAO'] = dias_emissao
-                
+                else:
+                    st.session_state.df_pedidos.loc[index, 'DIAS_EMISSAO'] = 0
+
                 if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['DATA_APROVACAO']):
                     data_limite = row['DATA_APROVACAO'] + pd.Timedelta(days=15)
                     if row['DATA_ENTREGA'] > data_limite:
@@ -522,12 +525,14 @@ else:
                         st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = dias_atraso
                     else:
                         st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = 0
+                else:
+                    st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = 0
 
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Histórico atualizado com sucesso!")
             st.rerun()
 
-    elif menu == "👤 Cadastro de Solicitante":
+    elif menu == "👤 Cadastro ":
         st.header("➕ Cadastro de Solicitante")
         st.info("Cadastre os solicitantes para que eles possam ser selecionados nas requisições.")
         
@@ -555,7 +560,7 @@ else:
                 else:
                     st.error("Por favor, preencha todos os campos para cadastrar o solicitante.")
 
-    elif menu == "📊 Dashboards de Desempenho":
+    elif menu == "📊 Dashboards ":
         st.header("📊 Análise de Desempenho de Entregas")
         
         if st.session_state.df_pedidos.empty:
@@ -563,6 +568,9 @@ else:
             st.stop()
 
         df_analise = st.session_state.df_pedidos.copy()
+        
+        # Garante que a coluna 'DATA' está no formato de data antes de ser usada.
+        df_analise['DATA'] = pd.to_datetime(df_analise['DATA'], errors='coerce', dayfirst=True)
 
         st.subheader("Filtros de Período")
         col_filtro1, col_filtro2 = st.columns(2)
@@ -592,16 +600,21 @@ else:
         st.subheader("Visão Geral")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total de Pedidos", len(df_filtrado_dash))
+            total_pedidos = len(df_filtrado_dash)
+            st.markdown(f"### {total_pedidos}")
+            st.markdown("Total de Pedidos")
         with col2:
             pedidos_pendentes = len(df_filtrado_dash[df_filtrado_dash['STATUS_PEDIDO'] == 'PENDENTE'])
-            st.metric("Pedidos Pendentes", pedidos_pendentes)
+            st.markdown(f"### {pedidos_pendentes}")
+            st.markdown("Pedidos Pendentes")
         with col3:
             valor_total = df_filtrado_dash['VALOR_ITEM'].sum()
-            st.metric("Valor Total dos Itens", f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown(f"### R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown("Valor Total dos Itens")
         with col4:
             media_atraso = df_filtrado_dash['DIAS_ATRASO'].mean() if not df_filtrado_dash.empty else 0
-            st.metric("Média de Dias de Atraso", f"{media_atraso:.1f}")
+            st.markdown(f"### {media_atraso:.1f}")
+            st.markdown("Média de Dias de Atraso")
 
         st.subheader("Análise de Pedidos com Atraso de Entrega")
         pedidos_atrasados = df_filtrado_dash[df_filtrado_dash['DIAS_ATRASO'] > 0]
@@ -678,12 +691,15 @@ else:
         else:
             st.info("Não há pedidos entregues no período para criar o ranking.")
 
-    elif menu == "📊 Performance Local":
+    elif menu == "📊 Performance ":
         st.header("📊 Análise de Performance de Negociações Locais")
 
         df_performance = st.session_state.df_pedidos.copy()
         
         df_performance_local = df_performance[df_performance['TIPO_PEDIDO'] == 'LOCAL'].copy()
+        
+        # Correção: Garante que a coluna 'DATA' está no formato de data antes de ser usada.
+        df_performance_local['DATA'] = pd.to_datetime(df_performance_local['DATA'], errors='coerce', dayfirst=True)
         
         st.markdown("---")
         st.subheader("Filtros de Período")
@@ -726,13 +742,17 @@ else:
         st.subheader("Visão Geral da Performance")
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Total de Pedidos Locais", len(df_performance_local))
+            total_pedidos_local = len(df_performance_local)
+            st.markdown(f"### {total_pedidos_local}")
+            st.markdown("Total de Pedidos Locais")
         with col2:
             media_economia = df_performance_local['PERC_ECONOMIA'].mean()
-            st.metric("Média de Economia (%)", f"{media_economia:.2f}%")
+            st.markdown(f"### {media_economia:.2f}%")
+            st.markdown("Média de Economia (%)")
         with col3:
             total_economizado = df_performance_local['ECONOMIA'].sum()
-            st.metric("Total Economizado", f"R$ {total_economizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown(f"### R$ {total_economizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown("Total Economizado")
 
         st.markdown("---")
         
