@@ -40,7 +40,7 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
-    
+
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
@@ -196,6 +196,7 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
         return False
 
+# Removido o cache para garantir que os dados de pedidos sejam sempre os mais recentes
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
