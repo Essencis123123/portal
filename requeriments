@@ -1,3 +1,6 @@
 streamlit
 pandas
 plotly
+requests
+gspread
+oauth2client
