@@ -209,11 +209,28 @@ with st.sidebar:
 
     st.subheader("Filtros de Período")
     if 'DATA' in df_pedidos.columns and not df_pedidos['DATA'].isnull().all():
-        data_minima = st.date_input("De:", value=df_pedidos['DATA'].min() or datetime.date.today())
-        data_maxima = st.date_input("Até:", value=df_pedidos['DATA'].max() or datetime.date.today())
+        # Filtros de data por multiselect
+        df_pedidos['MES'] = df_pedidos['DATA'].dt.month
+        df_pedidos['ANO'] = df_pedidos['DATA'].dt.year
+        meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
+        anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
+        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+                       7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+        
+        filtro_mes_dash = st.multiselect(
+            "Selecione os Meses:", 
+            options=['Todos'] + meses_disponiveis, 
+            format_func=lambda x: meses_nomes.get(x, x),
+            default=['Todos']
+        )
+        filtro_ano_dash = st.multiselect(
+            "Selecione os Anos:", 
+            options=['Todos'] + anos_disponiveis,
+            default=['Todos']
+        )
     else:
-        data_minima = None
-        data_maxima = None
+        filtro_mes_dash = ['Todos']
+        filtro_ano_dash = ['Todos']
         st.info("Nenhum dado com data disponível para filtrar.")
 
     st.subheader("Filtros de Dados")
@@ -263,8 +280,12 @@ if df_pedidos.empty:
 # --- Aplicação dos Filtros na Tabela Principal ---
 df_filtrado = df_pedidos.copy()
 
-if data_minima and data_maxima and 'DATA' in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.date.between(data_minima, data_maxima)]
+# Aplica os filtros de meses e anos
+if 'Todos' not in filtro_mes_dash:
+    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.month.isin(filtro_mes_dash)]
+
+if 'Todos' not in filtro_ano_dash:
+    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.year.isin(filtro_ano_dash)]
 
 if 'Todos' not in filtro_solicitante:
     df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'].isin(filtro_solicitante)]
