@@ -40,7 +40,7 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
-
+    
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
@@ -147,34 +147,24 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # DEBUG: Imprime as colunas que foram carregadas da planilha
-        st.write("Colunas carregadas da planilha (aba Almoxarifado):", df.columns.tolist())
-
-        # Reordena as colunas do DataFrame para a ordem esperada
-        ordem_colunas = [
-            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
-            "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
-            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-            "ORDEM_COMPRA"
-        ]
-        
-        # Cria um novo DataFrame com as colunas na ordem correta. Colunas ausentes serão preenchidas com NaN.
-        df_reordenado = df.reindex(columns=ordem_colunas)
-
         for col in ['DATA', 'VENCIMENTO']:
-            if col in df_reordenado.columns:
-                df_reordenado[col] = pd.to_datetime(df_reordenado[col], errors='coerce', dayfirst=True)
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
-            if col in df_reordenado.columns:
-                df_reordenado[col] = pd.to_numeric(df_reordenado[col], errors='coerce').fillna(0)
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # Garante que colunas importantes existam, se o arquivo estiver vazio
-        for col in ordem_colunas:
-            if col not in df_reordenado.columns:
-                df_reordenado[col] = ''
+        if 'CONDICAO_PROBLEMA' not in df.columns:
+            df['CONDICAO_PROBLEMA'] = ''
+        if 'REGISTRO_ADICIONAL' not in df.columns:
+            df['REGISTRO_ADICIONAL'] = ''
+        if 'ORDEM_COMPRA' not in df.columns:
+            df['ORDEM_COMPRA'] = ''
+        if 'STATUS_FINANCEIRO' not in df.columns:
+            df['STATUS_FINANCEIRO'] = ''
 
-        return df_reordenado
+        return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
         return pd.DataFrame(columns=[
@@ -206,7 +196,6 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
         return False
 
-# Removido o cache para garantir que os dados de pedidos sejam sempre os mais recentes
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
@@ -249,7 +238,6 @@ def salvar_dados_pedidos(df):
         st.error(f"Erro ao salvar dados de pedidos: {e}")
         return False
 
-@st.cache_data
 def carregar_dados_solicitantes():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -586,7 +574,7 @@ else:
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
                     'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
-                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR_FRETE'
+                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE'
                 ]].copy()
                 
                 df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
@@ -594,7 +582,7 @@ else:
                 df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
-                df_exibir_consulta['VALOR_FRETE'] = df_exibir_consulta['VALOR_FRETE'].apply(
+                df_exibir_consulta['VALOR FRETE'] = df_exibir_consulta['VALOR FRETE'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
                 
