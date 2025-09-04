@@ -633,16 +633,19 @@ else:
                     if col in st.session_state.df_pedidos.columns and col in edited_history_df.columns:
                         st.session_state.df_pedidos.loc[index, col] = edited_history_df.loc[index, col]
 
-                if pd.notna(st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO']) and pd.notna(st.session_state.df_pedidos.loc[index, 'DATA']):
-                    dias_emissao = (st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO'] - st.session_state.df_pedidos.loc[index, 'DATA']).days
+                # Lógica de cálculo corrigida
+                # Calcula DIAS_EMISSAO apenas se as datas existirem
+                if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
+                    dias_emissao = (row['DATA_APROVACAO'] - row['DATA']).days
                     st.session_state.df_pedidos.loc[index, 'DIAS_EMISSAO'] = dias_emissao
                 else:
                     st.session_state.df_pedidos.loc[index, 'DIAS_EMISSAO'] = 0
 
-                if pd.notna(st.session_state.df_pedidos.loc[index, 'DATA_ENTREGA']) and pd.notna(st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO']):
-                    data_limite = st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO'] + pd.Timedelta(days=15)
-                    if st.session_state.df_pedidos.loc[index, 'DATA_ENTREGA'] > data_limite:
-                        dias_atraso = (st.session_state.df_pedidos.loc[index, 'DATA_ENTREGA'] - data_limite).days
+                # Calcula DIAS_ATRASO apenas se as datas existirem
+                if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['DATA_APROVACAO']):
+                    data_limite = row['DATA_APROVACAO'] + pd.Timedelta(days=15)
+                    if row['DATA_ENTREGA'] > data_limite:
+                        dias_atraso = (row['DATA_ENTREGA'] - data_limite).days
                         st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = dias_atraso
                     else:
                         st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = 0
@@ -874,8 +877,8 @@ else:
         
         df_performance_local['ECONOMIA'] = df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']
         df_performance_local['PERC_ECONOMIA'] = np.where(df_performance_local['VALOR_ITEM'] > 0, 
-                                                         (df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']) / df_performance_local['VALOR_ITEM'] * 100, 
-                                                         0)
+                                                        (df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']) / df_performance_local['VALOR_ITEM'] * 100, 
+                                                        0)
 
         st.subheader("Visão Geral da Performance")
         col1, col2, col3 = st.columns(3)
