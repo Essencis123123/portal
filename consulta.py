@@ -151,7 +151,7 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Carregamento de Dados ---
-@st.cache_data
+@st.cache_data(ttl=600)  # ttl=600 significa 10 minutos
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
@@ -211,6 +211,11 @@ with st.sidebar:
     )
     
     st.divider()
+
+    # Botão de atualização manual
+    if st.button("Atualizar Dados"):
+        st.cache_data.clear()
+        st.rerun()
 
     # Inicializa as variáveis de filtro fora dos blocos condicionais
     filtro_solicitante = 'Todos'
