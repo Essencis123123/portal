@@ -36,16 +36,33 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
+    
+    /* CORREÇÃO: Estilo para o texto do selectbox no sidebar ser visível */
+    [data-testid="stSidebar"] .stSelectbox label p,
+    [data-testid="stSidebar"] .stMultiSelect label p,
+    [data-testid="stSidebar"] .stDateInput label p,
+    [data-testid="stSidebar"] .stRadio label p {
+        color: white !important;
+    }
 
-    /* CORREÇÃO DEFINITIVA: Estilo para o texto dentro dos campos de filtro ser preto */
-    [data-testid="stSidebar"] .stSelectbox > div > div > div > span {
+    /* CORREÇÃO: Texto dentro dos inputs (placeholders e valores selecionados) */
+    [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stDateInput input,
+    [data-testid="stSidebar"] .stTextInput input {
         color: black !important;
+        background-color: white !important;
     }
-    [data-testid="stSidebar"] .stMultiselect > div > div > div > span {
+
+    /* CORREÇÃO: Opções do dropdown com fundo branco e texto preto */
+    [data-testid="stSidebar"] div[role="listbox"] * {
         color: black !important;
+        background-color: white !important;
     }
-    [data-testid="stSidebar"] .stDateInput > div > div > input {
-        color: black !important;
+
+    /* CORREÇÃO: Placeholder dos inputs */
+    [data-testid="stSidebar"] input::placeholder {
+        color: #666 !important;
     }
 
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
@@ -66,7 +83,7 @@ st.markdown(
     div.st-emotion-cache-1ky8k0j, .st-emotion-cache-1f1q9w0 {
         color: black !important;
     }
-    
+
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -151,7 +168,7 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Carregamento de Dados ---
-@st.cache_data(ttl=600)  # ttl=600 significa 10 minutos
+@st.cache_data
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
@@ -211,11 +228,6 @@ with st.sidebar:
     )
     
     st.divider()
-
-    # Botão de atualização manual
-    if st.button("Atualizar Dados"):
-        st.cache_data.clear()
-        st.rerun()
 
     # Inicializa as variáveis de filtro fora dos blocos condicionais
     filtro_solicitante = 'Todos'
