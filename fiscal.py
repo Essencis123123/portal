@@ -76,10 +76,12 @@ st.markdown(
         background-color: #f0f2f5; color: #1C4D86; padding: 10px; border-radius: 8px;
         box-shadow: 0 1px 4px rgba(0,0,0,0.1);
         text-align: center;
-        font-size: 0.8rem; /* Tamanho da fonte do texto */
     }
-    [data-testid="stMetric"] > div > div:first-child {
+    [data-testid="stMetric"] .stMetricValue {
         font-size: 1.1rem; /* Tamanho da fonte do valor */
+    }
+    [data-testid="stMetric"] .stMetricLabel {
+        font-size: 0.8rem; /* Tamanho da fonte do texto */
     }
     </style>
     """,
