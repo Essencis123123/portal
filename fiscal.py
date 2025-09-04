@@ -81,7 +81,7 @@ st.markdown(
         font-size: 0.9rem;
     }
     [data-testid="stMetric"] .stMetricLabel {
-        font-size: 0.6rem;
+        font-size: 0.6rem; 
     }
     </style>
     """,
@@ -295,7 +295,6 @@ else:
         # Filtros de Período
         st.subheader("Filtros de Período")
         if 'DATA' in df.columns and not df['DATA'].isnull().all():
-            # CORREÇÃO: Pega a data mínima do DataFrame para evitar erros se o DataFrame estiver vazio.
             min_date_value = df['DATA'].min() if not df['DATA'].isnull().all() else datetime.date.today()
             max_date_value = df['DATA'].max() if not df['DATA'].isnull().all() else datetime.date.today()
             data_minima = st.date_input("De:", value=min_date_value)
@@ -390,13 +389,20 @@ else:
             total_juros = df_display['VALOR_JUROS'].sum()
             total_frete = df_display['VALOR_FRETE'].sum()
 
+            # --- CORREÇÃO AQUI: Nova lógica para formatar valores ---
+            def formatar_milhar(valor):
+                if valor >= 1000:
+                    return f"R$ {valor/1000:,.1f}K".replace(",", "X").replace(".", ",").replace("X", ".")
+                else:
+                    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            
             c1.metric("📊 Total de NFs", total_nfs)
-            # CORREÇÃO: Formatação dos valores com separador de milhar e vírgula decimal
-            c2.metric("💰 Valor NFs", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            c2.metric("💰 Valor NFs", formatar_milhar(total_valor))
             c3.metric("⏳ Pendentes", nfs_pendentes)
             c4.metric("✅ Finalizadas", total_nfs - nfs_pendentes)
-            c5.metric("💸 Juros", f"R$ {total_juros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            c6.metric("🚚 Fretes", f"R$ {total_frete:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            c5.metric("💸 Juros", formatar_milhar(total_juros))
+            c6.metric("🚚 Fretes", formatar_milhar(total_frete))
+            # --- FIM DA CORREÇÃO ---
 
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
@@ -406,7 +412,7 @@ else:
 
             edited_df = st.data_editor(
                 df_display,
-                use_container_container_width=True,
+                use_container_width=True,
                 column_config={
                     "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY", disabled=True),
                     "FORNECEDOR": "Fornecedor",
