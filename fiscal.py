@@ -151,7 +151,7 @@ def carregar_dados() -> pd.DataFrame:
             "DATA": None, "FORNECEDOR": "", "NF": "", "ORDEM_COMPRA": "", "V_TOTAL_NF": 0.0, 
             "VENCIMENTO": None, "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A", 
             "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0, "VALOR_FRETE": 0.0, "DOC_NF": "",
-            "RECEBEDOR": "", "DIAS_VENCIMENTO": 0 # Adicionado aqui para garantir que exista
+            "RECEBEDOR": "", "DIAS_VENCIMENTO": 0
         }
         for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
