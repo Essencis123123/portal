@@ -343,6 +343,12 @@ else:
                     # 1. Cria uma cópia da coluna para limpeza
                     fornecedores_limpos = df_pedidos['FORNECEDOR'].astype(str).str.strip().str.replace('"', '').str.replace('\n', '')
 
+                    # --- ETAPA DE DIAGNÓSTICO TEMPORÁRIA ---
+                    st.info("Lista de Fornecedores Lida da Planilha:")
+                    st.dataframe(pd.DataFrame(fornecedores_limpos.unique(), columns=['Fornecedor']), use_container_width=True)
+                    st.info(f"O sistema encontrou {len(fornecedores_limpos.unique())} fornecedores únicos na planilha.")
+                    # --- FIM DA ETAPA DE DIAGNÓSTICO ---
+
                     # 2. Procura a OC na planilha de pedidos
                     if ordem_compra_nf:
                         ordem_compra_existe = df_pedidos[
