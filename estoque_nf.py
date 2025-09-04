@@ -419,7 +419,7 @@ else:
                             st.rerun()
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
-    
+        
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
         if not st.session_state.df_almoxarifado.empty:
@@ -491,64 +491,90 @@ else:
     elif menu_option == "🔍 Consultar NFs":
         st.markdown("""
             <div class='header-container'>
-                <h1>🔍 CONSULTAR NOTAS FISCAIS</h1>
-                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+                <h1>🔍 CONSULTAR NOTAS FISCAIS E PEDIDOS</h1>
+                <p>Veja as Notas Fiscais e os Pedidos de Compra correspondentes</p>
             </div>
         """, unsafe_allow_html=True)
         
+        # Carregar os DataFrames de forma segura
+        if 'df_pedidos' not in st.session_state:
+            st.session_state.df_pedidos = carregar_dados_pedidos()
+        if 'df_almoxarifado' not in st.session_state:
+            st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
+
+        df_pedidos_oc = st.session_state.df_pedidos.copy()
         df_almox = st.session_state.df_almoxarifado.copy()
         
-        df = df_almox.copy()
+        # Renomear colunas para evitar conflitos na mesclagem
+        df_almox.rename(columns={'FORNECEDOR': 'FORNECEDOR_NF'}, inplace=True)
         
-        if not df.empty:
+        # Juntar os dois DataFrames pela Ordem de Compra
+        # O 'how=outer' garante que todas as OCs (com ou sem NF) apareçam
+        df_combinado = pd.merge(
+            df_pedidos_oc, 
+            df_almox, 
+            on='ORDEM_COMPRA', 
+            how='outer',
+            suffixes=('_pedido', '_nf')
+        )
+        
+        # Tratar valores nulos de 'NF' para facilitar a consulta
+        df_combinado['NF'].fillna('NÃO RECEBIDA', inplace=True)
+        
+        if not df_combinado.empty:
             st.subheader("🔎 Consulta Avançada")
             col1, col2 = st.columns(2)
             
             with col1:
                 nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
                 ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
-                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + sorted(df['FORNECEDOR'].dropna().unique().tolist()))
+                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor (Pedido)", options=["Todos"] + sorted(df_combinado['FORNECEDOR_pedido'].dropna().unique().tolist()))
             
             with col2:
-                status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
+                status_consulta = st.multiselect("Filtrar por Status (Pedido)", options=["Todos", "ENTREGUE", "PENDENTE"], default=["Todos"])
                 
-                if not df['DATA'].isnull().all():
-                    data_minima = df['DATA'].min().date() if pd.notna(df['DATA'].min()) else datetime.date.today()
-                    data_maxima = df['DATA'].max().date() if pd.notna(df['DATA'].max()) else datetime.date.today()
+                if not df_combinado['DATA_pedido'].isnull().all():
+                    data_minima = df_combinado['DATA_pedido'].min().date() if pd.notna(df_combinado['DATA_pedido'].min()) else datetime.date.today()
+                    data_maxima = df_combinado['DATA_pedido'].max().date() if pd.notna(df_combinado['DATA_pedido'].max()) else datetime.date.today()
                 else:
                     data_minima = datetime.date.today()
                     data_maxima = datetime.date.today()
 
-                data_inicio_consulta = st.date_input("Data Início", value=data_minima, min_value=data_minima, max_value=data_maxima)
-                data_fim_consulta = st.date_input("Data Fim", value=data_maxima, min_value=data_minima, max_value=data_maxima)
+                data_inicio_consulta = st.date_input("Data Início (Pedido)", value=data_minima, min_value=data_minima, max_value=data_maxima)
+                data_fim_consulta = st.date_input("Data Fim (Pedido)", value=data_maxima, min_value=data_minima, max_value=data_maxima)
 
-            df_consulta = df.copy()
+            df_consulta = df_combinado.copy()
             
+            # Aplicar filtros
             if nf_consulta: df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False)]
             if ordem_compra_consulta: df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False)]
-            if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR'] == fornecedor_consulta]
-            if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
+            if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_pedido'] == fornecedor_consulta]
+            if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_PEDIDO'].isin(status_consulta)]
             
             df_consulta = df_consulta[
-                (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
-                (df_consulta['DATA'].dt.date <= data_fim_consulta)
+                (df_consulta['DATA_pedido'].dt.date >= data_inicio_consulta) &
+                (df_consulta['DATA_pedido'].dt.date <= data_fim_consulta)
             ]
             
-            st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
+            st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} itens encontrados)")
             
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
-                    'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
-                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE'
+                    'REQUISICAO', 'DATA_pedido', 'SOLICITANTE', 'MATERIAL', 'QUANTIDADE', 
+                    'FORNECEDOR_pedido', 'ORDEM_COMPRA', 'STATUS_PEDIDO', 
+                    'NF', 'V. TOTAL NF', 'VENCIMENTO', 'DOC NF', 'STATUS_FINANCEIRO'
                 ]].copy()
                 
-                df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
-                df_exibir_consulta['VENCIMENTO'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-                df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
-                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                )
-                df_exibir_consulta['VALOR FRETE'] = df_exibir_consulta['VALOR FRETE'].apply(
-                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                df_exibir_consulta.columns = [
+                    'Nº Requisição', 'Data Pedido', 'Solicitante', 'Material', 'Quantidade',
+                    'Fornecedor Pedido', 'Nº Ordem de Compra', 'Status do Pedido',
+                    'Nº NF', 'Valor Total NF', 'Vencimento NF', 'Link NF', 'Status Financeiro'
+                ]
+                
+                df_exibir_consulta['Data Pedido'] = df_exibir_consulta['Data Pedido'].dt.strftime('%d/%m/%Y')
+                df_exibir_consulta['Vencimento NF'] = df_exibir_consulta['Vencimento NF'].dt.strftime('%d/%m/%Y')
+                df_exibir_consulta['Valor Total NF'] = df_exibir_consulta['Valor Total NF'].apply(
+                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
                 )
                 
                 st.dataframe(
@@ -556,8 +582,8 @@ else:
                     use_container_width=True,
                     height=400,
                     column_config={
-                        "DOC NF": st.column_config.LinkColumn(
-                            "DOC NF",
+                        "Link NF": st.column_config.LinkColumn(
+                            "Link NF",
                             help="Clique para abrir a nota fiscal.",
                             display_text="📥 Abrir NF"
                         )
@@ -568,11 +594,11 @@ else:
                 st.download_button(
                     label="📥 Download Resultados",
                     data=csv_consulta,
-                    file_name="consulta_nfs.csv",
+                    file_name="consulta_nfs_e_pedidos.csv",
                     mime="text/csv"
                 )
             else:
-                st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
+                st.warning("⚠️ Nenhuma registro encontrado com os filtros aplicados.")
         else:
             st.info("📝 Nenhum dado disponível para consulta.")
 
