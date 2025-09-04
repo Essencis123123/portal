@@ -262,6 +262,7 @@ def salvar_dados_solicitantes(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
+# Adicionado para carregar dados do almoxarifado
 @st.cache_data
 def carregar_dados_almoxarifado():
     try:
@@ -274,7 +275,7 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # Garante que as colunas existam, reordenando-as.
+        # Reordena e limpa as colunas para evitar KeyErrors
         ordem_colunas = ['ORDEM_COMPRA', 'DOC NF']
         df = df.reindex(columns=ordem_colunas)
         
@@ -437,12 +438,9 @@ else:
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
             st.stop()
         
-        # Pega a nota fiscal da aba de almoxarifado
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
             df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
-            
-            # Faz a junção com o dataframe de pedidos pendentes para preencher automaticamente o campo DOC NF
             pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
             pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
@@ -473,7 +471,7 @@ else:
                     "VALOR_ITEM": st.column_config.NumberColumn("Valor do Item", format="%.2f"),
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
-                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"])
+                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
                 }
             )
             
@@ -500,7 +498,6 @@ else:
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
                     st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
                     st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
-                    st.session_state.df_pedidos.loc[original_index, 'DOC NF'] = edited_row['DOC NF']
                     
                     if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
                         data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
@@ -568,6 +565,17 @@ else:
             st.warning("Nenhum registro encontrado com os filtros aplicados.")
             st.stop()
         
+        # Função para formatar o status com emojis
+        def formatar_status(status):
+            if status == 'ENTREGUE':
+                return '🟢 ENTREGUE'
+            elif status == 'PENDENTE':
+                return '⚪ PENDENTE'
+            else:
+                return '🟡 EM ANDAMENTO'
+        
+        df_history['STATUS_PEDIDO'] = df_history['STATUS_PEDIDO'].apply(formatar_status)
+
         edited_history_df = st.data_editor(
             df_history,
             use_container_width=True,
@@ -587,7 +595,7 @@ else:
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=["PENDENTE", "ENTREGUE"]),
+                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=["PENDENTE", "ENTREGUE", "EM ANDAMENTO"]),
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
@@ -600,6 +608,11 @@ else:
             
             for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
                 edited_history_df[col] = pd.to_datetime(edited_history_df[col], errors='coerce', dayfirst=True)
+            
+            # Remove a formatação de emoji para salvar os dados corretamente
+            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].str.replace('🟢 ENTREGUE', 'ENTREGUE')
+            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].str.replace('⚪ PENDENTE', 'PENDENTE')
+            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].str.replace('🟡 EM ANDAMENTO', 'EM ANDAMENTO')
 
             # Para que as edições não apaguem o link do DOC NF, precisamos separá-las
             df_history_merged = edited_history_df.drop(columns=['DOC NF'], errors='ignore')
