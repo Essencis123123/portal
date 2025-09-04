@@ -9,9 +9,9 @@ from plotly.subplots import make_subplots
 import requests
 from PIL import Image
 from io import BytesIO
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import gspread
+from gspread_dataframe import get_as_dataframe, set_with_dataframe
+from oauth2client.service_account import ServiceAccountCredentials
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
@@ -136,66 +136,94 @@ def load_logo(url):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
+# --- FUNÇÕES DE CONEXÃO E CARREGAMENTO DA PLANILHA ---
+@st.cache_resource
+def get_gspread_client():
+    """Conecta com o Google Sheets usando a conta de serviço."""
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credenciais.json', scope)
+    client = gspread.authorize(creds)
+    return client
+
 def carregar_dados():
     """
-    Carrega os dados do arquivo CSV, lidando com o caso de arquivo vazio.
-    NOTA: O decorador @st.cache_data foi removido para garantir que os dados
-    sejam sempre lidos novamente quando a página é recarregada.
+    Carrega os dados da aba "almoxarifado" da planilha do Google Sheets.
     """
-    arquivo_csv = "dados_pedidos.csv"
-    
-    # Define as colunas necessárias e seus valores padrão
-    colunas_necessarias = {
-        "STATUS": "EM ANDAMENTO",
-        "CONDICAO_PROBLEMA": "N/A",
-        "REGISTRO_ADICIONAL": "",
-        "VALOR_JUROS": 0.0,
-        "DIAS_ATRASO": 0,
-        "VALOR_FRETE": 0.0,
-        "DOC NF": "",
-        "V. TOTAL NF": 0.0,
-        "NF": "",
-        "VENCIMENTO": None,
-    }
-    
-    if os.path.exists(arquivo_csv):
-        try:
-            df = pd.read_csv(arquivo_csv)
-            # Converter colunas de data
-            df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-            if 'VENCIMENTO' in df.columns:
-                df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
-            else:
-                df['VENCIMENTO'] = pd.NaT
-            
-            # Garante que colunas importantes existam
-            for col, default_val in colunas_necessarias.items():
-                if col not in df.columns:
-                    df[col] = default_val
-            
-            return df
-        except pd.errors.EmptyDataError:
-            # Se o arquivo existe mas está vazio, retorna um DataFrame vazio
-            st.warning("O arquivo de dados existe, mas está vazio. Adicione dados pelo Painel do Almoxarifado.")
-            return pd.DataFrame(columns=list(colunas_necessarias.keys()))
-        except Exception as e:
-            st.error(f"Erro ao carregar arquivo: {e}")
-            return pd.DataFrame(columns=list(colunas_necessarias.keys()))
-    else:
-        return pd.DataFrame(columns=list(colunas_necessarias.keys()))
+    try:
+        client = get_gspread_client()
+        # SUBSTITUA O TEXTO ABAIXO PELO NOME OU URL DA SUA PLANILHA
+        sheet = client.open("NOME_DA_SUA_PLANILHA")
+        worksheet = sheet.worksheet("almoxarifado") # NOME DA ABA
+        
+        df = get_as_dataframe(worksheet)
+        
+        if df.empty or all(df.columns.isnull()):
+            st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
+            return pd.DataFrame(columns=[
+                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
+                "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF",
+            ])
+
+        # Limpeza e conversão de dados
+        df = df.dropna(how='all')
+        df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
+
+        # Conversão para tipos corretos
+        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        if 'VENCIMENTO' in df.columns:
+            df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
+        else:
+            df['VENCIMENTO'] = pd.NaT
+        
+        # Garante que colunas importantes existam
+        colunas_necessarias = {
+            "STATUS": "EM ANDAMENTO",
+            "CONDICAO_PROBLEMA": "N/A",
+            "REGISTRO_ADICIONAL": "",
+            "VALOR_JUROS": 0.0,
+            "DIAS_ATRASO": 0,
+            "VALOR_FRETE": 0.0,
+            "DOC NF": "",
+            "V. TOTAL NF": 0.0,
+            "NF": "",
+            "VENCIMENTO": None,
+        }
+        for col, default_val in colunas_necessarias.items():
+            if col not in df.columns:
+                df[col] = default_val
+
+        # Converte colunas numéricas
+        df['V. TOTAL NF'] = pd.to_numeric(df['V. TOTAL NF'], errors='coerce').fillna(0)
+        df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
+        df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
+        df['DIAS_ATRASO'] = pd.to_numeric(df['DIAS_ATRASO'], errors='coerce').fillna(0)
+        
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados da planilha. Verifique o nome/URL da planilha, o nome da aba e se as credenciais estão corretas. Erro: {e}")
+        return pd.DataFrame()
 
 def salvar_dados(df):
-    """Salva o DataFrame no arquivo CSV"""
+    """Salva o DataFrame de volta na aba "almoxarifado" do Google Sheets"""
     try:
+        client = get_gspread_client()
+        # SUBSTITUA O TEXTO ABAIXO PELO NOME OU URL DA SUA PLANILHA
+        sheet = client.open("NOME_DA_SUA_PLANILHA")
+        worksheet = sheet.worksheet("almoxarifado") # NOME DA ABA
+        
+        # Limpa o conteúdo existente antes de escrever o novo
+        worksheet.clear()
+        
+        # Converte as datas de volta para string antes de salvar
         df_to_save = df.copy()
         df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
         if 'VENCIMENTO' in df_to_save.columns:
             df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-            
-        df_to_save.to_csv("dados_pedidos.csv", index=False, encoding='utf-8')
+        
+        set_with_dataframe(worksheet, df_to_save)
         return True
     except Exception as e:
-        st.error(f"Erro ao salvar dados: {e}")
+        st.error(f"Erro ao salvar dados na planilha: {e}")
         return False
 
 # --- Lógica de Login (UNIFICADA) ---
@@ -228,8 +256,9 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    st.session_state.df = carregar_dados()
-
+    if 'df' not in st.session_state:
+        st.session_state.df = carregar_dados()
+    
     if 'ultimo_salvamento' not in st.session_state:
         st.session_state.ultimo_salvamento = None
     if 'alteracoes_pendentes' not in st.session_state:
@@ -350,21 +379,6 @@ else:
 
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
-
-            def formatar_vencimento(venc):
-                try:
-                    if pd.isna(venc):
-                        return "N/A"
-                    venc_date = pd.to_datetime(venc).date()
-                    dias = (venc_date - datetime.date.today()).days
-                    if dias < 0:
-                        return f"🔴 {venc_date.strftime('%d/%m/%Y')}"
-                    elif dias <= 10:
-                        return f"🟡 {venc_date.strftime('%d/%m/%Y')}"
-                    else:
-                        return f"🟢 {venc_date.strftime('%d/%m/%Y')}"
-                except:
-                    return "N/A"
 
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
@@ -597,14 +611,13 @@ else:
                 st.metric("NFs com Juros", f"{nfs_com_juros}")
         
         else:
-            st.info("Nenhuma nota fiscal para calcular juros.")
+            st.info("Nenhum dado disponível.")
 
     elif menu == "⚙️ Configurações":
         st.header("⚙️ Configurações do Sistema")
         
         st.subheader("Manutenção de Dados")
         if st.button("🔄 Forçar Recarregamento de Dados"):
-            st.cache_data.clear()
             st.session_state.df = carregar_dados()
             st.success("Cache limpo e dados recarregados com sucesso!")
             st.rerun()
