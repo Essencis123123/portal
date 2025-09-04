@@ -216,7 +216,7 @@ with st.sidebar:
     if logo_img:
         st.image(logo_img, use_container_width=True)
     
-    st.title("🔎 Painel do Solicitante")
+    st.title("🔎 Requisitante")
     st.divider()
     
     menu_option = st.sidebar.radio(
