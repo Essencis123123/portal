@@ -406,8 +406,29 @@ else:
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
 
+            # --- CORREÇÃO AQUI: Lógica para as bolinhas visuais nas colunas ---
+            # Cria a coluna visual para STATUS
+            def formatar_status_visual(status):
+                if status == 'FINALIZADO':
+                    return '🟢 ' + status
+                elif status == 'EM ANDAMENTO':
+                    return '🟡 ' + status
+                elif status == 'NF PROBLEMA':
+                    return '🔴 ' + status
+                return status
+            df_display['STATUS_VISUAL'] = df_display['STATUS'].apply(formatar_status_visual)
+            
+            # Cria a coluna visual para DIAS_VENCIMENTO
+            def formatar_vencimento_visual(dias):
+                if dias <= 7:
+                    return f"🔴 {dias}"
+                elif dias <= 10:
+                    return f"🟡 {dias}"
+                return str(dias)
+            df_display['DIAS_VENCIMENTO_VISUAL'] = df_display['DIAS_VENCIMENTO'].apply(formatar_vencimento_visual)
+
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
-            problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
+            problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
             edited_df = st.data_editor(
                 df_display,
@@ -419,8 +440,8 @@ else:
                     "ORDEM_COMPRA": "N° Ordem de Compra",
                     "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
-                    "DIAS_VENCIMENTO": st.column_config.NumberColumn("Dias Vencimento", disabled=True),
-                    "STATUS": st.column_config.SelectboxColumn("Status", options=status_options),
+                    "DIAS_VENCIMENTO_VISUAL": st.column_config.Column("Dias Vencimento", disabled=True),
+                    "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=status_options),
                     "CONDICAO_PROBLEMA": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
                     "VALOR_JUROS": st.column_config.NumberColumn("Juros (R$)", format="%.2f"),
@@ -429,11 +450,12 @@ else:
                     "RECEBEDOR": "Recebedor",
                 },
                 column_order=[
-                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
-                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO_VISUAL",
+                    "STATUS_VISUAL", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
                 ],
                 hide_index=True
             )
+            # --- FIM DA CORREÇÃO ---
 
             # Se houve alteração, salva automaticamente de forma segura
             if not edited_df.equals(df_display):
@@ -448,6 +470,11 @@ else:
                 ref = pd.Timestamp.today().normalize()
                 edited_df["DIAS_VENCIMENTO"] = (edited_df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
 
+                # --- CORREÇÃO: Mapeia as colunas visuais de volta para as originais antes de salvar ---
+                edited_df["STATUS"] = edited_df["STATUS_VISUAL"].str.replace('🟢 ', '').str.replace('🟡 ', '').str.replace('🔴 ', '')
+                edited_df.drop(columns=['STATUS_VISUAL', 'DIAS_VENCIMENTO_VISUAL'], inplace=True, errors='ignore')
+                # --- FIM DA CORREÇÃO ---
+                
                 st.session_state.df = edited_df.copy()
 
                 if salvar_dados(st.session_state.df):
