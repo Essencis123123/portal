@@ -378,17 +378,23 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
+                            # Adicionado a busca para garantir que a OC exista na planilha de pedidos
                             if 'ORDEM_COMPRA' in st.session_state.df_pedidos.columns:
-                                df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
+                                # Encontra as linhas na planilha de pedidos com a OC informada
+                                pedidos_relacionados = st.session_state.df_pedidos[
+                                    st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                                ]
                                 
-                                if not df_update_pedidos.empty:
-                                    for original_index in df_update_pedidos.index:
-                                        st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                                        st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
-                                
+                                if not pedidos_relacionados.empty:
+                                    # Atualiza o status e a data de entrega para todos os pedidos com essa OC
+                                    indices_a_atualizar = pedidos_relacionados.index
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+
+                                    # Salva as alterações na planilha de pedidos
                                     salvar_dados_pedidos(st.session_state.df_pedidos)
                                 else:
-                                    st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada nos pedidos. O status não foi atualizado.")
+                                    st.warning(f"ℹ️ A Ordem de Compra '{ordem_compra_nf}' não foi encontrada na planilha de pedidos. O status não foi atualizado.")
                             
                             novo_registro_nf = {
                                 "DATA": pd.to_datetime(data_recebimento),
