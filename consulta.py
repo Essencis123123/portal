@@ -10,6 +10,7 @@ from PIL import Image
 from io import BytesIO
 import gspread
 from google.oauth2.service_account import Credentials
+import json
 
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel do Solicitante", layout="wide", page_icon="📝")
@@ -166,14 +167,27 @@ def load_logo(url):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
-# --- Funções de Carregamento de Dados ---
+# --- Funções de Conexão e Carregamento de Dados ---
+@st.cache_resource(show_spinner=False)
+def get_gspread_client():
+    """Conecta com o Google Sheets usando os secrets do Streamlit."""
+    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    
+    # Pega as credenciais como string
+    creds_string = st.secrets["gcp_service_account"]
+    
+    # Converte a string JSON para um dicionário Python
+    creds_json = json.loads(creds_string)
+    
+    creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
+    client = gspread.authorize(creds)
+    return client
+
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        # Usa a função de cliente cacheada
+        gc = get_gspread_client()
         
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
@@ -283,7 +297,7 @@ with st.sidebar:
             meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
             anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                             7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+                            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             filtro_mes_dash = st.selectbox("Selecione o Mês:", meses_disponiveis, format_func=lambda x: meses_nomes.get(x), index=len(meses_disponiveis)-1)
             filtro_ano_dash = st.selectbox("Selecione o Ano:", anos_disponiveis)
         else:
@@ -424,7 +438,7 @@ elif menu_option == "📊 Dashboard de Custos":
         meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
         anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
         meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+                        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
         filtro_mes_dash = st.selectbox("Selecione o Mês:", meses_disponiveis, format_func=lambda x: meses_nomes.get(x), index=len(meses_disponiveis)-1)
         filtro_ano_dash = st.selectbox("Selecione o Ano:", anos_disponiveis)
