@@ -526,11 +526,8 @@ else:
         df_pedidos_oc = st.session_state.df_pedidos.copy()
         df_almox = st.session_state.df_almoxarifado.copy()
         
-        # Renomear colunas para evitar conflitos na mesclagem
-        df_almox.rename(columns={'FORNECEDOR': 'FORNECEDOR_NF'}, inplace=True)
-        
         # Juntar os dois DataFrames pela Ordem de Compra
-        # O 'how=outer' garante que todas as OCs (com ou sem NF) apareçam
+        # Os sufixos garantem que colunas com o mesmo nome sejam diferenciadas
         df_combinado = pd.merge(
             df_pedidos_oc, 
             df_almox, 
@@ -538,6 +535,10 @@ else:
             how='outer',
             suffixes=('_pedido', '_nf')
         )
+        
+        # O problema era aqui. Agora criamos uma única coluna 'FORNECEDOR' que o usuário pediu,
+        # tomando o valor da coluna 'FORNECEDOR_pedido' que é a primária.
+        df_combinado.rename(columns={'FORNECEDOR_pedido': 'FORNECEDOR'}, inplace=True)
         
         # Tratar valores nulos de 'NF' para facilitar a consulta
         # Adiciona a coluna 'NF' se ela não existir
@@ -592,7 +593,7 @@ else:
                 
                 df_exibir_consulta.columns = [
                     'Nº Requisição', 'Data Pedido', 'Solicitante', 'Material', 'Quantidade',
-                    'Fornecedor Pedido', 'Nº Ordem de Compra', 'Status do Pedido',
+                    'Fornecedor', 'Nº Ordem de Compra', 'Status do Pedido',
                     'Nº NF', 'Valor Total NF', 'Vencimento NF', 'Link NF', 'Status Financeiro'
                 ]
                 
