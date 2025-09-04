@@ -134,10 +134,7 @@ def load_logo(url):
     except:
         return None
 
-logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-logo_img = load_logo(logo_url)
-
-# --- Funções de Carregamento e Salvamento de Dados (Adaptadas para Google Sheets) ---
+# Funções de carregamento e salvamento de dados para Google Sheets
 def carregar_dados_almoxarifado():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -145,7 +142,7 @@ def carregar_dados_almoxarifado():
         credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
         gc = gspread.authorize(credentials)
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(2)  # Aba para dados do almoxarifado (índice 2)
+        worksheet = spreadsheet.get_worksheet(2)
         
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -351,7 +348,13 @@ else:
                     nf_numero = st.text_input("Número da NF*")
                     
                 with col2:
-                    recebedor = st.selectbox("Recebedor*", sorted(df_solicitantes['NOME'].dropna().unique().tolist()))
+                    recebedor_options = [
+                        "ARLEY GONCALVES DOS SANTOS", "EVIANE DAS GRACAS DE ASSIS",
+                        "ANDRE CASTRO DE SOUZA", "ISABELA CAROLINA DE PAURA SOARES",
+                        "EMERSON ALMEIDA DE ARAUJO", "GABRIEL PEREIRA MARTINS",
+                        "OUTROS"
+                    ]
+                    recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
                     ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
                     volume_nf = st.number_input("Volume*", min_value=1, value=1)
                     
