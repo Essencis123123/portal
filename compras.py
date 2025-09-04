@@ -574,9 +574,8 @@ else:
         
         # --- CORREÇÃO AQUI ---
         # A coluna 'Anexo NF' agora contém os links.
-        # Criamos uma nova coluna para o texto de exibição, com o ícone ou 'N/A'.
-        # O LinkColumn será configurado para exibir essa nova coluna.
-        df_display['Anexo Display'] = df_display['DOC NF'].apply(lambda x: "📥" if pd.notna(x) and x != "" else "N/A")
+        # Criamos uma nova coluna para o texto de exibição, com o ícone ou 'N/A' para exibição.
+        df_display['Anexo Display'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
 
         edited_history_df = st.data_editor(
             df_display,
@@ -626,7 +625,7 @@ else:
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
             for index, row in edited_history_df.iterrows():
-                cols_to_update = [col for col in edited_history_df.columns if col not in ['DOC NF', 'Anexo Display']]
+                cols_to_update = [col for col in edited_history_df.columns if col not in ['Anexo NF', 'Anexo Display']]
                 
                 for col in cols_to_update:
                     if col in st.session_state.df_pedidos.columns and col in edited_history_df.columns:
