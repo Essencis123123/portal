@@ -334,9 +334,9 @@ else:
 
     # Cabeçalhos por menu
     headers = {
-        "📋 Visualização de NFs": ("📋 VISUALIZAÇÃO DE NOTAS FISCAIS", "Gerenciamento e acompanhamento financeiro de NFs"),
+        "📋 Lançamentos": ("📋 VISUALIZAÇÃO DE NOTAS FISCAIS", "Gerenciamento e acompanhamento financeiro de NFs"),
         "💰 Gestão de Juros": ("💰 GESTÃO DE JUROS E MULTAS", "Calcule e gerencie juros para notas em atraso"),
-        "📊 Dashboards Financeiros": ("📊 DASHBOARDS FINANCEIROS COMPLETOS", "Análise estratégica de custos e eficiências"),
+        "📊 Dashboards": ("📊 DASHBOARDS FINANCEIROS COMPLETOS", "Análise estratégica de custos e eficiências"),
         "⚙️ Configurações": ("⚙️ CONFIGURAÇÕES DO SISTEMA", "Parâmetros e manutenção de dados"),
     }
     titulo, subtitulo = headers.get(menu)
