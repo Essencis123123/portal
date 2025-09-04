@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 import json
 
 # Configuração da página com layout wide e ícone
-st.set_page_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
+st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
