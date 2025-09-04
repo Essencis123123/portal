@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 import json
 
 # Configuração da página com layout wide e ícone
-st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
+st.set_page_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
@@ -143,33 +143,47 @@ def load_logo(url):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
-# --- Funções de Carregamento e Salvamento de Dados ---
+# --- Funções de Conexão e Carregamento de Dados ---
+@st.cache_resource(show_spinner=False)
+def get_gspread_client():
+    """
+    Conecta com o Google Sheets usando os secrets do Streamlit.
+    Esta função foi aprimorada para lidar tanto com strings JSON quanto com objetos AttrDict.
+    """
+    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    
+    credentials_info = st.secrets["gcp_service_account"]
+    
+    if isinstance(credentials_info, str):
+        try:
+            credentials_info = json.loads(credentials_info)
+        except json.JSONDecodeError as e:
+            st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
+            return None
+    
+    creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    client = gspread.authorize(creds)
+    return client
 
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(0) # Pega a primeira aba
+        worksheet = spreadsheet.get_worksheet(0)
         
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # Garante que as colunas de data sejam do tipo datetime
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # Garante que as colunas numéricas tenham o tipo correto
         for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # Garante que colunas importantes existam, se o arquivo estiver vazio
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ""
         
@@ -190,15 +204,11 @@ def criar_dataframe_pedidos_vazio():
 def salvar_dados_pedidos(df):
     """Salva o DataFrame de pedidos no Google Sheets."""
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
 
-        # Prepara o DataFrame para salvar, convertendo datas para string
         df_to_save = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df_to_save.columns:
@@ -206,10 +216,8 @@ def salvar_dados_pedidos(df):
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
         
-        # Converte o DataFrame para uma lista de listas para salvar
         data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
         
-        # Limpa o conteúdo da planilha e atualiza com os novos dados
         worksheet.clear()
         worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         
@@ -220,13 +228,10 @@ def salvar_dados_pedidos(df):
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(1) # Pega a segunda aba (índice 1)
+        worksheet = spreadsheet.get_worksheet(1)
         
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -243,17 +248,13 @@ def criar_dataframe_solicitantes_vazio():
 def salvar_dados_solicitantes(df):
     """Salva o DataFrame de solicitantes no Google Sheets."""
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(1) # Pega a segunda aba (índice 1)
+        worksheet = spreadsheet.get_worksheet(1)
 
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
         
-        # Limpa o conteúdo da planilha e atualiza com os novos dados
         worksheet.clear()
         worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         
@@ -261,20 +262,15 @@ def salvar_dados_solicitantes(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
-# Adicionado para carregar dados do almoxarifado
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(2)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # Reordena e limpa as colunas para evitar KeyErrors
         ordem_colunas = ['ORDEM_COMPRA', 'DOC NF']
         df = df.reindex(columns=ordem_colunas, fill_value="")
         
@@ -575,7 +571,10 @@ else:
                 return status
         
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
-
+        
+        # Corrige a coluna para o link
+        df_display['Anexo NF'] = df_display['DOC NF'].apply(lambda x: f"📥 Anexo ({x})" if x else "N/A")
+        
         edited_history_df = st.data_editor(
             df_display,
             use_container_width=True,
@@ -600,19 +599,18 @@ else:
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
-                "DOC NF": st.column_config.LinkColumn("Anexo NF", display_text="📥 Anexo", disabled=True)
+                "Anexo NF": st.column_config.LinkColumn("Anexo NF", display_text="📥 Anexo")
             },
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
                 "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-                "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+                "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "Anexo NF"
             ]
         )
 
         if not edited_history_df.equals(df_display):
             st.info("Salvando alterações...")
             
-            # Desconverte o status de exibição para o valor original
             edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
                 '🟢 ENTREGUE': 'ENTREGUE',
                 '🟡 PENDENTE': 'PENDENTE',
@@ -620,7 +618,6 @@ else:
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
-            # Para cada linha editada, encontre a linha correspondente no DataFrame original e atualize
             for index, row in edited_history_df.iterrows():
                 cols_to_update = [col for col in edited_history_df.columns if col != 'DOC NF']
                 
@@ -643,7 +640,7 @@ else:
                         st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = 0
                 else:
                     st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = 0
-
+            
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Histórico atualizado com sucesso!")
             st.rerun()
@@ -679,7 +676,7 @@ else:
                     st.session_state.df_solicitantes = pd.concat([st.session_state.df_solicitantes, novo_solicitante], ignore_index=True)
                     salvar_dados_solicitantes(st.session_state.df_solicitantes)
                     st.success(f"Solicitante '{nome}' cadastrado com sucesso!")
-                    time.sleep(2) # Pausa para exibir a mensagem de sucesso
+                    time.sleep(2)
                     st.rerun()
                 else:
                     st.error("Por favor, preencha todos os campos para cadastrar o solicitante.")
@@ -933,3 +930,7 @@ else:
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
             st.info("Dados de solicitantes locais insuficientes para gerar o ranking.")
+
+Chat veja meu codigo ele nao puxou o link no campo anexo NF
+
+O link esta no campo "DOC NF"
