@@ -18,7 +18,7 @@ st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide",
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
-    """
+    
     <style>
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
