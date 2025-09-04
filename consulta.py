@@ -36,21 +36,35 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
+    
+    /* CORREÇÃO: Estilo para o texto do selectbox no sidebar ser visível */
+    [data-testid="stSidebar"] .stSelectbox label p,
+    [data-testid="stSidebar"] .stMultiSelect label p,
+    [data-testid="stSidebar"] .stDateInput label p,
+    [data-testid="stSidebar"] .stRadio label p {
+        color: white !important;
+    }
 
-    /* CORREÇÃO DEFINITIVA: Estilo para o texto dentro dos campos de filtro ser preto */
-    [data-testid="stSidebar"] .stSelectbox > div > div > div > span,
-    [data-testid="stSidebar"] .stMultiselect > div > div > div > span,
-    [data-testid="stSidebar"] .stDateInput > div > div > input {
+    /* CORREÇÃO: Texto dentro dos inputs (placeholders e valores selecionados) */
+    [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stDateInput input,
+    [data-testid="stSidebar"] .stTextInput input {
         color: black !important;
+        background-color: white !important;
     }
-    
-    /* Outra regra para garantir que o texto de opções no dropdown seja preto */
-    [data-testid="stSidebar"] div[role="listbox"] .st-b5,
-    [data-testid="stSidebar"] div[role="listbox"] .st-b6,
-    [data-testid="stSidebar"] div[role="listbox"] span {
+
+    /* CORREÇÃO: Opções do dropdown com fundo branco e texto preto */
+    [data-testid="stSidebar"] div[role="listbox"] * {
         color: black !important;
+        background-color: white !important;
     }
-    
+
+    /* CORREÇÃO: Placeholder dos inputs */
+    [data-testid="stSidebar"] input::placeholder {
+        color: #666 !important;
+    }
+
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
@@ -140,8 +154,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Carregar a imagem do logo a partir da URL
-@st.cache_data
+# Carregar a imagem do logo a partir da URL (sem cache)
 def load_logo(url):
     try:
         response = requests.get(url)
@@ -213,10 +226,6 @@ with st.sidebar:
     )
     
     st.divider()
-    
-    if st.button("Atualizar Dados"):
-        st.cache_data.clear()
-        st.rerun()
 
     # Inicializa as variáveis de filtro fora dos blocos condicionais
     filtro_solicitante = 'Todos'
@@ -367,7 +376,7 @@ if menu_option == "📋 Acompanhar Pedidos":
     
     # Verifica e formata as colunas de data
     if 'DATA' in df_tabela.columns:
-        df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%m%Y').replace('NaT', 'N/A')
+        df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
     else:
         df_tabela['DATA REQUISIÇÃO'] = 'N/A'
     
