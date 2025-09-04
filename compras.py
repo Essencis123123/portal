@@ -145,17 +145,14 @@ logo_img = load_logo(logo_url)
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
-        # Configuração das credenciais (usando st.secrets para segurança)
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         credentials_info = st.secrets["gcp_service_account"]
         credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
         gc = gspread.authorize(credentials)
         
-        # Abre a planilha pelo ID
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0) # Pega a primeira aba
         
-        # Lê os dados
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
@@ -217,7 +214,6 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
-@st.cache_data
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
@@ -304,7 +300,7 @@ def fazer_login(email, senha):
     else:
         st.error("E-mail ou senha incorretos.")
 
-# --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
+# --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state.logado:
     st.title("Login - Painel do Comprador")
     with st.form("login_form"):
@@ -444,7 +440,7 @@ else:
             
             pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
-            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
 
 
         cols_para_editar = [
@@ -585,6 +581,7 @@ else:
             use_container_width=True,
             hide_index=False,
             column_config={
+                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
                 "DATA": st.column_config.DateColumn("Data Requisição"),
                 "SOLICITANTE": "Solicitante",
                 "DEPARTAMENTO": "Departamento",
@@ -599,12 +596,16 @@ else:
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
                 "DOC NF": st.column_config.LinkColumn("Anexo NF", display_text="📥 Anexo")
-            }
+            },
+            column_order=[
+                "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
+                "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
+                "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+            ]
         )
 
         if not edited_history_df.equals(df_display):
