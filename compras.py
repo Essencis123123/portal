@@ -575,6 +575,7 @@ else:
         # --- CORREÇÃO AQUI ---
         # A coluna 'Anexo NF' agora contém os links.
         # A coluna 'Anexo Display' contém o ícone ou 'N/A' para exibição.
+        df_display['Anexo NF'] = df_display['DOC NF']
         df_display['Anexo Display'] = df_display['DOC NF'].apply(lambda x: "📥" if pd.notna(x) and x != "" else "N/A")
 
         edited_history_df = st.data_editor(
@@ -604,7 +605,7 @@ else:
                 "DOC NF": st.column_config.LinkColumn(
                     "Anexo NF", 
                     help="Clique para visualizar o anexo",
-                    display_text="Anexo Display" # Usa a nova coluna para o texto de exibição
+                    display_text="Anexo Display"
                 )
             },
             column_order=[
