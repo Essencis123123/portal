@@ -200,11 +200,12 @@ def carregar_dados():
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         
-        # Verifica se a coluna 'VENCIMENTO' é do tipo datetime. Se não for, a cria novamente.
+        # Verifica se a coluna 'VENCIMENTO' é do tipo datetime. Se não for, a converte novamente
+        # Isso garante que o acessor .dt possa ser usado.
         if not pd.api.types.is_datetime64_any_dtype(df['VENCIMENTO']):
             df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
             
-        # Calcula os dias até o vencimento
+        # Calcula os dias até o vencimento. Se houver valores nulos, preenche com 0.
         hoje = datetime.date.today()
         df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
 
