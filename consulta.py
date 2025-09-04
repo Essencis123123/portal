@@ -50,6 +50,12 @@ st.markdown(
         color: white !important;
     }
 
+    /* Estilo para garantir que os rótulos de campos e botões sejam pretos na área principal */
+    div[data-testid*="stForm"] label p, div[data-testid*="stForm"] label,
+    div.st-emotion-cache-1ky8k0j, .st-emotion-cache-1f1q9w0 {
+        color: black !important;
+    }
+
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -196,38 +202,32 @@ with st.sidebar:
     st.divider()
 
     # Inicializa as variáveis de filtro fora dos blocos condicionais
-    filtro_mes_pedidos = 'Todos'
-    filtro_ano_pedidos = 'Todos'
     filtro_solicitante = 'Todos'
     filtro_departamento = 'Todos'
     filtro_status = []
     
-    meses_disponiveis = []
-    anos_disponiveis = []
-    meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                     7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
     solicitantes_disponiveis = []
     departamentos_disponiveis = []
     status_disponiveis = []
     
     # Cria as listas de opções de filtro se houver dados
-    if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
-        meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
-        anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
+    if 'SOLICITANTE' in df_pedidos.columns and not df_pedidos.empty:
         solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
         departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
         status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
         
     if menu_option == "📋 Acompanhar Pedidos":
         st.subheader("Filtros de Pedidos")
-        
-        # Filtros de mês e ano para o acompanhamento
-        if meses_disponiveis:
-            filtro_mes_pedidos = st.selectbox("Selecione o Mês:", ['Todos'] + meses_disponiveis, format_func=lambda x: meses_nomes.get(x) if isinstance(x, int) else x)
-            filtro_ano_pedidos = st.selectbox("Selecione o Ano:", ['Todos'] + anos_disponiveis)
-        else:
-            st.info("Nenhum dado com data disponível para filtrar.")
 
+        # Filtro por período de data de requisição
+        if 'DATA' in df_pedidos.columns and not df_pedidos['DATA'].isnull().all():
+            data_minima = st.date_input("De:", value=df_pedidos['DATA'].min() or datetime.date.today(), key="data_minima_acompanhar")
+            data_maxima = st.date_input("Até:", value=df_pedidos['DATA'].max() or datetime.date.today(), key="data_maxima_acompanhar")
+        else:
+            st.info("Nenhum dado com data disponível para filtrar por período.")
+            data_minima = None
+            data_maxima = None
+        
         # Filtros de solicitante, departamento e status
         if solicitantes_disponiveis:
             filtro_solicitante = st.selectbox(
@@ -253,7 +253,11 @@ with st.sidebar:
     
     elif menu_option == "📊 Dashboard de Custos":
         st.subheader("Filtros do Dashboard")
-        if meses_disponiveis:
+        if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
+            meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
+            anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
+            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+                             7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             filtro_mes_dash = st.selectbox("Selecione o Mês:", meses_disponiveis, format_func=lambda x: meses_nomes.get(x), index=len(meses_disponiveis)-1)
             filtro_ano_dash = st.selectbox("Selecione o Ano:", anos_disponiveis)
         else:
@@ -284,6 +288,9 @@ if menu_option == "📋 Acompanhar Pedidos":
     df_filtrado = df_pedidos.copy()
 
     # Aplicação dos filtros
+    if data_minima and data_maxima and 'DATA' in df_filtrado.columns:
+        df_filtrado = df_filtrado[df_filtrado['DATA'].dt.date.between(data_minima, data_maxima)]
+
     if filtro_solicitante != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
 
