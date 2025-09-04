@@ -133,11 +133,23 @@ logo_img = load_logo(logo_url)
 # --- Funções de Conexão e Carregamento de Dados ---
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    """Conecta com o Google Sheets usando os secrets do Streamlit."""
+    """
+    Conecta com o Google Sheets usando os secrets do Streamlit.
+    Esta função foi aprimorada para lidar tanto com strings JSON quanto com objetos AttrDict.
+    """
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    creds_string = st.secrets["gcp_service_account"]
-    creds_json = json.loads(creds_string)
-    creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
+    
+    credentials_info = st.secrets["gcp_service_account"]
+    
+    # Verifica se as credenciais são uma string e tenta convertê-las para JSON
+    if isinstance(credentials_info, str):
+        try:
+            credentials_info = json.loads(credentials_info)
+        except json.JSONDecodeError as e:
+            st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
+            return None
+    
+    creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     client = gspread.authorize(creds)
     return client
 
