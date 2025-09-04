@@ -203,6 +203,10 @@ def carregar_dados():
         
         # Seleciona apenas as colunas finais para remover duplicatas e manter a ordem
         df = df[colunas_final]
+
+        # Cria a coluna 'DIAS_ATRASO' se ela não existir
+        if 'DIAS_ATRASO' not in df.columns:
+            df['DIAS_ATRASO'] = 0
         
         # Converte colunas numéricas
         df['V. TOTAL NF'] = pd.to_numeric(df['V. TOTAL NF'], errors='coerce').fillna(0)
@@ -394,7 +398,7 @@ else:
 
             # Linha de debug para verificar se o DataFrame está sendo carregado
             st.write("--- DataFrame para debug ---")
-            st.dataframe(df.head()) # Mudado para st.dataframe para evitar o erro
+            st.dataframe(df.head())
             st.write("--- Fim do debug ---")
 
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
