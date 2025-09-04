@@ -553,7 +553,7 @@ else:
             with col1:
                 nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
                 ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
-                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor (Pedido)", options=["Todos"] + sorted(df_combinado['FORNECEDOR_pedido'].dropna().unique().tolist()))
+                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor (Pedido)", options=["Todos"] + sorted(df_combinado['FORNECEDOR'].dropna().unique().tolist()))
             
             with col2:
                 status_consulta = st.multiselect("Filtrar por Status (Pedido)", options=["Todos", "ENTREGUE", "PENDENTE"], default=["Todos"])
@@ -573,7 +573,7 @@ else:
             # Aplicar filtros
             if nf_consulta: df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False)]
             if ordem_compra_consulta: df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False)]
-            if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_pedido'] == fornecedor_consulta]
+            if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR'] == fornecedor_consulta]
             if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_PEDIDO'].isin(status_consulta)]
             
             df_consulta = df_consulta[
@@ -586,7 +586,7 @@ else:
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
                     'REQUISICAO', 'DATA_pedido', 'SOLICITANTE', 'MATERIAL', 'QUANTIDADE', 
-                    'FORNECEDOR_pedido', 'ORDEM_COMPRA', 'STATUS_PEDIDO', 
+                    'FORNECEDOR', 'ORDEM_COMPRA', 'STATUS_PEDIDO', 
                     'NF', 'V. TOTAL NF', 'VENCIMENTO', 'DOC NF', 'STATUS_FINANCEIRO'
                 ]].copy()
                 
@@ -598,7 +598,7 @@ else:
                 
                 df_exibir_consulta['Data Pedido'] = df_exibir_consulta['Data Pedido'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['Vencimento NF'] = df_exibir_consulta['Vencimento NF'].dt.strftime('%d/%m/%Y')
-                df_exibir_consulta['Valor Total NF'] = df_exibir_consulta['Valor Total NF'].apply(
+                df_exibir_consulta['Valor Total NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
                 )
                 
