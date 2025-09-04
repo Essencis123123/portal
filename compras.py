@@ -217,27 +217,6 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
-# Adicionado para carregar dados do almoxarifado
-def carregar_dados_almoxarifado():
-    try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(2)
-        data = worksheet.get_all_records()
-        df = pd.DataFrame(data)
-
-        # Reordena e limpa as colunas para evitar KeyErrors
-        ordem_colunas = ['ORDEM_COMPRA', 'DOC NF']
-        df = df.reindex(columns=ordem_colunas)
-        
-        return df
-    except Exception as e:
-        st.warning(f"Aviso: Não foi possível carregar dados do Almoxarifado para preencher a nota fiscal. Verifique a aba 'Almoxarifado' da planilha. {e}")
-        return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
-
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
@@ -281,6 +260,28 @@ def salvar_dados_solicitantes(df):
         st.success("Solicitante cadastrado na planilha com sucesso!")
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
+
+# Adicionado para carregar dados do almoxarifado
+def carregar_dados_almoxarifado():
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(2)
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+
+        # Reordena e limpa as colunas para evitar KeyErrors
+        ordem_colunas = ['ORDEM_COMPRA', 'DOC NF']
+        df = df.reindex(columns=ordem_colunas)
+        
+        return df
+    except Exception as e:
+        st.warning(f"Aviso: Não foi possível carregar dados do Almoxarifado para preencher a nota fiscal. Verifique a aba 'Almoxarifado' da planilha. {e}")
+        return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
+
 
 # --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
 USERS = {
@@ -437,12 +438,14 @@ else:
         
         # Pega a nota fiscal da aba de almoxarifado
         df_almox = st.session_state.df_almoxarifado.copy()
-        df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
-        
-        # Faz a junção com o dataframe de pedidos pendentes para preencher automaticamente o campo DOC NF
-        pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
-        pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
-        pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
+        if not df_almox.empty:
+            df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
+            
+            # Faz a junção com o dataframe de pedidos pendentes para preencher automaticamente o campo DOC NF
+            pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
+            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
+
 
         cols_para_editar = [
             "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "QUANTIDADE",
