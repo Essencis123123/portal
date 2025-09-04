@@ -276,36 +276,6 @@ def fazer_login(email, senha):
     else:
         st.error("E-mail ou senha incorretos.")
 
-# Credenciais de e-mail agora vêm de st.secrets
-def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao, material):
-    try:
-        remetente = st.secrets["email"]["remetente"]
-        senha = st.secrets["email"]["senha"]
-        destinatario = email_solicitante
-        corpo_mensagem = f"""
-        Olá, {solicitante_nome}.
-        Gostaríamos de informar que o material **{material}** da requisição **{numero_requisicao}** se encontra disponível para retirada no almoxarifado.
-        Por favor, entre em contato com o setor responsavel para mais informações.
-        Atenciosamente, Equipe de Suprimentos
-        """
-        mensagem = MIMEMultipart()
-        mensagem['From'] = remetente
-        mensagem['To'] = destinatario
-        mensagem['Subject'] = f"Material Entregue - Requisição {numero_requisicao}"
-        mensagem.attach(MIMEText(corpo_mensagem, 'plain'))
-
-        servidor_smtp = smtplib.SMTP('smtp.gmail.com', 587)
-        servidor_smtp.starttls()
-        servidor_smtp.login(remetente, senha)
-        texto = mensagem.as_string()
-        servidor_smtp.sendmail(remetente, destinatario, texto)
-        servidor_smtp.quit()
-        st.success(f"E-mail de confirmação enviado para {destinatario}.")
-        return True
-    except Exception as e:
-        st.error(f"❌ Erro ao enviar e-mail: {e}. O problema pode ser na conexão ou credenciais do Gmail.")
-        return False
-
 # --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state['logado']:
     st.title("🏭 Login do Almoxarifado")
@@ -441,13 +411,6 @@ else:
                             
                             if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
                                 st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
-                                if 'NOME' in df_solicitantes.columns and 'EMAIL' in df_solicitantes.columns:
-                                    email_solicitante = df_solicitantes[df_solicitantes['NOME'] == recebedor]['EMAIL'].iloc[0] if recebedor in df_solicitantes['NOME'].values else None
-                                    if email_solicitante:
-                                        material_pedido = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf]['MATERIAL'].iloc[0] if not df_update_pedidos.empty and 'MATERIAL' in df_update_pedidos.columns else "N/A"
-                                        enviar_email_entrega(recebedor, email_solicitante, ordem_compra_nf, material_pedido)
-                                else:
-                                    st.warning("Aviso: As colunas 'NOME' ou 'EMAIL' não foram encontradas na planilha de solicitantes. O e-mail não foi enviado.")
                             else:
                                 st.error("Erro ao salvar os dados da nota fiscal.")
                         
