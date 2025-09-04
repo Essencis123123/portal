@@ -217,6 +217,7 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
+@st.cache_data
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
@@ -262,6 +263,7 @@ def salvar_dados_solicitantes(df):
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
 # Adicionado para carregar dados do almoxarifado
+@st.cache_data
 def carregar_dados_almoxarifado():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -311,7 +313,7 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    # A lógica para carregar dados foi movida para as funções acima
+    # O carregamento de dados foi movido para as funções acima
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
     if 'df_solicitantes' not in st.session_state:
