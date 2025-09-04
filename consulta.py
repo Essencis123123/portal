@@ -196,8 +196,6 @@ with st.sidebar:
     st.divider()
 
     # Inicializa as variáveis de filtro fora dos blocos condicionais
-    filtro_mes_pedidos = 'Todos'
-    filtro_ano_pedidos = 'Todos'
     filtro_solicitante = 'Todos'
     filtro_departamento = 'Todos'
     filtro_status = []
@@ -220,13 +218,6 @@ with st.sidebar:
         
     if menu_option == "📋 Acompanhar Pedidos":
         st.subheader("Filtros de Pedidos")
-        
-        # Filtros de mês e ano para o acompanhamento
-        if meses_disponiveis:
-            filtro_mes_pedidos = st.selectbox("Selecione o Mês:", ['Todos'] + meses_disponiveis, format_func=lambda x: meses_nomes.get(x) if isinstance(x, int) else x)
-            filtro_ano_pedidos = st.selectbox("Selecione o Ano:", ['Todos'] + anos_disponiveis)
-        else:
-            st.info("Nenhum dado com data disponível para filtrar.")
 
         # Filtros de solicitante, departamento e status
         if solicitantes_disponiveis:
@@ -244,7 +235,6 @@ with st.sidebar:
             )
 
         if status_disponiveis:
-            default_status_options = ['PENDENTE', 'ENTREGUE']
             # Padrão alterado para 'Todos'
             filtro_status = st.multiselect(
                 "Filtrar por Status:",
@@ -285,12 +275,6 @@ if menu_option == "📋 Acompanhar Pedidos":
     df_filtrado = df_pedidos.copy()
 
     # Aplicação dos filtros
-    if 'MES' in df_filtrado.columns and 'ANO' in df_filtrado.columns:
-        if filtro_mes_pedidos != 'Todos':
-            df_filtrado = df_filtrado[df_filtrado['MES'] == filtro_mes_pedidos]
-        if filtro_ano_pedidos != 'Todos':
-            df_filtrado = df_filtrado[df_filtrado['ANO'] == filtro_ano_pedidos]
-
     if filtro_solicitante != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
 
@@ -347,8 +331,17 @@ if menu_option == "📋 Acompanhar Pedidos":
             return '🟡 EM ANDAMENTO'
 
     df_tabela['STATUS'] = df_tabela['STATUS_PEDIDO'].apply(formatar_status)
-    df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%Y')
-    df_tabela['DATA ENTREGA'] = df_tabela['DATA_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+    
+    # Verifica e formata as colunas de data
+    if 'DATA' in df_tabela.columns:
+        df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+    else:
+        df_tabela['DATA REQUISIÇÃO'] = 'N/A'
+    
+    if 'DATA_ENTREGA' in df_tabela.columns:
+        df_tabela['DATA ENTREGA'] = df_tabela['DATA_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+    else:
+        df_tabela['DATA ENTREGA'] = 'N/A'
     
     st.dataframe(
         df_tabela[['DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL', 'QUANTIDADE', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'DATA ENTREGA']],
