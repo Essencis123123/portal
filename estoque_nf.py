@@ -339,15 +339,8 @@ else:
 
                     fornecedor_selecionado = ""
                     
-                    # --- Lógica de busca e preenchimento de fornecedor ---
                     # 1. Cria uma cópia da coluna para limpeza
                     fornecedores_limpos = df_pedidos['FORNECEDOR'].astype(str).str.strip().str.replace('"', '').str.replace('\n', '')
-
-                    # --- ETAPA DE DIAGNÓSTICO TEMPORÁRIA ---
-                    st.info("Lista de Fornecedores Lida da Planilha:")
-                    st.dataframe(pd.DataFrame(fornecedores_limpos.unique(), columns=['Fornecedor']), use_container_width=True)
-                    st.info(f"O sistema encontrou {len(fornecedores_limpos.unique())} fornecedores únicos na planilha.")
-                    # --- FIM DA ETAPA DE DIAGNÓSTICO ---
 
                     # 2. Procura a OC na planilha de pedidos
                     if ordem_compra_nf:
@@ -355,7 +348,6 @@ else:
                             df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
                         ]
                         if not ordem_compra_existe.empty:
-                            # Se a OC for encontrada, pega o fornecedor limpo
                             fornecedor_selecionado = fornecedores_limpos.loc[ordem_compra_existe.index].iloc[0]
                     
                     # 3. Exibe o fornecedor com base na OC, ou permite seleção manual
@@ -364,8 +356,7 @@ else:
                     else:
                         fornecedores_disponiveis = fornecedores_limpos.dropna().unique().tolist()
                         fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
-                    # --- Fim da lógica de busca ---
-
+                    
                     nf_numero = st.text_input("Número da NF*")
                     
                 with col2:
