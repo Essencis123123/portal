@@ -336,11 +336,6 @@ else:
                     fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
                     fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                     
-                    if fornecedor_nf == '':
-                        fornecedor_manual = st.text_input("Novo Fornecedor (opcional)", placeholder="Digite o nome se não estiver na lista...")
-                    else:
-                        fornecedor_manual = ""
-                    
                     nf_numero = st.text_input("Número da NF*")
                     
                 with col2:
@@ -367,7 +362,7 @@ else:
                 enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
                 
                 if enviar:
-                    nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
+                    nome_final_fornecedor = fornecedor_nf
                     campos_validos = all([
                         nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
                         valor_total_nf.strip() not in ["", "0,00"]
