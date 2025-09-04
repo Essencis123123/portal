@@ -309,6 +309,9 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
+    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
+    logo_img = load_logo(logo_url)
+
     # O carregamento de dados foi movido para as funções acima
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
@@ -528,10 +531,9 @@ else:
         # Adiciona os links do DOC NF da planilha do almoxarifado
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
-            df_history = pd.merge(df_history, df_almox, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
-            df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
-            df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
-
+            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left')
+        else:
+            df_history['DOC NF'] = ''
 
         if not df_history['DATA'].isnull().all():
             with col_filter_h1:
