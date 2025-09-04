@@ -874,6 +874,3 @@ else:
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
             st.info("Dados de solicitantes locais insuficientes para gerar o ranking.")
-
-
-chat O PAINEL DE COMPRAS ESTA FUNCIONANDO NORMALMENTE MAS O DE ALMOXARIFADO ESTA APRESENTANDO UM ERRO O DE COMPRAS VAI REFRESH QUANDO EU REGISTRAR UMA NOTA FISCAL NO PAINEL DE ALMOXARIFADO? E QUERO O CODIGO PRA CORRIGIR O ERRO
