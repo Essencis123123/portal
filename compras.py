@@ -262,7 +262,6 @@ def salvar_dados_solicitantes(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
-# Adicionado para carregar dados do almoxarifado
 @st.cache_data
 def carregar_dados_almoxarifado():
     try:
@@ -438,6 +437,17 @@ else:
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
             st.stop()
         
+        # Pega a nota fiscal da aba de almoxarifado
+        df_almox = st.session_state.df_almoxarifado.copy()
+        if not df_almox.empty:
+            df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
+            
+            # Faz a junção com o dataframe de pedidos pendentes para preencher automaticamente o campo DOC NF
+            pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
+            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
+
+
         cols_para_editar = [
             "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "QUANTIDADE",
             "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
@@ -463,7 +473,7 @@ else:
                     "VALOR_ITEM": st.column_config.NumberColumn("Valor do Item", format="%.2f"),
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
-                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
+                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"])
                 }
             )
             
@@ -490,6 +500,7 @@ else:
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
                     st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
                     st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
+                    st.session_state.df_pedidos.loc[original_index, 'DOC NF'] = edited_row['DOC NF']
                     
                     if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
                         data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
