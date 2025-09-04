@@ -160,7 +160,7 @@ def carregar_dados():
         if df.empty or all(df.columns.isnull()):
             st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
             return pd.DataFrame(columns=[
-                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF",
+                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO",
                 "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
             ])
         
@@ -171,7 +171,9 @@ def carregar_dados():
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'V_TOTAL_NF': 'V_TOTAL_NF' # Garante que o nome V_TOTAL_NF seja consistente
+            'V._TOTAL_NF': 'V_TOTAL_NF',
+            'DOC_NF': 'DOC_NF',
+            'VALOR_FRETE': 'VALOR_FRETE'
         })
         
         # Limpa e converte tipos de dados
@@ -179,13 +181,14 @@ def carregar_dados():
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
 
         df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
         
         # Garante que as colunas essenciais existam
         colunas_necessarias = {
             "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A",
             "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0,
             "VALOR_FRETE": 0.0, "DOC_NF": "",
-            "V_TOTAL_NF": 0.0, "NF": "", "RECEBEDOR": ""
+            "V_TOTAL_NF": 0.0, "NF": "", "RECEBEDOR": "", "VENCIMENTO": None
         }
         for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
@@ -200,6 +203,13 @@ def carregar_dados():
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         
+        # Verifica e calcula os dias até o vencimento
+        if pd.api.types.is_datetime64_any_dtype(df['VENCIMENTO']):
+            hoje = datetime.date.today()
+            df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
+        else:
+            df['DIAS_VENCIMENTO'] = 0
+
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados da planilha. Verifique o nome/URL da planilha, o nome da aba e se as credenciais estão corretas. Erro: {e}")
@@ -217,12 +227,18 @@ def salvar_dados(df):
             'STATUS': 'STATUS_FINANCEIRO', 
             'REGISTRO_ADICIONAL': 'OBSERVACAO',
             'V_TOTAL_NF': 'V. TOTAL NF',
-            'DOC_NF': 'DOC NF'
+            'DOC_NF': 'DOC NF',
+            'VALOR_FRETE': 'VALOR FRETE'
         })
         
         # Converte as datas de volta para string antes de salvar
         df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
-        
+        if 'VENCIMENTO' in df_to_save.columns:
+            df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+            
+        # Remove colunas de cálculo antes de salvar
+        df_to_save = df_to_save.drop(columns=['DIAS_VENCIMENTO'], errors='ignore')
+
         set_with_dataframe(worksheet, df_to_save)
         return True
     except Exception as e:
@@ -396,7 +412,7 @@ else:
                     "FORNECEDOR": "Fornecedor",
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
-                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f"),
+                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
                     "STATUS": st.column_config.SelectboxColumn("Status", options=status_options),
                     "CONDICAO_PROBLEMA": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
