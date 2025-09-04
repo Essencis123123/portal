@@ -597,8 +597,8 @@ else:
                     'Nº NF', 'Valor Total NF', 'Vencimento NF', 'Link NF', 'Status Financeiro'
                 ]
                 
-                df_exibir_consulta['Data Pedido'] = df_exibir_consulta['Data Pedido'].dt.strftime('%d/%m/%Y')
-                df_exibir_consulta['Vencimento NF'] = df_exibir_consulta['Vencimento NF'].dt.strftime('%d/%m/%Y')
+                df_exibir_consulta['Data Pedido'] = df_exibir_consulta['DATA_pedido'].dt.strftime('%d/%m/%Y')
+                df_exibir_consulta['Vencimento NF'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['Valor Total NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
                 )
