@@ -12,7 +12,7 @@ from io import BytesIO
 import gspread
 from gspread_dataframe import get_as_dataframe, set_with_dataframe
 import json
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
@@ -131,7 +131,6 @@ def load_logo(url):
         img = Image.open(BytesIO(response.content))
         return img
     except:
-        st.error("Erro ao carregar a imagem do logo")
         return None
 
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
@@ -141,80 +140,70 @@ logo_img = load_logo(logo_url)
 @st.cache_resource
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
-    from oauth2client.service_account import ServiceAccountCredentials
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    
-    creds_json = st.secrets.get("gcp_service_account")
-    
-    if isinstance(creds_json, str):
-        creds_dict = json.loads(creds_json)
-    else:
-        creds_dict = creds_json
-    
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds_json = st.secrets["gcp_service_account"]
+    creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
     client = gspread.authorize(creds)
     return client
 
 def carregar_dados():
     """
-    Carrega os dados da aba "Almoxarifado" da planilha do Google Sheets.
+    Carrega os dados da aba "Almoxarifado" da planilha do Google Sheets e prepara para o painel fiscal.
     """
     try:
         client = get_gspread_client()
         sheet = client.open("dados_pedido")
-        worksheet = sheet.worksheet("Almoxarifado") 
+        worksheet = sheet.worksheet("Almoxarifado")
         
-        df = get_as_dataframe(worksheet)
-        
+        df = pd.DataFrame(worksheet.get_all_records())
+
         if df.empty or all(df.columns.isnull()):
             st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
             return pd.DataFrame(columns=[
                 "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
                 "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR"
             ])
-            
-        # Padroniza todos os nomes das colunas para evitar duplicatas
-        df.columns = df.columns.str.strip().str.replace(' ', '_').str.upper()
         
-        # Renomeia as colunas necessárias para nomes internos consistentes
+        # Padroniza todos os nomes das colunas para letras maiúsculas e sem espaços
+        df.columns = df.columns.str.strip().str.replace(' ', '_').str.upper()
+
+        # Renomeia colunas da planilha para nomes internos consistentes
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
             'OBSERVACAO': 'REGISTRO_ADICIONAL'
         })
         
-        # Limpeza e conversão de dados
+        # Limpa e converte tipos de dados
         df = df.dropna(how='all')
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
-        
-        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-        if 'VENCIMENTO' in df.columns:
-            df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
-        else:
-            df['VENCIMENTO'] = pd.NaT
-        
-        # Lista final das colunas que queremos no DataFrame (usando nomes internos)
-        colunas_final_internas = [
-            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V._TOTAL_NF", "VENCIMENTO",
-            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
-        ]
-        
-        # Garante que todas as colunas necessárias existam
-        for col in colunas_final_internas:
-            if col not in df.columns:
-                df[col] = None
-        
-        # Seleciona apenas as colunas finais para remover duplicatas e manter a ordem
-        df = df[colunas_final_internas]
-        
-        # Cria a coluna de dias até o vencimento
-        hoje = datetime.date.today()
-        df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
 
+        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
+        
+        # Garante que as colunas essenciais existam
+        colunas_necessarias = {
+            "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A",
+            "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0,
+            "VALOR_FRETE": 0.0, "DOC_NF": "",
+            "V._TOTAL_NF": 0.0, "NF": "",
+            "VENCIMENTO": None, "RECEBEDOR": ""
+        }
+        for col, default_val in colunas_necessarias.items():
+            if col not in df.columns:
+                df[col] = default_val
+
+        # Seleciona e reordena apenas as colunas que o painel fiscal irá usar
+        colunas_finais = list(colunas_necessarias.keys()) + ['DIAS_VENCIMENTO']
+        
         # Converte colunas numéricas
         df['V._TOTAL_NF'] = pd.to_numeric(df['V._TOTAL_NF'], errors='coerce').fillna(0)
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         
+        # Calcula os dias até o vencimento
+        hoje = datetime.date.today()
+        df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
+
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados da planilha. Verifique o nome/URL da planilha, o nome da aba e se as credenciais estão corretas. Erro: {e}")
@@ -226,13 +215,12 @@ def salvar_dados(df):
         client = get_gspread_client()
         sheet = client.open("dados_pedido")
         worksheet = sheet.worksheet("Almoxarifado")
-        
+
         # Mapeia nomes internos para nomes da planilha antes de salvar
         df_to_save = df.rename(columns={
             'STATUS': 'STATUS_FINANCEIRO', 
             'REGISTRO_ADICIONAL': 'OBSERVACAO',
             'V._TOTAL_NF': 'V. TOTAL NF',
-            'VALOR_FRETE': 'VALOR FRETE',
             'DOC_NF': 'DOC NF'
         })
         
@@ -244,8 +232,6 @@ def salvar_dados(df):
         # Remove colunas de cálculo antes de salvar
         df_to_save = df_to_save.drop(columns=['DIAS_VENCIMENTO'], errors='ignore')
 
-        worksheet.clear()
-        
         set_with_dataframe(worksheet, df_to_save)
         return True
     except Exception as e:
@@ -405,11 +391,6 @@ else:
 
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
-
-            # Linha de debug para verificar se o DataFrame está sendo carregado
-            st.write("--- DataFrame para debug ---")
-            st.dataframe(df.head())
-            st.write("--- Fim do debug ---")
 
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
