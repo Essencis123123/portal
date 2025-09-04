@@ -11,10 +11,10 @@ from PIL import Image
 from io import BytesIO
 import gspread
 from gspread_dataframe import get_as_dataframe, set_with_dataframe
-from oauth2client.service_account import ServiceAccountCredentials
+import json # Importa a biblioteca JSON para lidar com as credenciais
 
 # Configuração da página com layout wide
-st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
+st.set_page_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
@@ -139,21 +139,28 @@ logo_img = load_logo(logo_url)
 # --- FUNÇÕES DE CONEXÃO E CARREGAMENTO DA PLANILHA ---
 @st.cache_resource
 def get_gspread_client():
-    """Conecta com o Google Sheets usando a conta de serviço."""
+    """Conecta com o Google Sheets usando os secrets do Streamlit."""
+    from oauth2client.service_account import ServiceAccountCredentials
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credenciais.json', scope)
+    
+    # Lê a string JSON completa dos secrets
+    creds_json = st.secrets["gcp_service_account"]
+    
+    # Converte a string JSON em um dicionário Python
+    creds_dict = json.loads(creds_json)
+    
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     return client
 
 def carregar_dados():
     """
-    Carrega os dados da aba "almoxarifado" da planilha do Google Sheets.
+    Carrega os dados da aba "Almoxarifado" da planilha do Google Sheets.
     """
     try:
         client = get_gspread_client()
-        # SUBSTITUA O TEXTO ABAIXO PELO NOME OU URL DA SUA PLANILHA
         sheet = client.open("dados_pedido")
-        worksheet = sheet.worksheet("Almoxarifado") # NOME DA ABA
+        worksheet = sheet.worksheet("Almoxarifado")
         
         df = get_as_dataframe(worksheet)
         
@@ -190,8 +197,8 @@ def carregar_dados():
             "V. TOTAL NF": 0.0,
             "NF": "",
             "VENCIMENTO": None,
-            "RECEBEDOR": "", # Nova coluna
-            "VOLUME": 0 # Nova coluna
+            "RECEBEDOR": "",
+            "VOLUME": 0
         }
         for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
@@ -210,12 +217,11 @@ def carregar_dados():
         return pd.DataFrame()
 
 def salvar_dados(df):
-    """Salva o DataFrame de volta na aba "almoxarifado" do Google Sheets"""
+    """Salva o DataFrame de volta na aba "Almoxarifado" do Google Sheets"""
     try:
         client = get_gspread_client()
-        # SUBSTITUA O TEXTO ABAIXO PELO NOME OU URL DA SUA PLANILHA
         sheet = client.open("dados_pedido")
-        worksheet = sheet.worksheet("Almoxarifado") # NOME DA ABA
+        worksheet = sheet.worksheet("Almoxarifado")
 
         # Renomeia colunas para o formato original da planilha antes de salvar
         df_to_save = df.rename(columns={'STATUS': 'STATUS_FINANCEIRO', 'REGISTRO_ADICIONAL': 'OBSERVACAO'})
@@ -248,7 +254,7 @@ def fazer_login(email, senha):
         st.session_state['logado'] = True
         st.session_state['nome_colaborador'] = USERS[email]["name"]
         st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
-        time.sleep(1) # Dá tempo para o usuário ver a mensagem antes de recarregar
+        time.sleep(1)
         st.rerun()
     else:
         st.error("E-mail ou senha incorretos.")
