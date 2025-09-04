@@ -94,6 +94,18 @@ def _to_datetime(series):
     """Converte para datetime com dayfirst, tolerante a strings, date e NaT."""
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
 
+def sanitize_column_names(df):
+    """Garante que os nomes das colunas são strings válidas para o data_editor"""
+    df = df.copy()
+    
+    # Converter todos os nomes para string e remover espaços extras
+    df.columns = [str(col).strip() for col in df.columns]
+    
+    # Substituir caracteres problemáticos
+    df.columns = [col.replace('\n', ' ').replace('\r', ' ') for col in df.columns]
+    
+    return df
+
 def carregar_dados() -> pd.DataFrame:
     """
     Carrega os dados da aba 'Almoxarifado' da planilha 'dados_pedido' do Google Sheets
@@ -338,10 +350,28 @@ else:
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
 
-            df_display = df.copy()
+            # Sanitizar nomes das colunas
+            df_display = sanitize_column_names(df.copy())
+            
+            # Verificar colunas necessárias
+            required_columns = ["DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", 
+                               "VENCIMENTO", "DIAS_VENCIMENTO", "STATUS", "CONDICAO_PROBLEMA", 
+                               "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"]
+            
+            # Garantir que todas as colunas necessárias existam
+            for col in required_columns:
+                if col not in df_display.columns:
+                    if col == "RECEBEDOR":
+                        df_display[col] = ""
+                    elif "VALOR" in col:
+                        df_display[col] = 0.0
+                    elif col == "VENCIMENTO":
+                        df_display[col] = pd.NaT
+                    else:
+                        df_display[col] = ""
 
             edited_df = st.data_editor(
-                df_display,
+                df_display[required_columns],
                 use_container_width=True,
                 column_config={
                     "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY", disabled=True),
@@ -367,19 +397,26 @@ else:
             )
 
             # Se houve alteração, salva automaticamente de forma segura
-            if not edited_df.equals(df_display):
+            if not edited_df.equals(df_display[required_columns]):
                 st.session_state.alteracoes_pendentes = True
 
+                # Atualizar apenas as colunas editadas no DataFrame original
+                for col in required_columns:
+                    if col in df.columns:
+                        df[col] = edited_df[col]
+                    else:
+                        df[col] = edited_df[col]
+
                 # Normaliza tipos antes de salvar
-                edited_df["DATA"] = _to_datetime(edited_df["DATA"])
-                edited_df["VENCIMENTO"] = _to_datetime(edited_df["VENCIMENTO"])
+                df["DATA"] = _to_datetime(df["DATA"])
+                df["VENCIMENTO"] = _to_datetime(df["VENCIMENTO"])
                 for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
-                    edited_df[c] = pd.to_numeric(edited_df[c], errors="coerce").fillna(0.0)
+                    df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
                 # Recalcula dias
                 ref = pd.Timestamp.today().normalize()
-                edited_df["DIAS_VENCIMENTO"] = (edited_df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
+                df["DIAS_VENCIMENTO"] = (df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
 
-                st.session_state.df = edited_df.copy()
+                st.session_state.df = df.copy()
 
                 if salvar_dados(st.session_state.df):
                     st.session_state.ultimo_salvamento = datetime.datetime.now()
