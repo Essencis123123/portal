@@ -40,7 +40,21 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
-
+    
+    /* CORREÇÃO DEFINITIVA: Estilo para o texto dentro dos campos de filtro ser preto */
+    [data-testid="stSidebar"] .stSelectbox > div > div > div > span,
+    [data-testid="stSidebar"] .stMultiselect > div > div > div > span,
+    [data-testid="stSidebar"] .stDateInput > div > div > input {
+        color: black !important;
+    }
+    
+    /* Outra regra para garantir que o texto de opções no dropdown seja preto */
+    [data-testid="stSidebar"] div[role="listbox"] .st-b5,
+    [data-testid="stSidebar"] div[role="listbox"] .st-b6,
+    [data-testid="stSidebar"] div[role="listbox"] span {
+        color: black !important;
+    }
+    
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
@@ -52,6 +66,12 @@ st.markdown(
     }
     .stDownloadButton button p {
         color: white !important;
+    }
+
+    /* Estilo para garantir que os rótulos de campos e botões sejam pretos na área principal */
+    div[data-testid*="stForm"] label p, div[data-testid*="stForm"] label,
+    div.st-emotion-cache-1ky8k0j, .st-emotion-cache-1f1q9w0 {
+        color: black !important;
     }
 
     [data-testid="stSidebar"] img {
@@ -142,7 +162,7 @@ def carregar_dados_almoxarifado():
         credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
         gc = gspread.authorize(credentials)
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(2)
+        worksheet = spreadsheet.get_worksheet(2)  # Aba para dados do almoxarifado (índice 2)
         
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
