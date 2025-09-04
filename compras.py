@@ -304,7 +304,7 @@ def fazer_login(email, senha):
     else:
         st.error("E-mail ou senha incorretos.")
 
-# --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
+# --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state.logado:
     st.title("Login - Painel do Comprador")
     with st.form("login_form"):
@@ -441,9 +441,10 @@ else:
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
             df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
+            
             pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
-            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
+            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
 
         cols_para_editar = [
@@ -505,7 +506,7 @@ else:
                         dias_emissao = (data_aprovacao - data_requisicao).days
                         st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
                     else:
-                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = 0
+                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAo'] = 0
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Dados atualizados com sucesso!")
@@ -567,16 +568,22 @@ else:
         
         # Cria uma cópia para exibição com a coluna formatada
         df_display = df_history.copy()
-        df_display['STATUS_DISPLAY'] = df_display['STATUS_PEDIDO'].map({
-            'ENTREGUE': '🟢 ENTREGUE',
-            'PENDENTE': '🟡 PENDENTE'
-        }).fillna(df_display['STATUS_PEDIDO'])
         
+        def formatar_status_display(status):
+            if status == 'ENTREGUE':
+                return '🟢 ENTREGUE'
+            elif status == 'PENDENTE':
+                return '🟡 PENDENTE'
+            else:
+                return status
+        
+        # Aplica a função de formatação para exibir os emojis
+        df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
+
         edited_history_df = st.data_editor(
             df_display,
             use_container_width=True,
             hide_index=False,
-            column_order=[col for col in df_display.columns if col != 'STATUS_PEDIDO'] + ['STATUS_PEDIDO'],
             column_config={
                 "DATA": st.column_config.DateColumn("Data Requisição"),
                 "SOLICITANTE": "Solicitante",
@@ -592,8 +599,7 @@ else:
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-                "STATUS_DISPLAY": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE']),
-                "STATUS_PEDIDO": "Status (original)", # Coluna oculta para referência
+                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
@@ -603,16 +609,14 @@ else:
 
         if not edited_history_df.equals(df_display):
             st.info("Salvando alterações...")
-
-            # Reverte os valores da coluna de exibição para os valores originais
-            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_DISPLAY'].map({
-                '🟢 ENTREGUE': 'ENTREGUE',
-                '🟡 PENDENTE': 'PENDENTE'
-            }).fillna(edited_history_df['STATUS_DISPLAY'])
             
-            # Remove a coluna de exibição para atualizar o DataFrame original
-            edited_history_df.drop(columns=['STATUS_DISPLAY'], inplace=True)
-
+            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
+                '🟢 ENTREGUE': 'ENTREGUE',
+                '🟡 PENDENTE': 'PENDENTE',
+                'EM ANDAMENTO': 'EM ANDAMENTO',
+                '': ''
+            }).fillna(edited_history_df['STATUS_PEDIDO'])
+            
             for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
                 edited_history_df[col] = pd.to_datetime(edited_history_df[col], errors='coerce', dayfirst=True)
 
