@@ -37,7 +37,7 @@ st.markdown(
         color: white !important;
     }
     
-    /* CORREÇÃO: Estilo para o texto do selectbox no sidebar ser visível */
+    /* CORREÇÃO DEFINITIVA: Estilo para o texto dentro dos campos de filtro ser preto */
     [data-testid="stSidebar"] .stSelectbox > div > div > div > span,
     [data-testid="stSidebar"] .stMultiselect > div > div > div > span,
     [data-testid="stSidebar"] .stDateInput > div > div > input {
