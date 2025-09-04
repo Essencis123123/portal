@@ -204,25 +204,49 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
-
 def carregar_dados_solicitantes():
-    """Carrega ou cria o DataFrame de solicitantes."""
-    arquivo_csv = "dados_solicitantes.csv"
-    if os.path.exists(arquivo_csv):
-        try:
-            return pd.read_csv(arquivo_csv, dtype={'NOME': str, 'DEPARTAMENTO': str, 'EMAIL': str, 'FILIAL': str})
-        except Exception as e:
-            st.error(f"Erro ao carregar arquivo de solicitantes: {e}")
-            return criar_dataframe_solicitantes_vazio()
-    return criar_dataframe_solicitantes_vazio()
+    """Carrega o DataFrame de solicitantes do Google Sheets."""
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(1) # Pega a segunda aba (índice 1)
+        
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+        
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de solicitantes do Google Sheets: {e}")
+        return criar_dataframe_solicitantes_vazio()
 
 def criar_dataframe_solicitantes_vazio():
     """Cria um DataFrame de solicitantes vazio."""
     return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
 def salvar_dados_solicitantes(df):
-    """Salva o DataFrame de solicitantes."""
-    df.to_csv("dados_solicitantes.csv", index=False, encoding='utf-8')
+    """Salva o DataFrame de solicitantes no Google Sheets."""
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(1) # Pega a segunda aba (índice 1)
+
+        data_to_write = [df.columns.values.tolist()] + df.values.tolist()
+        
+        # Limpa o conteúdo da planilha e atualiza com os novos dados
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        
+        st.success("Solicitante cadastrado na planilha com sucesso!")
+    except Exception as e:
+        st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
 # --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
 USERS = {
@@ -252,6 +276,7 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
+    # A lógica para carregar dados foi movida para as funções acima
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
     if 'df_solicitantes' not in st.session_state:
@@ -283,43 +308,7 @@ else:
                 <p>Sistema de Controle e Análise de Pedidos</p>
             </div>
         """, unsafe_allow_html=True)
-    elif menu == "✍️ Pedidos (OC)":
-        st.markdown("""
-            <div class='header-container'>
-                <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1>
-                <p>Vincule as Ordens de Compra às Requisições Pendentes</p>
-            </div>
-        """, unsafe_allow_html=True)
-    elif menu == "📜 Histórico ":
-        st.markdown("""
-            <div class='header-container'>
-                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
-                <p>Gerencie e Edite os Registros Anteriores</p>
-            </div>
-        """, unsafe_allow_html=True)
-    elif menu == "👤 Cadastro ":
-        st.markdown("""
-            <div class='header-container'>
-                <h1>👤 CADASTRO DE SOLICITANTES</h1>
-                <p>Adicione novos Solicitantes ao Sistema</p>
-            </div>
-        """, unsafe_allow_html=True)
-    elif menu == "📊 Dashboards ":
-        st.markdown("""
-            <div class='header-container'>
-                <h1>📊 DASHBOARD DE DESEMPENHO</h1>
-                <p>Análise de Prazos e Custos de Pedidos</p>
-            </div>
-        """, unsafe_allow_html=True)
-    elif menu == "📊 Performance ":
-        st.markdown("""
-            <div class='header-container'>
-                <h1>📊 PERFORMANCE DE NEGOCIAÇÃO LOCAL</h1>
-                <p>Análise de Economia em Pedidos Locais</p>
-            </div>
-        """, unsafe_allow_html=True)
-
-    if menu == "📝 Requisição":
+        
         st.header("📝 Registrar Nova Requisição de Compra")
         
         solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist()
@@ -392,6 +381,13 @@ else:
                 st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
 
     elif menu == "✍️ Pedidos (OC)":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1>
+                <p>Vincule as Ordens de Compra às Requisições Pendentes</p>
+            </div>
+        """, unsafe_allow_html=True)
+
         st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
         st.info("Edite os campos diretamente na tabela abaixo para adicionar os dados de Ordem de Compra. Eles serão salvos ao clicar no botão abaixo.")
         
@@ -469,6 +465,12 @@ else:
             st.rerun()
 
     elif menu == "📜 Histórico ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
+                <p>Gerencie e Edite os Registros Anteriores</p>
+            </div>
+        """, unsafe_allow_html=True)
         st.header("📜 Histórico de Requisições e Pedidos")
         st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
         
@@ -564,6 +566,12 @@ else:
             st.rerun()
 
     elif menu == "👤 Cadastro ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>👤 CADASTRO DE SOLICITANTES</h1>
+                <p>Adicione novos Solicitantes ao Sistema</p>
+            </div>
+        """, unsafe_allow_html=True)
         st.header("➕ Cadastro de Solicitante")
         st.info("Cadastre os solicitantes para que eles possam ser selecionados nas requisições.")
         
@@ -588,10 +596,19 @@ else:
                     st.session_state.df_solicitantes = pd.concat([st.session_state.df_solicitantes, novo_solicitante], ignore_index=True)
                     salvar_dados_solicitantes(st.session_state.df_solicitantes)
                     st.success(f"Solicitante '{nome}' cadastrado com sucesso!")
+                    time.sleep(2) # Pausa para exibir a mensagem de sucesso
+                    st.rerun()
                 else:
                     st.error("Por favor, preencha todos os campos para cadastrar o solicitante.")
 
     elif menu == "📊 Dashboards ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📊 DASHBOARD DE DESEMPENHO</h1>
+                <p>Análise de Prazos e Custos de Pedidos</p>
+            </div>
+        """, unsafe_allow_html=True)
+
         st.header("📊 Análise de Desempenho de Entregas")
         
         if st.session_state.df_pedidos.empty:
@@ -602,7 +619,7 @@ else:
         
         # Garante que a coluna 'DATA' está no formato de data antes de ser usada.
         df_analise['DATA'] = pd.to_datetime(df_analise['DATA'], errors='coerce', dayfirst=True)
-
+        
         st.subheader("Filtros de Período")
         col_filtro1, col_filtro2 = st.columns(2)
         
@@ -710,26 +727,32 @@ else:
         if not df_entregues.empty:
             df_entregues['TEMPO_ENTREGA'] = (df_entregues['DATA_ENTREGA'] - df_entregues['DATA_APROVACAO']).dt.days
 
-            ranking_fornecedores = df_entregues.groupby('FORNECEDORES')['TEMPO_ENTREGA'].mean().sort_values().reset_index()
+            ranking_fornecedores = df_entregues.groupby('FORNECEDOR')['TEMPO_ENTREGA'].mean().sort_values().reset_index()
             fig_ranking = px.bar(
                 ranking_fornecedores,
-                x='FORNECEDORES',
+                x='FORNECEDOR',
                 y='TEMPO_ENTREGA',
                 title='Tempo Médio de Entrega por Fornecedor (dias)',
-                labels={'TEMPO_ENTREGA': 'Tempo Médio (dias)', 'FORNECEDORES': 'Fornecedor'}
+                labels={'TEMPO_ENTREGA': 'Tempo Médio (dias)', 'FORNECEDOR': 'Fornecedor'}
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
             st.info("Não há pedidos entregues no período para criar o ranking.")
 
     elif menu == "📊 Performance ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📊 PERFORMANCE DE NEGOCIAÇÃO LOCAL</h1>
+                <p>Análise de Economia em Pedidos Locais</p>
+            </div>
+        """, unsafe_allow_html=True)
         st.header("📊 Análise de Performance de Negociações Locais")
 
         df_performance = st.session_state.df_pedidos.copy()
         
         df_performance_local = df_performance[df_performance['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
-        # Correção: Garante que a coluna 'DATA' está no formato de data antes de ser usada.
+        # Garante que a coluna 'DATA' está no formato de data antes de ser usada.
         df_performance_local['DATA'] = pd.to_datetime(df_performance_local['DATA'], errors='coerce', dayfirst=True)
         
         st.markdown("---")
