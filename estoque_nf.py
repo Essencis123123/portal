@@ -335,9 +335,26 @@ else:
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
-                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
-                    fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                    # --- Lógica de busca e preenchimento de fornecedor ---
+                    ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
+
+                    fornecedor_selecionado = ""
+                    # Procura a OC na planilha de pedidos
+                    if ordem_compra_nf:
+                        ordem_compra_existe = df_pedidos[
+                            df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                        ]
+                        if not ordem_compra_existe.empty:
+                            fornecedor_selecionado = ordem_compra_existe['FORNECEDOR'].iloc[0]
                     
+                    # Exibe o fornecedor com base na OC, ou permite seleção manual
+                    if fornecedor_selecionado:
+                        st.text_input("Fornecedor da NF*", value=fornecedor_selecionado, disabled=True, key='fornecedor_oc')
+                    else:
+                        fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
+                        fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                    # --- Fim da lógica de busca ---
+
                     nf_numero = st.text_input("Número da NF*")
                     
                 with col2:
@@ -348,7 +365,6 @@ else:
                         "OUTROS"
                     ]
                     recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
-                    ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
                     volume_nf = st.number_input("Volume*", min_value=1, value=1)
                     
                 with col3:
@@ -364,9 +380,9 @@ else:
                 enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
                 
                 if enviar:
-                    nome_final_fornecedor = fornecedor_nf
+                    nome_final_fornecedor = fornecedor_selecionado if fornecedor_selecionado else st.session_state.get('fornecedor_oc')
                     campos_validos = all([
-                        nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
+                        nome_final_fornecedor, nf_numero.strip(), ordem_compra_nf.strip(),
                         valor_total_nf.strip() not in ["", "0,00"]
                     ])
                     
@@ -598,7 +614,7 @@ else:
                     mime="text/csv"
                 )
             else:
-                st.warning("⚠️ Nenhuma registro encontrado com os filtros aplicados.")
+                st.warning("⚠️ Nenhum registro encontrado com os filtros aplicados.")
         else:
             st.info("📝 Nenhum dado disponível para consulta.")
 
