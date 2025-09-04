@@ -577,7 +577,7 @@ else:
         # Criamos uma nova coluna para o texto de exibição, com o ícone ou 'N/A' para exibição.
         df_display['Anexo Display'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
 
-        edited_history_df = st.data_editor(
+edited_history_df = st.data_editor(
             df_display,
             use_container_width=True,
             hide_index=False,
@@ -602,9 +602,11 @@ else:
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
                 "DOC NF": st.column_config.LinkColumn(
-                    "Anexo NF", 
+                    "Anexo NF",
                     help="Clique para visualizar o anexo",
-                    display_text="Anexo Display"
+                    # A correção é aqui: use o ícone diretamente como o display_text.
+                    # A coluna com os links continua sendo "DOC NF".
+                    display_text="📥"
                 )
             },
             column_order=[
