@@ -160,7 +160,7 @@ def carregar_dados():
         if df.empty or all(df.columns.isnull()):
             st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
             return pd.DataFrame(columns=[
-                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO",
+                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF",
                 "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
             ])
         
@@ -179,16 +179,16 @@ def carregar_dados():
         # Limpa e converte tipos de dados
         df = df.dropna(how='all')
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
-
+        
+        # Converte a coluna DATA para datetime
         df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-        df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
         
         # Garante que as colunas essenciais existam
         colunas_necessarias = {
             "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A",
             "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0,
             "VALOR_FRETE": 0.0, "DOC_NF": "",
-            "V_TOTAL_NF": 0.0, "NF": "", "RECEBEDOR": "", "VENCIMENTO": None
+            "V_TOTAL_NF": 0.0, "NF": "", "RECEBEDOR": ""
         }
         for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
@@ -203,13 +203,10 @@ def carregar_dados():
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         
-        # Verifica e calcula os dias até o vencimento
-        if pd.api.types.is_datetime64_any_dtype(df['VENCIMENTO']):
-            hoje = datetime.date.today()
-            df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
-        else:
-            df['DIAS_VENCIMENTO'] = 0
-
+        # Certifica-se de que a coluna DATA é do tipo datetime antes de usá-la
+        if not pd.api.types.is_datetime64_any_dtype(df['DATA']):
+            df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados da planilha. Verifique o nome/URL da planilha, o nome da aba e se as credenciais estão corretas. Erro: {e}")
@@ -227,18 +224,13 @@ def salvar_dados(df):
             'STATUS': 'STATUS_FINANCEIRO', 
             'REGISTRO_ADICIONAL': 'OBSERVACAO',
             'V_TOTAL_NF': 'V. TOTAL NF',
-            'DOC_NF': 'DOC NF',
-            'VALOR_FRETE': 'VALOR FRETE'
+            'DOC_NF': 'DOC NF'
         })
         
         # Converte as datas de volta para string antes de salvar
-        df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
-        if 'VENCIMENTO' in df_to_save.columns:
-            df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-            
-        # Remove colunas de cálculo antes de salvar
-        df_to_save = df_to_save.drop(columns=['DIAS_VENCIMENTO'], errors='ignore')
-
+        if 'DATA' in df_to_save.columns:
+            df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
+        
         set_with_dataframe(worksheet, df_to_save)
         return True
     except Exception as e:
@@ -518,113 +510,116 @@ else:
         st.header("📊 Dashboards Financeiros Completos")
         
         if not df.empty:
-            df['MES_ANO'] = df['DATA'].dt.to_period('M')
-            df['ANO'] = df['DATA'].dt.year
-            df['MES'] = df['DATA'].dt.month
-            
-            dados_mensais = df.groupby('MES_ANO').agg({
-                'V_TOTAL_NF': 'sum',
-                'VALOR_FRETE': 'sum',
-                'VALOR_JUROS': 'sum',
-                'NF': 'count'
-            }).reset_index()
-            dados_mensais['MES_ANO'] = dados_mensais['MES_ANO'].dt.to_timestamp()
-            
-            anos = sorted(df['ANO'].unique())
-            if len(anos) >= 2:
-                st.subheader("📅 Comparativo Anual")
+            if not pd.api.types.is_datetime64_any_dtype(df['DATA']):
+                st.warning("Não é possível gerar o dashboard. A coluna 'DATA' não contém datas válidas.")
+            else:
+                df['MES_ANO'] = df['DATA'].dt.to_period('M')
+                df['ANO'] = df['DATA'].dt.year
+                df['MES'] = df['DATA'].dt.month
                 
-                comparativo_anual = df.groupby('ANO').agg({
+                dados_mensais = df.groupby('MES_ANO').agg({
                     'V_TOTAL_NF': 'sum',
                     'VALOR_FRETE': 'sum',
                     'VALOR_JUROS': 'sum',
                     'NF': 'count'
                 }).reset_index()
+                dados_mensais['MES_ANO'] = dados_mensais['MES_ANO'].dt.to_timestamp()
                 
-                fig_comparativo = make_subplots(rows=2, cols=2, subplot_titles=('Valor Total', 'Custo com Fretes', 'Juros Pagos', 'Quantidade de NFs'))
-                
-                fig_comparativo.add_trace(
-                    go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['V_TOTAL_NF'], name='Valor Total'),
-                    row=1, col=1
-                )
-                
-                fig_comparativo.add_trace(
-                    go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['VALOR_FRETE'], name='Fretes'),
-                    row=1, col=2
-                )
-                
-                fig_comparativo.add_trace(
-                    go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['VALOR_JUROS'], name='Juros'),
-                    row=2, col=1
-                )
-                
-                fig_comparativo.add_trace(
-                    go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['NF'], name='Qtd NFs'),
-                    row=2, col=2
-                )
-                
-                fig_comparativo.update_layout(height=600, showlegend=False)
-                st.plotly_chart(fig_comparativo, use_container_width=True)
-            
-            st.subheader("🚚 Análise de Fretes")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if 'CONDICAO_FRETE' in df.columns:
-                    frete_tipo = df.groupby('CONDICAO_FRETE')['VALOR_FRETE'].sum().reset_index()
-                    if not frete_tipo.empty:
-                        fig_frete_tipo = px.pie(
-                            frete_tipo,
-                            values='VALOR_FRETE',
-                            names='CONDICAO_FRETE',
-                            title='Distribuição por Tipo de Frete'
-                        )
-                        st.plotly_chart(fig_frete_tipo, use_container_width=True)
-            
-            with col2:
-                if not dados_mensais.empty:
-                    fig_frete_evolucao = px.line(
-                        dados_mensais,
-                        x='MES_ANO',
-                        y='VALOR_FRETE',
-                        title='Evolução Mensal dos Gastos com Frete',
-                        labels={'VALOR_FRETE': 'Valor do Frete (R$)', 'MES_ANO': 'Mês'}
+                anos = sorted(df['ANO'].unique())
+                if len(anos) >= 2:
+                    st.subheader("📅 Comparativo Anual")
+                    
+                    comparativo_anual = df.groupby('ANO').agg({
+                        'V_TOTAL_NF': 'sum',
+                        'VALOR_FRETE': 'sum',
+                        'VALOR_JUROS': 'sum',
+                        'NF': 'count'
+                    }).reset_index()
+                    
+                    fig_comparativo = make_subplots(rows=2, cols=2, subplot_titles=('Valor Total', 'Custo com Fretes', 'Juros Pagos', 'Quantidade de NFs'))
+                    
+                    fig_comparativo.add_trace(
+                        go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['V_TOTAL_NF'], name='Valor Total'),
+                        row=1, col=1
                     )
-                    st.plotly_chart(fig_frete_evolucao, use_container_width=True)
-            
-            st.subheader("💸 Análise de Custos")
-            custos_totais = pd.DataFrame({
-                'Tipo': ['Valor NFs', 'Fretes', 'Juros'],
-                'Valor': [df['V_TOTAL_NF'].sum(), df['VALOR_FRETE'].sum(), df['VALOR_JUROS'].sum()]
-            })
-            
-            fig_custos = px.bar(
-                custos_totais,
-                x='Tipo',
-                y='Valor',
-                title='Distribuição Total de Custos',
-                color='Tipo'
-            )
-            st.plotly_chart(fig_custos, use_container_width=True)
-            
-            st.subheader("📈 Métricas de Eficiência")
-            col_met1, col_met2, col_met3, col_met4 = st.columns(4)
-            
-            with col_met1:
-                custo_total = df['V_TOTAL_NF'].sum() + df['VALOR_FRETE'].sum() + df['VALOR_JUROS'].sum()
-                st.metric("Custo Total", f"R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            
-            with col_met2:
-                perc_frete = (df['VALOR_FRETE'].sum() / df['V_TOTAL_NF'].sum() * 100) if df['V_TOTAL_NF'].sum() > 0 else 0
-                st.metric("% Frete/NF", f"{perc_frete:.2f}%")
-            
-            with col_met3:
-                perc_juros = (df['VALOR_JUROS'].sum() / df['V_TOTAL_NF'].sum() * 100) if df['V_TOTAL_NF'].sum() > 0 else 0
-                st.metric("% Juros/NF", f"{perc_juros:.2f}%")
-            
-            with col_met4:
-                nfs_com_juros = len(df[df['VALOR_JUROS'] > 0])
-                st.metric("NFs com Juros", f"{nfs_com_juros}")
+                    
+                    fig_comparativo.add_trace(
+                        go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['VALOR_FRETE'], name='Fretes'),
+                        row=1, col=2
+                    )
+                    
+                    fig_comparativo.add_trace(
+                        go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['VALOR_JUROS'], name='Juros'),
+                        row=2, col=1
+                    )
+                    
+                    fig_comparativo.add_trace(
+                        go.Bar(x=comparativo_anual['ANO'], y=comparativo_anual['NF'], name='Qtd NFs'),
+                        row=2, col=2
+                    )
+                    
+                    fig_comparativo.update_layout(height=600, showlegend=False)
+                    st.plotly_chart(fig_comparativo, use_container_width=True)
+                
+                st.subheader("🚚 Análise de Fretes")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if 'CONDICAO_FRETE' in df.columns:
+                        frete_tipo = df.groupby('CONDICAO_FRETE')['VALOR_FRETE'].sum().reset_index()
+                        if not frete_tipo.empty:
+                            fig_frete_tipo = px.pie(
+                                frete_tipo,
+                                values='VALOR_FRETE',
+                                names='CONDICAO_FRETE',
+                                title='Distribuição por Tipo de Frete'
+                            )
+                            st.plotly_chart(fig_frete_tipo, use_container_width=True)
+                
+                with col2:
+                    if not dados_mensais.empty:
+                        fig_frete_evolucao = px.line(
+                            dados_mensais,
+                            x='MES_ANO',
+                            y='VALOR_FRETE',
+                            title='Evolução Mensal dos Gastos com Frete',
+                            labels={'VALOR_FRETE': 'Valor do Frete (R$)', 'MES_ANO': 'Mês'}
+                        )
+                        st.plotly_chart(fig_frete_evolucao, use_container_width=True)
+                
+                st.subheader("💸 Análise de Custos")
+                custos_totais = pd.DataFrame({
+                    'Tipo': ['Valor NFs', 'Fretes', 'Juros'],
+                    'Valor': [df['V_TOTAL_NF'].sum(), df['VALOR_FRETE'].sum(), df['VALOR_JUROS'].sum()]
+                })
+                
+                fig_custos = px.bar(
+                    custos_totais,
+                    x='Tipo',
+                    y='Valor',
+                    title='Distribuição Total de Custos',
+                    color='Tipo'
+                )
+                st.plotly_chart(fig_custos, use_container_width=True)
+                
+                st.subheader("📈 Métricas de Eficiência")
+                col_met1, col_met2, col_met3, col_met4 = st.columns(4)
+                
+                with col_met1:
+                    custo_total = df['V_TOTAL_NF'].sum() + df['VALOR_FRETE'].sum() + df['VALOR_JUROS'].sum()
+                    st.metric("Custo Total", f"R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                
+                with col_met2:
+                    perc_frete = (df['VALOR_FRETE'].sum() / df['V_TOTAL_NF'].sum() * 100) if df['V_TOTAL_NF'].sum() > 0 else 0
+                    st.metric("% Frete/NF", f"{perc_frete:.2f}%")
+                
+                with col_met3:
+                    perc_juros = (df['VALOR_JUROS'].sum() / df['V_TOTAL_NF'].sum() * 100) if df['V_TOTAL_NF'].sum() > 0 else 0
+                    st.metric("% Juros/NF", f"{perc_juros:.2f}%")
+                
+                with col_met4:
+                    nfs_com_juros = len(df[df['VALOR_JUROS'] > 0])
+                    st.metric("NFs com Juros", f"{nfs_com_juros}")
         
         else:
             st.info("Nenhum dado disponível.")
