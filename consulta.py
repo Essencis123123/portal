@@ -36,7 +36,7 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
-    
+
     /* CORREÇÃO DEFINITIVA: Estilo para o texto dentro dos campos de filtro ser preto */
     [data-testid="stSidebar"] .stSelectbox > div > div > div > span,
     [data-testid="stSidebar"] .stMultiselect > div > div > div > span,
@@ -215,6 +215,7 @@ with st.sidebar:
     st.divider()
     
     if st.button("Atualizar Dados"):
+        st.cache_data.clear()
         st.rerun()
 
     # Inicializa as variáveis de filtro fora dos blocos condicionais
@@ -366,7 +367,7 @@ if menu_option == "📋 Acompanhar Pedidos":
     
     # Verifica e formata as colunas de data
     if 'DATA' in df_tabela.columns:
-        df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+        df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%m%Y').replace('NaT', 'N/A')
     else:
         df_tabela['DATA REQUISIÇÃO'] = 'N/A'
     
