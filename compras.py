@@ -481,38 +481,32 @@ else:
             edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
             edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
             
-            # Filtra apenas as linhas com Ordem de Compra preenchida
-            edited_rows_with_oc = edited_df[edited_df['ORDEM_COMPRA'].notna() & (edited_df['ORDEM_COMPRA'] != '')]
-
-            if edited_rows_with_oc.empty:
-                st.warning("Nenhuma OC foi preenchida. Nada a salvar.")
-            else:
-                for index, edited_row in edited_rows_with_oc.iterrows():
-                    original_index = st.session_state.df_pedidos[
-                        (st.session_state.df_pedidos['REQUISICAO'] == edited_row['REQUISICAO']) & 
-                        (st.session_state.df_pedidos['MATERIAL'] == edited_row['MATERIAL'])
-                    ].index
-                    
-                    if not original_index.empty:
-                        original_index = original_index[0]
-                        
-                        st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
-                        st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
-                        st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_rows_with_oc.loc[index, 'VALOR_ITEM']
-                        st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
-                        st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
-                        st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
-                        
-                        if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
-                            data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
-                            data_aprovacao = st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']
-                            dias_emissao = (data_aprovacao - data_requisicao).days
-                            st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
-                        else:
-                            st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = 0
+            for index, edited_row in edited_df.iterrows():
+                original_index = st.session_state.df_pedidos[
+                    (st.session_state.df_pedidos['REQUISICAO'] == edited_row['REQUISICAO']) & 
+                    (st.session_state.df_pedidos['MATERIAL'] == edited_row['MATERIAL'])
+                ].index
                 
-                salvar_dados_pedidos(st.session_state.df_pedidos)
-                st.success("Dados atualizados com sucesso!")
+                if not original_index.empty:
+                    original_index = original_index[0]
+                    
+                    st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
+                    st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
+                    st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_df.loc[index, 'VALOR_ITEM']
+                    st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
+                    st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
+                    st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
+                    
+                    if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
+                        data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
+                        data_aprovacao = st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']
+                        dias_emissao = (data_aprovacao - data_requisicao).days
+                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
+                    else:
+                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = 0
+            
+            salvar_dados_pedidos(st.session_state.df_pedidos)
+            st.success("Dados atualizados com sucesso!")
             st.rerun()
 
     elif menu == "📜 Histórico ":
@@ -578,6 +572,7 @@ else:
         
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
+        # --- CORREÇÃO AQUI ---
         # A coluna 'DOC NF' contém os links.
         # Criamos a coluna 'Anexo' para ser a coluna de exibição e de link ao mesmo tempo.
         df_display['Anexo'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
@@ -609,6 +604,8 @@ else:
                 "DOC NF": st.column_config.LinkColumn(
                     "Anexo NF",
                     help="Clique para visualizar o anexo",
+                    # A correção é aqui: usa o nome da coluna que contém a URL
+                    # e o texto de exibição como uma string literal.
                     display_text="📥 Anexo"
                 )
             },
@@ -630,7 +627,7 @@ else:
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
             for index, row in edited_history_df.iterrows():
-                cols_to_update = [col for col in edited_history_df.columns if col not in ['DOC NF', 'Anexo']]
+                cols_to_update = [col for col in edited_history_df.columns if col not in ['DOC NF', 'Anexo', 'Anexo Display']]
                 
                 for col in cols_to_update:
                     if col in st.session_state.df_pedidos.columns and col in edited_history_df.columns:
@@ -943,4 +940,4 @@ else:
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
-            st.info("Dados de solicitantes locais insuficientes
+            st.info("Dados de solicitantes locais insuficientes para gerar o ranking.")
