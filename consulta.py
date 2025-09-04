@@ -36,12 +36,16 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
-    /* CORREÇÃO: Estilo para o texto do selectbox no sidebar ser visível */
-    [data-testid="stSidebar"] .st-emotion-cache-q2x8y4 {
-        color: white;
+
+    /* CORREÇÃO DEFINITIVA: Estilo para o texto dentro dos campos de filtro ser preto */
+    [data-testid="stSidebar"] .stSelectbox > div > div > div > span {
+        color: black !important;
     }
-    [data-testid="stSidebar"] .st-emotion-cache-1g0b2l {
-        color: white;
+    [data-testid="stSidebar"] .stMultiselect > div > div > div > span {
+        color: black !important;
+    }
+    [data-testid="stSidebar"] .stDateInput > div > div > input {
+        color: black !important;
     }
 
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
@@ -63,17 +67,6 @@ st.markdown(
         color: black !important;
     }
     
-    /* Regra corrigida para deixar o texto dentro dos campos de filtro preto */
-    [data-testid="stSidebar"] .st-emotion-cache-1c1913f span {
-        color: black !important;
-    }
-
-    /* CORREÇÃO: Nova regra para mudar o fundo dos campos no sidebar */
-    [data-testid="stSidebar"] .st-emotion-cache-1g0b2l div, [data-testid="stSidebar"] .st-emotion-cache-q2x8y4 div {
-        background-color: #0d3862; /* Um tom de azul escuro para contrastar com a letra branca */
-    }
-
-
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
