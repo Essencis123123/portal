@@ -134,7 +134,7 @@ def load_logo(url):
     except:
         return None
 
-# --- Funções de Carregamento e Salvamento de Dados para Google Sheets
+# Funções de carregamento e salvamento de dados para Google Sheets
 def carregar_dados_almoxarifado():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -216,6 +216,29 @@ def carregar_dados_pedidos():
         st.error(f"Erro ao carregar dados de pedidos: {e}")
         return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA"])
 
+def salvar_dados_pedidos(df):
+    """Salva os dados de pedidos no Google Sheets."""
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(0)
+
+        df_copy = df.copy()
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        
+        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados de pedidos: {e}")
+        return False
+
 @st.cache_data
 def carregar_dados_solicitantes():
     try:
@@ -234,37 +257,6 @@ def carregar_dados_solicitantes():
 
 # Funções de E-mail
 status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
-logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-logo_img = load_logo(logo_url)
-
-# Credenciais de e-mail agora vêm de st.secrets
-def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao, material):
-    remetente = st.secrets["email"]["remetente"]
-    senha = st.secrets["email"]["senha"]
-    destinatario = email_solicitante
-    corpo_mensagem = f"""
-    Olá, {solicitante_nome}.
-    Gostaríamos de informar que o material **{material}** da requisição **{numero_requisicao}** se encontra disponível para retirada no almoxarifado.
-    Por favor, entre em contato com o setor responsavel para mais informações.
-    Atenciosamente, Equipe de Suprimentos
-    """
-    mensagem = MIMEMultipart()
-    mensagem['From'] = remetente
-    mensagem['To'] = destinatario
-    mensagem['Subject'] = f"Material Entregue - Requisição {numero_requisicao}"
-    mensagem.attach(MIMEText(corpo_mensagem, 'plain'))
-    try:
-        servidor_smtp = smtplib.SMTP('smtp.gmail.com', 587)
-        servidor_smtp.starttls()
-        servidor_smtp.login(remetente, senha)
-        texto = mensagem.as_string()
-        servidor_smtp.sendmail(remetente, destinatario, texto)
-        servidor_smtp.quit()
-        st.success(f"E-mail de confirmação enviado para {destinatario}.")
-        return True
-    except Exception as e:
-        st.error(f"❌ Erro ao enviar e-mail: {e}. O problema pode ser na conexão ou credenciais do Gmail.")
-        return False
 
 # --- LÓGICA DE LOGIN ---
 USERS = {
@@ -284,6 +276,36 @@ def fazer_login(email, senha):
         st.rerun()
     else:
         st.error("E-mail ou senha incorretos.")
+
+# Credenciais de e-mail agora vêm de st.secrets
+def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao, material):
+    try:
+        remetente = st.secrets["email"]["remetente"]
+        senha = st.secrets["email"]["senha"]
+        destinatario = email_solicitante
+        corpo_mensagem = f"""
+        Olá, {solicitante_nome}.
+        Gostaríamos de informar que o material **{material}** da requisição **{numero_requisicao}** se encontra disponível para retirada no almoxarifado.
+        Por favor, entre em contato com o setor responsavel para mais informações.
+        Atenciosamente, Equipe de Suprimentos
+        """
+        mensagem = MIMEMultipart()
+        mensagem['From'] = remetente
+        mensagem['To'] = destinatario
+        mensagem['Subject'] = f"Material Entregue - Requisição {numero_requisicao}"
+        mensagem.attach(MIMEText(corpo_mensagem, 'plain'))
+
+        servidor_smtp = smtplib.SMTP('smtp.gmail.com', 587)
+        servidor_smtp.starttls()
+        servidor_smtp.login(remetente, senha)
+        texto = mensagem.as_string()
+        servidor_smtp.sendmail(remetente, destinatario, texto)
+        servidor_smtp.quit()
+        st.success(f"E-mail de confirmação enviado para {destinatario}.")
+        return True
+    except Exception as e:
+        st.error(f"❌ Erro ao enviar e-mail: {e}. O problema pode ser na conexão ou credenciais do Gmail.")
+        return False
 
 # --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state['logado']:
@@ -306,6 +328,7 @@ else:
     # Carrega dados dos solicitantes de forma separada
     df_solicitantes = carregar_dados_solicitantes()
 
+    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
     logo_img = load_logo(logo_url)
     if logo_img:
         st.sidebar.image(logo_img, use_container_width=True)
@@ -338,7 +361,7 @@ else:
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
-                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
                     fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                     
                     if fornecedor_nf == '':
@@ -385,16 +408,17 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
-                            
-                            if not df_update_pedidos.empty:
-                                for original_index in df_update_pedidos.index:
-                                    st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                                    st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                            if 'ORDEM_COMPRA' in st.session_state.df_pedidos.columns:
+                                df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
                                 
-                                salvar_dados_pedidos(st.session_state.df_pedidos)
-                            else:
-                                st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada nos pedidos. O status não foi atualizado.")
+                                if not df_update_pedidos.empty:
+                                    for original_index in df_update_pedidos.index:
+                                        st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                                        st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                                    
+                                    salvar_dados_pedidos(st.session_state.df_pedidos)
+                                else:
+                                    st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada nos pedidos. O status não foi atualizado.")
                             
                             novo_registro_nf = {
                                 "DATA": pd.to_datetime(data_recebimento),
@@ -417,10 +441,13 @@ else:
                             
                             if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
                                 st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
-                                email_solicitante = df_solicitantes[df_solicitantes['NOME'] == recebedor]['EMAIL'].iloc[0] if recebedor in df_solicitantes['NOME'].values else None
-                                if email_solicitante:
-                                    material_pedido = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf]['MATERIAL'].iloc[0] if not df_update_pedidos.empty else "N/A"
-                                    enviar_email_entrega(recebedor, email_solicitante, ordem_compra_nf, material_pedido)
+                                if 'NOME' in df_solicitantes.columns and 'EMAIL' in df_solicitantes.columns:
+                                    email_solicitante = df_solicitantes[df_solicitantes['NOME'] == recebedor]['EMAIL'].iloc[0] if recebedor in df_solicitantes['NOME'].values else None
+                                    if email_solicitante:
+                                        material_pedido = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf]['MATERIAL'].iloc[0] if not df_update_pedidos.empty and 'MATERIAL' in df_update_pedidos.columns else "N/A"
+                                        enviar_email_entrega(recebedor, email_solicitante, ordem_compra_nf, material_pedido)
+                                else:
+                                    st.warning("Aviso: As colunas 'NOME' ou 'EMAIL' não foram encontradas na planilha de solicitantes. O e-mail não foi enviado.")
                             else:
                                 st.error("Erro ao salvar os dados da nota fiscal.")
                         
