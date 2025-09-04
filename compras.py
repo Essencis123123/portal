@@ -171,7 +171,7 @@ def carregar_dados_pedidos():
         gc = get_gspread_client()
         
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(0)
+        worksheet = spreadsheet.get_worksheet(0) # Pega a primeira aba
         
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -572,8 +572,10 @@ else:
         
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
-        # Corrige a coluna para o link
-        df_display['Anexo NF'] = df_display['DOC NF'].apply(lambda x: f"📥 Anexo ({x})" if x else "N/A")
+        # --- CORREÇÃO AQUI ---
+        # A coluna 'DOC NF' contém o link. Usamos ela diretamente no LinkColumn
+        # e definimos o texto de exibição para "📥 Anexo".
+        df_display['Anexo NF'] = df_display['DOC NF']
         
         edited_history_df = st.data_editor(
             df_display,
@@ -599,7 +601,11 @@ else:
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
-                "Anexo NF": st.column_config.LinkColumn("Anexo NF", display_text="📥 Anexo")
+                "Anexo NF": st.column_config.LinkColumn(
+                    "Anexo NF", 
+                    help="Clique para visualizar o anexo",
+                    display_text="📥 Anexo" if pd.notna(df_history['DOC NF']) else "N/A"
+                )
             },
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
@@ -619,7 +625,8 @@ else:
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
             for index, row in edited_history_df.iterrows():
-                cols_to_update = [col for col in edited_history_df.columns if col != 'DOC NF']
+                # A coluna "DOC NF" deve ser lida da fonte original para evitar perdas
+                cols_to_update = [col for col in edited_history_df.columns if col not in ['Anexo NF', 'DOC NF']]
                 
                 for col in cols_to_update:
                     if col in st.session_state.df_pedidos.columns and col in edited_history_df.columns:
@@ -930,4 +937,3 @@ else:
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
             st.info("Dados de solicitantes locais insuficientes para gerar o ranking.")
-
