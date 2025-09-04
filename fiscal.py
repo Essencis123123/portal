@@ -193,13 +193,17 @@ def carregar_dados():
                 df[col] = default_val
 
         # Seleciona e reordena apenas as colunas que o painel fiscal irá usar
-        colunas_finais = list(colunas_necessarias.keys()) + ['DIAS_VENCIMENTO']
+        colunas_finais = list(colunas_necessarias.keys())
         
         # Converte colunas numéricas
         df['V._TOTAL_NF'] = pd.to_numeric(df['V._TOTAL_NF'], errors='coerce').fillna(0)
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         
+        # Verifica se a coluna 'VENCIMENTO' é do tipo datetime. Se não for, a cria novamente.
+        if not pd.api.types.is_datetime64_any_dtype(df['VENCIMENTO']):
+            df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
+            
         # Calcula os dias até o vencimento
         hoje = datetime.date.today()
         df['DIAS_VENCIMENTO'] = (df['VENCIMENTO'].dt.date - hoje).dt.days.fillna(0).astype(int)
