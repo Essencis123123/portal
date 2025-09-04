@@ -115,25 +115,38 @@ def carregar_dados() -> pd.DataFrame:
 
         df = pd.DataFrame(worksheet.get_all_records())
 
-        # Padroniza os nomes das colunas
+        if df.empty or all(pd.Series(df.columns).isnull()):
+            st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
+            return pd.DataFrame(columns=[
+                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "STATUS",
+                "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
+                "DOC_NF", "RECEBEDOR", "VENCIMENTO", "DIAS_VENCIMENTO"
+            ])
+
+        # Padroniza os nomes das colunas de forma mais robusta
         df.columns = df.columns.str.strip().str.upper().str.replace('.', '').str.replace(' ', '_').str.replace('/', '_')
 
-        # --- CORREÇÃO AQUI: Trata colunas duplicadas ---
+        # Dicionário de mapeamento para nomes internos e padronizados
+        mapeamento = {
+            'STATUS_FINANCEIRO': 'STATUS',
+            'OBSERVACAO': 'REGISTRO_ADICIONAL',
+            'FORNECEDOR_NF': 'FORNECEDOR',
+            'V_TOTAL_NF': 'V_TOTAL_NF',
+            'DOC_NF': 'DOC_NF',
+            'V_TOTAL_NF': 'V_TOTAL_NF',
+            'CONDICAO_FRETE': 'CONDICAO_FRETE',
+            'VALOR_FRETE': 'VALOR_FRETE'
+        }
+        
+        # Aplica o mapeamento e trata as colunas não mapeadas
+        novos_nomes = [mapeamento.get(col, col) for col in df.columns]
+        df.columns = novos_nomes
+
+        # Trata colunas duplicadas após a padronização
         cols = pd.Series(df.columns)
         for dup in cols[cols.duplicated()].unique():
             cols[cols[cols == dup].index.values.tolist()] = [f"{dup}_{i}" for i in range(1, len(cols[cols == dup]) + 1)]
         df.columns = cols
-        # --- FIM DA CORREÇÃO ---
-
-        # Renomeia com um mapeamento explícito para garantir nomes internos consistentes
-        # Corrigido o mapeamento para "DOC NF"
-        df = df.rename(columns={
-            'STATUS_FINANCEIRO': 'STATUS',
-            'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'FORNECEDOR_NF': 'FORNECEDOR',
-            'V_TOTAL_NF': 'V_TOTAL_NF', 
-            'DOC_NF': 'DOC_NF',
-        }, errors='ignore')
 
         # Remove linhas totalmente vazias, apara espaços
         df = df.dropna(how='all')
@@ -141,19 +154,17 @@ def carregar_dados() -> pd.DataFrame:
             df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
         # Garante colunas essenciais
-        colunas_necessarias = {
-            "DATA": None, "FORNECEDOR": "", "NF": "", "ORDEM_COMPRA": "", "V_TOTAL_NF": 0.0, 
-            "VENCIMENTO": None, "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A", 
-            "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0, "VALOR_FRETE": 0.0, "DOC_NF": "",
-            "RECEBEDOR": "", "DIAS_VENCIMENTO": 0
-        }
-        for col, default_val in colunas_necessarias.items():
-            if col not in df.columns:
-                df[col] = default_val
-        
-        # Reordena o DataFrame para corresponder à ordem esperada
-        df = df.reindex(columns=colunas_necessarias.keys(), fill_value="")
+        colunas_necessarias = [
+            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", 
+            "VENCIMENTO", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", 
+            "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+        ]
 
+        # Garante que todas as colunas esperadas existam
+        for col in colunas_necessarias:
+            if col not in df.columns:
+                df[col] = ''
+        
         # Tipos numéricos
         for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
@@ -165,12 +176,14 @@ def carregar_dados() -> pd.DataFrame:
         # DIAS_VENCIMENTO (robusto)
         ref = pd.Timestamp.today().normalize()
         df["DIAS_VENCIMENTO"] = (df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
+        
+        # Reordena para o st.data_editor
+        df = df.reindex(columns=colunas_necessarias + ["DIAS_VENCIMENTO"], fill_value="")
 
         return df
 
     except Exception as e:
         st.error(f"Erro ao carregar dados da planilha. Verifique nome/aba/credenciais. Detalhe: {e}")
-        # Retorna um DataFrame vazio com as colunas esperadas em caso de erro
         return pd.DataFrame(columns=[
             "DATA","FORNECEDOR","NF","ORDEM_COMPRA","V_TOTAL_NF","STATUS",
             "CONDICAO_PROBLEMA","REGISTRO_ADICIONAL","VALOR_JUROS","VALOR_FRETE",
@@ -345,16 +358,6 @@ else:
 
             df_display = df.copy()
 
-            # --- CORREÇÃO AQUI: Garante que as colunas existam e na ordem correta
-            colunas_exibicao = [
-                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", 
-                "DIAS_VENCIMENTO", "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", 
-                "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
-            ]
-            
-            df_display = df_display.reindex(columns=colunas_exibicao, fill_value="")
-            # --- FIM DA CORREÇÃO ---
-
             edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
@@ -374,7 +377,10 @@ else:
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
                 },
-                column_order=colunas_exibicao,
+                column_order=[
+                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
+                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+                ],
                 hide_index=True
             )
 
