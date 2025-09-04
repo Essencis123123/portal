@@ -612,8 +612,8 @@ else:
 
         if not edited_history_df.equals(df_display):
             st.info("Salvando alterações...")
-            
-            # Reverte os valores da coluna de exibição para os valores originais
+
+            # Desconverte o status de exibição para o valor original
             edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
                 '🟢 ENTREGUE': 'ENTREGUE',
                 '🟡 PENDENTE': 'PENDENTE',
@@ -621,24 +621,27 @@ else:
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
-            for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
-                edited_history_df[col] = pd.to_datetime(edited_history_df[col], errors='coerce', dayfirst=True)
-
-            # Para que as edições não apaguem o link do DOC NF, precisamos separá-las
-            df_history_merged = edited_history_df.drop(columns=['DOC NF'], errors='ignore')
-            st.session_state.df_pedidos.update(df_history_merged)
-            
+            # Para cada linha editada, encontre a linha correspondente no DataFrame original e atualize
             for index, row in edited_history_df.iterrows():
-                if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
-                    dias_emissao = (row['DATA_APROVACAO'] - row['DATA']).days
+                # Encontra o índice da linha original no DataFrame de sessão
+                # Garantimos que a linha de índice `index` do edited_history_df corresponde
+                # à linha de índice `index` do df_history original
+                
+                # Obtém os valores editados, mas não atualiza a coluna 'DOC NF'
+                cols_to_update = [col for col in edited_history_df.columns if col != 'DOC NF']
+                st.session_state.df_pedidos.loc[index, cols_to_update] = row[cols_to_update]
+
+                # Recalcula os dias de emissão e atraso
+                if pd.notna(st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO']) and pd.notna(st.session_state.df_pedidos.loc[index, 'DATA']):
+                    dias_emissao = (st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO'] - st.session_state.df_pedidos.loc[index, 'DATA']).days
                     st.session_state.df_pedidos.loc[index, 'DIAS_EMISSAO'] = dias_emissao
                 else:
                     st.session_state.df_pedidos.loc[index, 'DIAS_EMISSAO'] = 0
 
-                if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['DATA_APROVACAO']):
-                    data_limite = row['DATA_APROVACAO'] + pd.Timedelta(days=15)
-                    if row['DATA_ENTREGA'] > data_limite:
-                        dias_atraso = (row['DATA_ENTREGA'] - data_limite).days
+                if pd.notna(st.session_state.df_pedidos.loc[index, 'DATA_ENTREGA']) and pd.notna(st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO']):
+                    data_limite = st.session_state.df_pedidos.loc[index, 'DATA_APROVACAO'] + pd.Timedelta(days=15)
+                    if st.session_state.df_pedidos.loc[index, 'DATA_ENTREGA'] > data_limite:
+                        dias_atraso = (st.session_state.df_pedidos.loc[index, 'DATA_ENTREGA'] - data_limite).days
                         st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = dias_atraso
                     else:
                         st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = 0
