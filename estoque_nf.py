@@ -13,6 +13,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import gspread
+from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
 
@@ -210,6 +211,7 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
         return False
 
+@st.cache_data
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
