@@ -209,7 +209,7 @@ with st.sidebar:
     if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
         meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
         anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
-        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
                          7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
         solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
@@ -223,6 +223,8 @@ with st.sidebar:
         if meses_disponiveis:
             filtro_mes_pedidos = st.selectbox("Selecione o Mês:", ['Todos'] + meses_disponiveis, format_func=lambda x: meses_nomes.get(x) if isinstance(x, int) else x)
             filtro_ano_pedidos = st.selectbox("Selecione o Ano:", ['Todos'] + anos_disponiveis)
+        else:
+            st.info("Nenhum dado com data disponível para filtrar.")
 
         # Filtros de solicitante, departamento e status
         if 'SOLICITANTE' in df_pedidos.columns:
