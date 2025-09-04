@@ -132,6 +132,7 @@ st.markdown(
 # Carregar a imagem do logo a partir da URL
 @st.cache_data(show_spinner=False)
 def load_logo(url):
+    """Carrega a imagem de um URL e armazena em cache."""
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -146,12 +147,8 @@ logo_img = load_logo(logo_url)
 # --- Funções de Conexão e Carregamento de Dados ---
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    """
-    Conecta com o Google Sheets usando os secrets do Streamlit.
-    Esta função foi aprimorada para lidar tanto com strings JSON quanto com objetos AttrDict.
-    """
+    """Conecta com o Google Sheets usando os secrets do Streamlit."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    
     credentials_info = st.secrets["gcp_service_account"]
     
     if isinstance(credentials_info, str):
@@ -169,7 +166,6 @@ def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
         gc = get_gspread_client()
-        
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
         
@@ -205,7 +201,6 @@ def salvar_dados_pedidos(df):
     """Salva o DataFrame de pedidos no Google Sheets."""
     try:
         gc = get_gspread_client()
-        
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
 
@@ -229,7 +224,6 @@ def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
         gc = get_gspread_client()
-        
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(1)
         
@@ -249,7 +243,6 @@ def salvar_dados_solicitantes(df):
     """Salva o DataFrame de solicitantes no Google Sheets."""
     try:
         gc = get_gspread_client()
-        
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(1)
 
@@ -264,6 +257,7 @@ def salvar_dados_solicitantes(df):
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
+    """Carrega dados do almoxarifado para preencher a nota fiscal."""
     try:
         gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
@@ -308,7 +302,6 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
     logo_img = load_logo(logo_url)
 
     if 'df_pedidos' not in st.session_state:
@@ -438,11 +431,9 @@ else:
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
             df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
-            
             pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
             pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
-
 
         cols_para_editar = [
             "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "QUANTIDADE",
@@ -481,6 +472,12 @@ else:
             edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
             edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
             
+            # Cálculo de DIAS_EMISSAO feito aqui, após a submissão do formulário
+            edited_df['DIAS_EMISSAO'] = edited_df.apply(
+                lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
+                axis=1
+            )
+            
             for index, edited_row in edited_df.iterrows():
                 original_index = st.session_state.df_pedidos[
                     (st.session_state.df_pedidos['REQUISICAO'] == edited_row['REQUISICAO']) & 
@@ -489,21 +486,13 @@ else:
                 
                 if not original_index.empty:
                     original_index = original_index[0]
-                    
                     st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
                     st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_df.loc[index, 'VALOR_ITEM']
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
                     st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
                     st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
-                    
-                    if pd.notna(st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']):
-                        data_requisicao = st.session_state.df_pedidos.loc[original_index, 'DATA']
-                        data_aprovacao = st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO']
-                        dias_emissao = (data_aprovacao - data_requisicao).days
-                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
-                    else:
-                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = 0
+                    st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = edited_row['DIAS_EMISSAO']
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Dados atualizados com sucesso!")
@@ -522,7 +511,6 @@ else:
         col_filter_h1, col_filter_h2, col_filter_h3, col_filter_h4 = st.columns(4)
         
         df_history = st.session_state.df_pedidos.copy()
-
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
 
         df_almox = st.session_state.df_almoxarifado.copy()
@@ -572,9 +560,6 @@ else:
         
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
-        # --- CORREÇÃO AQUI ---
-        # A coluna 'DOC NF' contém os links.
-        # Criamos a coluna 'Anexo' para ser a coluna de exibição e de link ao mesmo tempo.
         df_display['Anexo'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
 
         edited_history_df = st.data_editor(
@@ -604,8 +589,6 @@ else:
                 "DOC NF": st.column_config.LinkColumn(
                     "Anexo NF",
                     help="Clique para visualizar o anexo",
-                    # A correção é aqui: usa o nome da coluna que contém a URL
-                    # e o texto de exibição como uma string literal.
                     display_text="📥 Anexo"
                 )
             },
@@ -626,31 +609,32 @@ else:
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
-            for index, row in edited_history_df.iterrows():
-                cols_to_update = [col for col in edited_history_df.columns if col not in ['DOC NF', 'Anexo', 'Anexo Display']]
-                
-                for col in cols_to_update:
-                    if col in st.session_state.df_pedidos.columns and col in edited_history_df.columns:
-                        st.session_state.df_pedidos.loc[index, col] = edited_history_df.loc[index, col]
+            # Converte as colunas de data ANTES de fazer os cálculos
+            edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
+            edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
+            edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
 
-                # Lógica de cálculo corrigida
-                # Calcula DIAS_EMISSAO apenas se as datas existirem
-                if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
-                    dias_emissao = (row['DATA_APROVACAO'] - row['DATA']).days
-                    st.session_state.df_pedidos.loc[index, 'DIAS_EMISSAO'] = dias_emissao
-                else:
-                    st.session_state.df_pedidos.loc[index, 'DIAS_EMISSAO'] = 0
-
-                # Calcula DIAS_ATRASO apenas se as datas existirem
+            # Calcula DIAS_EMISSAO
+            edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(
+                lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
+                axis=1
+            )
+            
+            # Calcula DIAS_ATRASO
+            def calcular_dias_atraso(row):
                 if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['DATA_APROVACAO']):
                     data_limite = row['DATA_APROVACAO'] + pd.Timedelta(days=15)
                     if row['DATA_ENTREGA'] > data_limite:
-                        dias_atraso = (row['DATA_ENTREGA'] - data_limite).days
-                        st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = dias_atraso
-                    else:
-                        st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = 0
-                else:
-                    st.session_state.df_pedidos.loc[index, 'DIAS_ATRASO'] = 0
+                        return (row['DATA_ENTREGA'] - data_limite).days
+                return 0
+
+            edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
+
+            # Atualiza o DataFrame na session_state com os valores calculados
+            # Mapeia as alterações de volta para o DataFrame principal
+            for col in edited_history_df.columns:
+                if col in st.session_state.df_pedidos.columns and col not in ['Anexo']:
+                    st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Histórico atualizado com sucesso!")
