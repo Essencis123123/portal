@@ -163,6 +163,8 @@ def carregar_dados_almoxarifado():
             df['ORDEM_COMPRA'] = ''
         if 'STATUS_FINANCEIRO' not in df.columns:
             df['STATUS_FINANCEIRO'] = ''
+        if 'DOC NF' not in df.columns:
+            df['DOC NF'] = ''
 
         return df
     except Exception as e:
