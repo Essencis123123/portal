@@ -56,9 +56,9 @@ st.markdown(
         color: black !important;
     }
     
-    /* Regra para deixar o texto dentro dos campos de filtro preto */
-    .st-emotion-cache-1g0b2l {
-        color: black;
+    /* Regra corrigida para deixar o texto dentro dos campos de filtro preto */
+    [data-testid="stSidebar"] .st-emotion-cache-1c1913f span {
+        color: black !important;
     }
 
     [data-testid="stSidebar"] img {
@@ -399,12 +399,7 @@ if menu_option == "📋 Acompanhar Pedidos":
                f"Total de pedidos: {len(df_pedidos)}")
 
 elif menu_option == "📊 Dashboard de Custos":
-    if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
-        meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
-        anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
-        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-        
+    if meses_disponiveis:
         filtro_mes_dash = st.selectbox("Selecione o Mês:", meses_disponiveis, format_func=lambda x: meses_nomes.get(x), index=len(meses_disponiveis)-1)
         filtro_ano_dash = st.selectbox("Selecione o Ano:", anos_disponiveis)
     else:
