@@ -12,6 +12,7 @@ from io import BytesIO
 import gspread
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
+import json
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
@@ -85,8 +86,16 @@ logo_img = load_logo(logo_url)
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds_json = st.secrets["gcp_service_account"]
-    creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
+    credentials_info = st.secrets["gcp_service_account"]
+    
+    if isinstance(credentials_info, str):
+        try:
+            credentials_info = json.loads(credentials_info)
+        except json.JSONDecodeError as e:
+            st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
+            return None
+    
+    creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     client = gspread.authorize(creds)
     return client
 
