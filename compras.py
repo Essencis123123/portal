@@ -304,7 +304,7 @@ def fazer_login(email, senha):
     else:
         st.error("E-mail ou senha incorretos.")
 
-# --- INTERFACE PRINCIPAL ---
+# --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
 if 'logado' not in st.session_state or not st.session_state.logado:
     st.title("Login - Painel do Comprador")
     with st.form("login_form"):
@@ -506,7 +506,7 @@ else:
                         dias_emissao = (data_aprovacao - data_requisicao).days
                         st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
                     else:
-                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAo'] = 0
+                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = 0
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Dados atualizados com sucesso!")
@@ -610,6 +610,7 @@ else:
         if not edited_history_df.equals(df_display):
             st.info("Salvando alterações...")
             
+            # Reverte os valores da coluna de exibição para os valores originais
             edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
                 '🟢 ENTREGUE': 'ENTREGUE',
                 '🟡 PENDENTE': 'PENDENTE',
