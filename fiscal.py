@@ -284,11 +284,11 @@ else:
             st.image(logo_img, use_container_width=True)
 
         st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
-        st.title("💼 Menu Financeiro")
+        st.title("💼 Financeiro")
 
         menu = st.radio(
             "📌 Navegação",
-            ["📋 Visualização de NFs", "💰 Gestão de Juros", "📊 Dashboards Financeiros", "⚙️ Configurações"]
+            ["📋 Lançamentos", "💰 Gestão de Juros", "📊 Dashboards ", "⚙️ Configurações"]
         )
         st.divider()
 
