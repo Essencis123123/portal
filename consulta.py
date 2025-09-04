@@ -50,6 +50,12 @@ st.markdown(
         color: white !important;
     }
 
+    /* Estilo para garantir que os rótulos de campos e botões sejam pretos na área principal */
+    div[data-testid*="stForm"] label p, div[data-testid*="stForm"] label,
+    div.st-emotion-cache-1ky8k0j, .st-emotion-cache-1f1q9w0 {
+        color: black !important;
+    }
+
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -196,6 +202,8 @@ with st.sidebar:
     st.divider()
 
     # Inicializa as variáveis de filtro fora dos blocos condicionais
+    filtro_mes_pedidos = 'Todos'
+    filtro_ano_pedidos = 'Todos'
     filtro_solicitante = 'Todos'
     filtro_departamento = 'Todos'
     filtro_status = []
@@ -207,6 +215,10 @@ with st.sidebar:
     solicitantes_disponiveis = []
     departamentos_disponiveis = []
     status_disponiveis = []
+
+    # Novas variáveis para o filtro de data
+    data_minima = datetime.date(2025, 1, 1) # Valor padrão
+    data_maxima = datetime.date.today()
     
     # Cria as listas de opções de filtro se houver dados
     if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
@@ -218,7 +230,19 @@ with st.sidebar:
         
     if menu_option == "📋 Acompanhar Pedidos":
         st.subheader("Filtros de Pedidos")
+        
+        # Filtros de mês e ano para o acompanhamento
+        if meses_disponiveis:
+            filtro_mes_pedidos = st.selectbox("Selecione o Mês:", ['Todos'] + meses_disponiveis, format_func=lambda x: meses_nomes.get(x) if isinstance(x, int) else x)
+            filtro_ano_pedidos = st.selectbox("Selecione o Ano:", ['Todos'] + anos_disponiveis)
+        else:
+            st.info("Nenhum dado com data disponível para filtrar.")
 
+        # Filtro por período de data de requisição
+        if 'DATA' in df_pedidos.columns and not df_pedidos['DATA'].isnull().all():
+            data_minima = st.date_input("De:", value=df_pedidos['DATA'].min() or datetime.date.today())
+            data_maxima = st.date_input("Até:", value=df_pedidos['DATA'].max() or datetime.date.today())
+        
         # Filtros de solicitante, departamento e status
         if solicitantes_disponiveis:
             filtro_solicitante = st.selectbox(
@@ -275,6 +299,15 @@ if menu_option == "📋 Acompanhar Pedidos":
     df_filtrado = df_pedidos.copy()
 
     # Aplicação dos filtros
+    if 'MES' in df_filtrado.columns and 'ANO' in df_filtrado.columns:
+        if filtro_mes_pedidos != 'Todos':
+            df_filtrado = df_filtrado[df_filtrado['MES'] == filtro_mes_pedidos]
+        if filtro_ano_pedidos != 'Todos':
+            df_filtrado = df_filtrado[df_filtrado['ANO'] == filtro_ano_pedidos]
+    
+    # Aplica o filtro por data de requisição
+    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.date.between(data_minima, data_maxima)]
+
     if filtro_solicitante != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
 
