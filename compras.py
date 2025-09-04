@@ -525,16 +525,19 @@ else:
         
         df_history = st.session_state.df_pedidos.copy()
 
-        # Adição da correção: Converte a coluna 'DATA' para o tipo datetime
+        # Converte a coluna 'DATA' para o tipo datetime
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
 
         # Mescla os dados do almoxarifado para obter o link do DOC NF
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
+            # Mescla os DataFrames pela coluna 'ORDEM_COMPRA'
             df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            # Preenche a coluna 'DOC NF' do df_history com os links do almoxarifado, se existirem
             df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
+            # Remove a coluna temporária
             df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
-        
+
         # Filtros
         if not df_history['DATA'].isnull().all():
             with col_filter_h1:
