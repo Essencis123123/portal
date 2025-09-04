@@ -49,7 +49,7 @@ st.markdown(
         color: black !important;
     }
     .stDownloadButton button p {
-        color: white !important;
+    color: white !important;
     }
 
     [data-testid="stSidebar"] img {
@@ -152,8 +152,8 @@ def carregar_dados():
     try:
         client = get_gspread_client()
         # SUBSTITUA O TEXTO ABAIXO PELO NOME OU URL DA SUA PLANILHA
-        sheet = client.open("NOME_DA_SUA_PLANILHA")
-        worksheet = sheet.worksheet("almoxarifado") # NOME DA ABA
+        sheet = client.open("dados_pedido")
+        worksheet = sheet.worksheet("Almoxarifado") # NOME DA ABA
         
         df = get_as_dataframe(worksheet)
         
@@ -161,8 +161,11 @@ def carregar_dados():
             st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
             return pd.DataFrame(columns=[
                 "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
-                "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF",
+                "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR", "VOLUME"
             ])
+
+        # Renomeia colunas para manter a compatibilidade com o código original
+        df = df.rename(columns={'STATUS_FINANCEIRO': 'STATUS', 'OBSERVACAO': 'REGISTRO_ADICIONAL'})
 
         # Limpeza e conversão de dados
         df = df.dropna(how='all')
@@ -187,6 +190,8 @@ def carregar_dados():
             "V. TOTAL NF": 0.0,
             "NF": "",
             "VENCIMENTO": None,
+            "RECEBEDOR": "", # Nova coluna
+            "VOLUME": 0 # Nova coluna
         }
         for col, default_val in colunas_necessarias.items():
             if col not in df.columns:
@@ -197,6 +202,7 @@ def carregar_dados():
         df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
         df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
         df['DIAS_ATRASO'] = pd.to_numeric(df['DIAS_ATRASO'], errors='coerce').fillna(0)
+        df['VOLUME'] = pd.to_numeric(df['VOLUME'], errors='coerce').fillna(0)
         
         return df
     except Exception as e:
@@ -208,17 +214,18 @@ def salvar_dados(df):
     try:
         client = get_gspread_client()
         # SUBSTITUA O TEXTO ABAIXO PELO NOME OU URL DA SUA PLANILHA
-        sheet = client.open("NOME_DA_SUA_PLANILHA")
-        worksheet = sheet.worksheet("almoxarifado") # NOME DA ABA
-        
-        # Limpa o conteúdo existente antes de escrever o novo
-        worksheet.clear()
+        sheet = client.open("dados_pedido")
+        worksheet = sheet.worksheet("Almoxarifado") # NOME DA ABA
+
+        # Renomeia colunas para o formato original da planilha antes de salvar
+        df_to_save = df.rename(columns={'STATUS': 'STATUS_FINANCEIRO', 'REGISTRO_ADICIONAL': 'OBSERVACAO'})
         
         # Converte as datas de volta para string antes de salvar
-        df_to_save = df.copy()
         df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
         if 'VENCIMENTO' in df_to_save.columns:
             df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+        
+        worksheet.clear()
         
         set_with_dataframe(worksheet, df_to_save)
         return True
@@ -388,7 +395,7 @@ else:
             edited_df = st.data_editor(
                 df_display[[
                     "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
-                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF"
+                    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF", "RECEBEDOR", "VOLUME"
                 ]],
                 use_container_width=True,
                 column_config={
@@ -403,7 +410,9 @@ else:
                     "REGISTRO_ADICIONAL": "Obs.",
                     "VALOR_JUROS": st.column_config.NumberColumn("Juros (R$)", format="%.2f"),
                     "VALOR_FRETE": st.column_config.NumberColumn("Frete (R$)", format="%.2f", disabled=True),
-                    "DOC NF": st.column_config.LinkColumn("DOC NF", display_text="📥")
+                    "DOC NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
+                    "RECEBEDOR": "Recebedor",
+                    "VOLUME": "Volume"
                 }
             )
 
