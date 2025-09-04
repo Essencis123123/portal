@@ -36,35 +36,21 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
+
+    /* CORREÇÃO DEFINITIVA: Estilo para o texto dentro dos campos de filtro ser preto */
+    [data-testid="stSidebar"] .stSelectbox > div > div > div > span,
+    [data-testid="stSidebar"] .stMultiselect > div > div > div > span,
+    [data-testid="stSidebar"] .stDateInput > div > div > input {
+        color: black !important;
+    }
     
-    /* CORREÇÃO: Estilo para o texto do selectbox no sidebar ser visível */
-    [data-testid="stSidebar"] .stSelectbox label p,
-    [data-testid="stSidebar"] .stMultiSelect label p,
-    [data-testid="stSidebar"] .stDateInput label p,
-    [data-testid="stSidebar"] .stRadio label p {
-        color: white !important;
-    }
-
-    /* CORREÇÃO: Texto dentro dos inputs (placeholders e valores selecionados) */
-    [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div,
-    [data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"] > div,
-    [data-testid="stSidebar"] .stDateInput input,
-    [data-testid="stSidebar"] .stTextInput input {
+    /* Outra regra para garantir que o texto de opções no dropdown seja preto */
+    [data-testid="stSidebar"] div[role="listbox"] .st-b5,
+    [data-testid="stSidebar"] div[role="listbox"] .st-b6,
+    [data-testid="stSidebar"] div[role="listbox"] span {
         color: black !important;
-        background-color: white !important;
     }
-
-    /* CORREÇÃO: Opções do dropdown com fundo branco e texto preto */
-    [data-testid="stSidebar"] div[role="listbox"] * {
-        color: black !important;
-        background-color: white !important;
-    }
-
-    /* CORREÇÃO: Placeholder dos inputs */
-    [data-testid="stSidebar"] input::placeholder {
-        color: #666 !important;
-    }
-
+    
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
@@ -168,7 +154,7 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Carregamento de Dados ---
-@st.cache_data
+# CACHE REMOVIDO PARA FORÇAR ATUALIZAÇÃO CONSTANTE
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
