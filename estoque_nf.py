@@ -14,6 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import gspread
 from google.oauth2.service_account import Credentials
+import json
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
@@ -134,13 +135,27 @@ def load_logo(url):
     except:
         return None
 
-# Funções de carregamento e salvamento de dados para Google Sheets
+# --- Funções de conexão e carregamento de dados para Google Sheets ---
+@st.cache_resource(show_spinner=False)
+def get_gspread_client():
+    """Conecta com o Google Sheets usando os secrets do Streamlit."""
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credentials_info = st.secrets["gcp_service_account"]
+    
+    if isinstance(credentials_info, str):
+        try:
+            credentials_info = json.loads(credentials_info)
+        except json.JSONDecodeError as e:
+            st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
+            return None
+    
+    creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    client = gspread.authorize(creds)
+    return client
+
 def carregar_dados_almoxarifado():
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(2)
         
@@ -178,10 +193,7 @@ def carregar_dados_almoxarifado():
 
 def salvar_dados_almoxarifado(df):
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(2)
 
@@ -198,14 +210,10 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
         return False
 
-# Removido o cache para garantir que os dados de pedidos sejam sempre os mais recentes
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
         data = worksheet.get_all_records()
@@ -221,10 +229,7 @@ def carregar_dados_pedidos():
 def salvar_dados_pedidos(df):
     """Salva os dados de pedidos no Google Sheets."""
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
 
@@ -243,10 +248,7 @@ def salvar_dados_pedidos(df):
 
 def carregar_dados_solicitantes():
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(1)
         data = worksheet.get_all_records()
@@ -290,7 +292,6 @@ else:
     logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
     logo_img = load_logo(logo_url)
     
-    # O carregamento de dados é feito na inicialização do script para evitar cache inconsistente
     df_pedidos = carregar_dados_pedidos()
     df_almoxarifado = carregar_dados_almoxarifado()
 
@@ -299,7 +300,6 @@ else:
     if 'df_almoxarifado' not in st.session_state:
         st.session_state.df_almoxarifado = df_almoxarifado
     
-    # Carrega dados dos solicitantes de forma separada
     df_solicitantes = carregar_dados_solicitantes()
 
     if logo_img:
@@ -380,20 +380,16 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            # Adicionado a busca para garantir que a OC exista na planilha de pedidos
                             if 'ORDEM_COMPRA' in st.session_state.df_pedidos.columns:
-                                # Encontra as linhas na planilha de pedidos com a OC informada
                                 pedidos_relacionados = st.session_state.df_pedidos[
                                     st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
                                 ]
                                 
                                 if not pedidos_relacionados.empty:
-                                    # Atualiza o status e a data de entrega para todos os pedidos com essa OC
                                     indices_a_atualizar = pedidos_relacionados.index
                                     st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
                                     st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
 
-                                    # Salva as alterações na planilha de pedidos
                                     salvar_dados_pedidos(st.session_state.df_pedidos)
                                 else:
                                     st.warning(f"ℹ️ A Ordem de Compra '{ordem_compra_nf}' não foi encontrada na planilha de pedidos. O status não foi atualizado.")
