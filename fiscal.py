@@ -164,56 +164,100 @@ def carregar_dados():
                 "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
             ])
         
+        # DEBUG: Mostrar colunas originais para diagnóstico
+        st.write("🔍 Colunas originais na planilha:", df.columns.tolist())
+        
         # Padroniza todos os nomes das colunas para letras maiúsculas e sem espaços
         df.columns = df.columns.str.strip().str.replace(' ', '_').str.upper()
+        
+        # DEBUG: Mostrar colunas após padronização
+        st.write("🔍 Colunas após padronização:", df.columns.tolist())
 
-        # Renomeia colunas da planilha para nomes internos consistentes
-        df = df.rename(columns={
+        # MAPEAMENTO CORRETO baseado nos nomes REAIS das colunas
+        mapeamento_colunas = {
             'STATUS_FINANCEIRO': 'STATUS', 
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
-            'V._TOTAL_NF': 'V_TOTAL_NF'
-        })
+            'V._TOTAL_NF': 'V_TOTAL_NF',  # Isso vai capturar "V. TOTAL NF" -> "V_TOTAL_NF"
+            'DOC_NF': 'DOC_NF',
+            'VALOR_FRETE': 'VALOR_FRETE',
+            'CONDICAO_FRETE': 'CONDICAO_FRETE',
+            'VOLUME': 'VOLUME',
+            'VENCIMENTO': 'VENCIMENTO'
+        }
         
+        # Aplicar renomeação apenas para colunas que existem
+        renomear = {k: v for k, v in mapeamento_colunas.items() if k in df.columns}
+        df = df.rename(columns=renomear)
+        
+        # DEBUG: Mostrar colunas após renomeação
+        st.write("🔍 Colunas após renomeação:", df.columns.tolist())
+
         # Limpa e converte tipos de dados
         df = df.dropna(how='all')
         df = df.astype(str).apply(lambda x: x.str.strip()).replace('nan', '', regex=True)
 
-        # Garante que a coluna 'DATA' exista antes de tentar convertê-la
+        # Verificar se a coluna 'DATA' existe
         if 'DATA' not in df.columns:
-            st.error("Coluna 'DATA' não encontrada na planilha.")
+            st.error(f"Coluna 'DATA' não encontrada. Colunas disponíveis: {df.columns.tolist()}")
             return pd.DataFrame()
 
-        # Conversão de data mais robusta com dayfirst=True
-        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        # Conversão de data (formato brasileiro DD/MM/YYYY)
+        try:
+            df['DATA'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce')
+            # Se ainda tiver problemas, tentar método mais flexível
+            if df['DATA'].isna().sum() > 0:
+                df['DATA'] = pd.to_datetime(df['DATA'], dayfirst=True, errors='coerce')
+        except Exception as e:
+            st.error(f"Erro na conversão de data: {e}")
+            return pd.DataFrame()
         
-        # Garante que as colunas essenciais existam
-        colunas_necessarias = {
-            "STATUS": "EM ANDAMENTO", "CONDICAO_PROBLEMA": "N/A",
-            "REGISTRO_ADICIONAL": "", "VALOR_JUROS": 0.0,
-            "VALOR_FRETE": 0.0, "DOC_NF": "",
-            "V_TOTAL_NF": 0.0, "NF": "", "RECEBEDOR": ""
+        # Garante que as colunas essenciais existam com valores padrão
+        colunas_padrao = {
+            "STATUS": "EM ANDAMENTO", 
+            "CONDICAO_PROBLEMA": "N/A",
+            "REGISTRO_ADICIONAL": "", 
+            "VALOR_JUROS": 0.0,  # Esta coluna pode não existir na planilha original
+            "VALOR_FRETE": 0.0, 
+            "DOC_NF": "",
+            "V_TOTAL_NF": 0.0, 
+            "NF": "", 
+            "RECEBEDOR": "",
+            "FORNECEDOR": "",
+            "ORDEM_COMPRA": ""
         }
-        for col, default_val in colunas_necessarias.items():
+        
+        for col, default_val in colunas_padrao.items():
             if col not in df.columns:
                 df[col] = default_val
+                if col == "VALOR_JUROS":  # Coluna específica para juros
+                    st.info(f"Coluna '{col}' adicionada para cálculo de juros")
 
-        # Seleciona e reordena apenas as colunas que o painel fiscal irá usar
-        colunas_finais = list(colunas_necessarias.keys())
+        # Converte colunas numéricas
+        for col_num in ['V_TOTAL_NF', 'VALOR_JUROS', 'VALOR_FRETE']:
+            if col_num in df.columns:
+                df[col_num] = pd.to_numeric(df[col_num], errors='coerce').fillna(0)
+        
+        # Seleciona apenas as colunas que serão usadas no painel fiscal
+        colunas_finais = [
+            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF",
+            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", 
+            "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+        ]
+        
+        # Garante que todas as colunas finais existam
+        for col in colunas_finais:
+            if col not in df.columns:
+                df[col] = "" if col != "VALOR_JUROS" else 0.0
+        
         df = df[colunas_finais]
         
-        # Converte colunas numéricas
-        df['V_TOTAL_NF'] = pd.to_numeric(df['V_TOTAL_NF'], errors='coerce').fillna(0)
-        df['VALOR_JUROS'] = pd.to_numeric(df['VALOR_JUROS'], errors='coerce').fillna(0)
-        df['VALOR_FRETE'] = pd.to_numeric(df['VALOR_FRETE'], errors='coerce').fillna(0)
-        
-        # Certifica-se de que a coluna DATA é do tipo datetime antes de usá-la
-        if not pd.api.types.is_datetime64_any_dtype(df['DATA']):
-            st.error("Erro na conversão da coluna 'DATA' para o tipo de data. Verifique o formato na planilha.")
-            return pd.DataFrame()
-        
+        st.success("✅ Dados carregados com sucesso!")
         return df
+        
     except Exception as e:
-        st.error(f"Erro ao carregar dados da planilha. Verifique o nome/URL da planilha, o nome da aba e se as credenciais estão corretas. Erro: {e}")
+        st.error(f"Erro ao carregar dados da planilha: {e}")
+        import traceback
+        st.error(f"Detalhes do erro: {traceback.format_exc()}")
         return pd.DataFrame()
 
 def salvar_dados(df):
