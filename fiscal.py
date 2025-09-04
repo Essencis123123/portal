@@ -12,6 +12,8 @@ from io import BytesIO
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import gspread
+from google.oauth2.service_account import Credentials
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
@@ -136,62 +138,79 @@ def load_logo(url):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
+# --- Funções de Carregamento e Salvamento de Dados (Google Sheets) ---
 def carregar_dados():
     """
-    Carrega os dados do arquivo CSV, lidando com o caso de arquivo vazio.
-    NOTA: O decorador @st.cache_data foi removido para garantir que os dados
-    sejam sempre lidos novamente quando a página é recarregada.
+    Carrega os dados da planilha de almoxarifado do Google Sheets.
     """
-    arquivo_csv = "dados_pedidos.csv"
-    
-    if os.path.exists(arquivo_csv):
-        try:
-            df = pd.read_csv(arquivo_csv)
-            # Converter colunas de data
-            df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
-            if 'VENCIMENTO' in df.columns:
-                df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
-            else:
-                df['VENCIMENTO'] = pd.NaT
-            
-            # Garantir que colunas importantes existam
-            colunas_necessarias = {
-                "STATUS": "EM ANDAMENTO",
-                "CONDICAO_PROBLEMA": "N/A",
-                "REGISTRO_ADICIONAL": "",
-                "VALOR_JUROS": 0.0,
-                "DIAS_ATRASO": 0,
-                "VALOR_FRETE": 0.0,
-                "DOC NF": ""
-            }
-            
-            for col, default_val in colunas_necessarias.items():
-                if col not in df.columns:
-                    df[col] = default_val
-            
-            return df
-        except pd.errors.EmptyDataError:
-            # Se o arquivo existe mas está vazio, retorna um DataFrame vazio
-            st.warning("O arquivo de dados existe, mas está vazio. Adicione dados pelo Painel do Almoxarifado.")
-            return pd.DataFrame(columns=list(colunas_necessarias.keys()))
-        except Exception as e:
-            st.error(f"Erro ao carregar arquivo: {e}")
-            return pd.DataFrame(columns=list(colunas_necessarias.keys()))
-    else:
-        return pd.DataFrame(columns=list(colunas_necessarias.keys()))
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(2)  # Aba do almoxarifado
+
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+
+        # Trata as colunas
+        for col in ['DATA', 'VENCIMENTO']:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+        
+        for col in ['V. TOTAL NF', 'VALOR FRETE']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # Garante que as colunas essenciais para o financeiro existam
+        colunas_necessarias = {
+            "STATUS_FINANCEIRO": "EM ANDAMENTO",
+            "CONDICAO_PROBLEMA": "N/A",
+            "REGISTRO_ADICIONAL": "",
+            "VALOR_JUROS": 0.0,
+            "DIAS_ATRASO": 0,
+            "DOC NF": ""
+        }
+        
+        for col, default_val in colunas_necessarias.items():
+            if col not in df.columns:
+                df[col] = default_val
+        
+        # Renomeia a coluna 'STATUS_FINANCEIRO' para 'STATUS' para compatibilidade com o código original
+        df.rename(columns={'STATUS_FINANCEIRO': 'STATUS'}, inplace=True)
+        
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        return pd.DataFrame(columns=list(colunas_necessarias.keys()) + ['NF', 'FORNECEDOR', 'V. TOTAL NF', 'VENCIMENTO'])
 
 def salvar_dados(df):
-    """Salva o DataFrame no arquivo CSV"""
+    """
+    Salva o DataFrame na planilha de almoxarifado do Google Sheets.
+    """
     try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(2)
+
+        # Renomeia a coluna 'STATUS' de volta para 'STATUS_FINANCEIRO' antes de salvar
         df_to_save = df.copy()
-        df_to_save['DATA'] = df_to_save['DATA'].dt.strftime('%d/%m/%Y')
-        if 'VENCIMENTO' in df_to_save.columns:
-            df_to_save['VENCIMENTO'] = df_to_save['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-            
-        df_to_save.to_csv("dados_pedidos.csv", index=False, encoding='utf-8')
+        df_to_save.rename(columns={'STATUS': 'STATUS_FINANCEIRO'}, inplace=True)
+
+        for col in ['DATA', 'VENCIMENTO']:
+            if col in df_to_save.columns:
+                df_to_save[col] = df_to_save[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        
+        data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         return True
     except Exception as e:
-        st.error(f"Erro ao salvar dados: {e}")
+        st.error(f"Erro ao salvar dados no Google Sheets: {e}")
         return False
 
 # --- Lógica de Login (UNIFICADA) ---
@@ -209,7 +228,7 @@ def fazer_login(email, senha):
         st.session_state['logado'] = True
         st.session_state['nome_colaborador'] = USERS[email]["name"]
         st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
-        time.sleep(1) # Dá tempo para o usuário ver a mensagem antes de recarregar
+        time.sleep(1)
         st.rerun()
     else:
         st.error("E-mail ou senha incorretos.")
@@ -224,14 +243,16 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    st.session_state.df = carregar_dados()
+    # Carregamento de dados para o estado da sessão
+    if 'df' not in st.session_state:
+        st.session_state.df = carregar_dados()
 
+    df = st.session_state.df
+    
     if 'ultimo_salvamento' not in st.session_state:
         st.session_state.ultimo_salvamento = None
     if 'alteracoes_pendentes' not in st.session_state:
         st.session_state.alteracoes_pendentes = False
-    
-    df = st.session_state.df
 
     with st.sidebar:
         if logo_img:
@@ -366,10 +387,11 @@ else:
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO"]
             
             df_display = df.copy()
-
+            df_display['VENCIMENTO'] = df_display['VENCIMENTO'].apply(formatar_vencimento)
+            
             edited_df = st.data_editor(
                 df_display[[
-                    "DATA", "FORNECEDOR", "NF", "PEDIDO", "V. TOTAL NF", "VENCIMENTO",
+                    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V. TOTAL NF", "VENCIMENTO",
                     "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC NF"
                 ]],
                 use_container_width=True,
@@ -377,7 +399,7 @@ else:
                     "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY", disabled=True),
                     "FORNECEDOR": "Fornecedor",
                     "NF": "N° NF",
-                    "PEDIDO": "N° Pedido",
+                    "ORDEM_COMPRA": "N° Ordem de Compra",
                     "V. TOTAL NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
                     "STATUS": st.column_config.SelectboxColumn("Status", options=status_options),
@@ -389,10 +411,26 @@ else:
                 }
             )
 
-            if not edited_df.equals(df_display):
-                st.session_state.df.update(edited_df)
+            # Lógica para salvar as edições
+            if not edited_df.equals(df_display.drop(columns=['ORDEM_COMPRA'])):
                 st.session_state.alteracoes_pendentes = True
-                if salvar_dados(st.session_state.df):
+                
+                # Prepara o DataFrame de sessão para a atualização
+                df_to_update = st.session_state.df.copy()
+
+                # Percorre as linhas do DataFrame editado
+                for index, row in edited_df.iterrows():
+                    # Converte de volta o status de exibição para o valor original
+                    status_original = row['STATUS'].replace('🟢 ENTREGUE', 'FINALIZADO').replace('🟡 PENDENTE', 'EM ANDAMENTO').replace('🔴 PENDENTE', 'EM ANDAMENTO')
+                    df_to_update.loc[index, 'STATUS'] = status_original
+                    
+                    # Atualiza as outras colunas
+                    for col in ['FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'V. TOTAL NF', 'CONDICAO_PROBLEMA', 'REGISTRO_ADICIONAL', 'VALOR_JUROS', 'VALOR_FRETE', 'DOC NF']:
+                         if col in df_to_update.columns and col in row:
+                             df_to_update.loc[index, col] = row[col]
+
+                # Salva o DataFrame atualizado
+                if salvar_dados(df_to_update):
                     st.session_state.ultimo_salvamento = datetime.datetime.now()
                     st.session_state.alteracoes_pendentes = False
                     st.success("Alterações salvas com sucesso!")
@@ -401,7 +439,7 @@ else:
 
         else:
             st.info("📝 Nenhuma nota fiscal registrada no sistema. As notas cadastradas no Painel do Almoxarifado aparecerão aqui.")
-        
+    
     elif menu == "💰 Gestão de Juros":
         st.header("💰 Gestão de Juros e Multas")
         
@@ -420,7 +458,7 @@ else:
                             dias_atraso = st.number_input(
                                 "Dias em Atraso",
                                 min_value=0,
-                                value=int(row['DIAS_ATRASO']),
+                                value=int(row['DIAS_ATRASO']) if pd.notna(row['DIAS_ATRASO']) else 0,
                                 key=f"dias_{idx}"
                             )
                         
@@ -596,10 +634,6 @@ else:
     elif menu == "⚙️ Configurações":
         st.header("⚙️ Configurações do Sistema")
         
-        st.subheader("Parâmetros de Juros")
-        taxa_padrao = st.number_input("Taxa de Juros Padrão (% ao dia)", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
-        dias_carencia = st.number_input("Dias de Carência para Juros", min_value=0, value=5)
-        
         st.subheader("Manutenção de Dados")
         if st.button("🔄 Forçar Recarregamento de Dados"):
             st.cache_data.clear()
@@ -608,24 +642,28 @@ else:
             st.rerun()
 
         st.subheader("Exportação de Dados")
-        csv = df.to_csv(index=False, encoding='utf-8')
-        st.download_button(
-            label="⬇️ Download CSV",
-            data=csv,
-            file_name="dados_financeiros_completos.csv",
-            mime="text/csv"
-        )
-        
+        if not df.empty:
+            csv = df.to_csv(index=False, encoding='utf-8')
+            st.download_button(
+                label="⬇️ Download CSV",
+                data=csv,
+                file_name="dados_financeiros_completos.csv",
+                mime="text/csv"
+            )
+        else:
+            st.info("Não há dados para exportar.")
+            
         st.subheader("Limpeza de Dados")
-        if st.button("🧹 Limpar Dados de Teste"):
-            st.warning("Esta ação não pode ser desfeita!")
-            if st.button("Confirmar Limpeza"):
-                df_limpo = df[df['V. TOTAL NF'] > 0]
-                st.session_state.df = df_limpo
-                salvar_dados(df_limpo)
-                st.success("Dados limpos com sucesso!")
+        st.warning("Aviso: Esta ação não pode ser desfeita e irá limpar o histórico de notas fiscais.")
+        if st.button("🧹 Limpar Dados do Almoxarifado"):
+            df_vazio = pd.DataFrame(columns=df.columns)
+            if salvar_dados(df_vazio):
+                st.session_state.df = df_vazio
+                st.success("Dados do almoxarifado limpos com sucesso!")
                 st.rerun()
-        
+            else:
+                st.error("Erro ao tentar limpar os dados.")
+            
         st.subheader("Log de Atividades")
         if 'log_messages' in st.session_state:
             log_text = "\n".join(st.session_state['log_messages'])
