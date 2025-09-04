@@ -14,7 +14,7 @@ from gspread_dataframe import get_as_dataframe, set_with_dataframe
 import json # Importa a biblioteca JSON para lidar com as credenciais
 
 # Configuração da página com layout wide
-st.set_page_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
+st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
