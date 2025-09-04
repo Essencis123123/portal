@@ -227,7 +227,7 @@ with st.sidebar:
             filtro_ano_pedidos = st.selectbox("Selecione o Ano:", ['Todos'] + anos_disponiveis)
         else:
             st.info("Nenhum dado com data disponível para filtrar.")
-        
+
         # Filtros de solicitante, departamento e status
         if solicitantes_disponiveis:
             filtro_solicitante = st.selectbox(
