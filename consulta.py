@@ -217,30 +217,32 @@ with st.sidebar:
         st.info("Nenhum dado com data disponível para filtrar.")
 
     st.subheader("Filtros de Dados")
-    filtro_solicitante = 'Todos'
+    
+    filtro_solicitante = ['Todos']
     if 'SOLICITANTE' in df_pedidos.columns and not df_pedidos.empty:
         solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
-        filtro_solicitante = st.selectbox(
+        filtro_solicitante = st.multiselect(
             "Filtrar por Solicitante:",
-            options=['Todos'] + solicitantes_disponiveis
+            options=['Todos'] + solicitantes_disponiveis,
+            default=['Todos']
         )
     
-    filtro_departamento = 'Todos'
+    filtro_departamento = ['Todos']
     if 'DEPARTAMENTO' in df_pedidos.columns and not df_pedidos.empty:
         departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
-        filtro_departamento = st.selectbox(
+        filtro_departamento = st.multiselect(
             "Filtrar por Departamento:",
-            options=['Todos'] + departamentos_disponiveis
+            options=['Todos'] + departamentos_disponiveis,
+            default=['Todos']
         )
 
-    # --- CORREÇÃO AQUI: De multiselect para selectbox ---
-    filtro_status = 'Todos'
+    filtro_status = ['Todos']
     if 'STATUS_PEDIDO' in df_pedidos.columns and not df_pedidos.empty:
         status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
-        filtro_status = st.selectbox(
+        filtro_status = st.multiselect(
             "Filtrar por Status:",
             options=['Todos'] + sorted(status_disponiveis),
-            index=0
+            default=['Todos']
         )
 
 
@@ -264,15 +266,14 @@ df_filtrado = df_pedidos.copy()
 if data_minima and data_maxima and 'DATA' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['DATA'].dt.date.between(data_minima, data_maxima)]
 
-if filtro_solicitante != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
+if 'Todos' not in filtro_solicitante:
+    df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'].isin(filtro_solicitante)]
 
-if filtro_departamento != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['DEPARTAMENTO'] == filtro_departamento]
+if 'Todos' not in filtro_departamento:
+    df_filtrado = df_filtrado[df_filtrado['DEPARTAMENTO'].isin(filtro_departamento)]
 
-# --- CORREÇÃO AQUI: Aplicação do filtro de status como selectbox ---
-if filtro_status != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'] == filtro_status]
+if 'Todos' not in filtro_status:
+    df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'].isin(filtro_status)]
 
 if df_filtrado.empty:
     st.warning("Nenhum pedido encontrado com os filtros aplicados.")
