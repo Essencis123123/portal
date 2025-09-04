@@ -570,12 +570,8 @@ else:
             else:
                 return status
         
-        df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
-        
-        # --- CORREÇÃO AQUI ---
-        # A coluna 'Anexo NF' agora contém os links.
-        # Criamos uma nova coluna para o texto de exibição, com o ícone ou 'N/A'.
-        # O LinkColumn será configurado para exibir essa nova coluna.
+        # CORREÇÃO APLICADA AQUI - USANDO 'Anexo NF' PARA O LINK E 'Anexo Display' PARA O ÍCONE
+        df_display['Anexo NF'] = df_display['DOC NF']
         df_display['Anexo Display'] = df_display['DOC NF'].apply(lambda x: "📥" if pd.notna(x) and x != "" else "N/A")
 
         edited_history_df = st.data_editor(
