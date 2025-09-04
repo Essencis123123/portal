@@ -76,7 +76,6 @@ st.markdown(
         background-color: #f0f2f5; color: #1C4D86; padding: 5px; border-radius: 8px;
         box-shadow: 0 1px 4px rgba(0,0,0,0.1);
         text-align: center;
-        font-size: 0.7rem; 
     }
     [data-testid="stMetric"] .stMetricValue {
         font-size: 0.9rem;
@@ -577,7 +576,7 @@ else:
                         title='Evolução Mensal dos Gastos com Frete',
                         labels={'VALOR_FRETE': 'Valor do Frete (R$)', 'MES_ANO': 'Mês'}
                     )
-                    st.plotly_chart(fig_frete_evolucao, use_container_width=True)
+                    st.plotly_chart(fig_frete_evolucão, use_container_width=True)
 
             st.subheader("💸 Análise de Custos")
             custos_totais = pd.DataFrame({
