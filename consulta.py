@@ -233,13 +233,14 @@ with st.sidebar:
             options=['Todos'] + departamentos_disponiveis
         )
 
-    filtro_status = []
+    # --- CORREÇÃO AQUI: De multiselect para selectbox ---
+    filtro_status = 'Todos'
     if 'STATUS_PEDIDO' in df_pedidos.columns and not df_pedidos.empty:
         status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
-        filtro_status = st.multiselect(
+        filtro_status = st.selectbox(
             "Filtrar por Status:",
             options=['Todos'] + sorted(status_disponiveis),
-            default=['Todos']
+            index=0
         )
 
 
@@ -269,8 +270,9 @@ if filtro_solicitante != 'Todos':
 if filtro_departamento != 'Todos':
     df_filtrado = df_filtrado[df_filtrado['DEPARTAMENTO'] == filtro_departamento]
 
-if filtro_status and 'Todos' not in filtro_status:
-    df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'].isin(filtro_status)]
+# --- CORREÇÃO AQUI: Aplicação do filtro de status como selectbox ---
+if filtro_status != 'Todos':
+    df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'] == filtro_status]
 
 if df_filtrado.empty:
     st.warning("Nenhum pedido encontrado com os filtros aplicados.")
