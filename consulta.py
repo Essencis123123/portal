@@ -244,11 +244,12 @@ with st.sidebar:
             )
 
         if status_disponiveis:
-            # Opção de filtro alterada: agora 'Todos' é o padrão
+            default_status_options = ['PENDENTE', 'ENTREGUE']
+            # Padrão alterado para 'Todos'
             filtro_status = st.multiselect(
                 "Filtrar por Status:",
                 options=['Todos'] + sorted(status_disponiveis),
-                default=['Todos']  # Padrão alterado para 'Todos'
+                default=['Todos']
             )
     
     elif menu_option == "📊 Dashboard de Custos":
