@@ -204,14 +204,16 @@ with st.sidebar:
     
     meses_disponiveis = []
     anos_disponiveis = []
-
+    meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+                     7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+    solicitantes_disponiveis = []
+    departamentos_disponiveis = []
+    status_disponiveis = []
+    
     # Cria as listas de opções de filtro se houver dados
     if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
         meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
         anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
-        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-        
         solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
         departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
         status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
@@ -225,23 +227,23 @@ with st.sidebar:
             filtro_ano_pedidos = st.selectbox("Selecione o Ano:", ['Todos'] + anos_disponiveis)
         else:
             st.info("Nenhum dado com data disponível para filtrar.")
-
+        
         # Filtros de solicitante, departamento e status
-        if 'SOLICITANTE' in df_pedidos.columns:
+        if solicitantes_disponiveis:
             filtro_solicitante = st.selectbox(
                 "Filtrar por Solicitante:",
                 options=['Todos'] + solicitantes_disponiveis,
                 index=0
             )
         
-        if 'DEPARTAMENTO' in df_pedidos.columns:
+        if departamentos_disponiveis:
             filtro_departamento = st.selectbox(
                 "Filtrar por Departamento:",
                 options=['Todos'] + departamentos_disponiveis,
                 index=0
             )
 
-        if 'STATUS_PEDIDO' in df_pedidos.columns:
+        if status_disponiveis:
             default_status_options = ['PENDENTE', 'ENTREGUE']
             filtered_defaults = [status for status in default_status_options if status in status_disponiveis]
             filtro_status = st.multiselect(
@@ -383,6 +385,12 @@ if menu_option == "📋 Acompanhar Pedidos":
                f"Total de pedidos: {len(df_pedidos)}")
 
 elif menu_option == "📊 Dashboard de Custos":
+    if meses_disponiveis:
+        filtro_mes_dash = st.selectbox("Selecione o Mês:", meses_disponiveis, format_func=lambda x: meses_nomes.get(x), index=len(meses_disponiveis)-1)
+        filtro_ano_dash = st.selectbox("Selecione o Ano:", anos_disponiveis)
+    else:
+        st.info("Nenhum dado com data disponível para filtrar.")
+
     if 'MES' in df_pedidos.columns and 'ANO' in df_pedidos.columns and not df_pedidos.empty:
         df_filtrado_dash = df_pedidos[
             (df_pedidos['MES'] == filtro_mes_dash) & 
