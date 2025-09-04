@@ -362,6 +362,19 @@ else:
 
         st.markdown("---")
         st.subheader("Itens da Requisição")
+        
+        # Usando st.data_editor para permitir a edição e exclusão de linhas
+        if not st.session_state.itens_requisicao_temp.empty:
+            st.session_state.itens_requisicao_temp = st.data_editor(
+                st.session_state.itens_requisicao_temp,
+                use_container_width=True,
+                num_rows='dynamic',
+                column_config={
+                    "MATERIAL": "Material",
+                    "QUANTIDADE": st.column_config.NumberColumn("Quantidade", min_value=1)
+                }
+            )
+
         col_item1, col_item2, col_item3 = st.columns([3, 1, 1])
         with col_item1:
             item_material = st.text_input("Material", key="material_input")
@@ -373,14 +386,14 @@ else:
                 if item_material and item_quantidade > 0:
                     novo_item = pd.DataFrame([{"MATERIAL": item_material, "QUANTIDADE": item_quantidade}])
                     st.session_state.itens_requisicao_temp = pd.concat([st.session_state.itens_requisicao_temp, novo_item], ignore_index=True)
-                    st.success("Item adicionado! Adicione mais ou finalize a requisição.")
+                    st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
+                    # Limpa os campos de entrada após adicionar o item
+                    st.experimental_rerun()
                 else:
                     st.error("Por favor, preencha o material e a quantidade.")
         
         st.write("---")
-        st.subheader("Itens Adicionados")
-        st.dataframe(st.session_state.itens_requisicao_temp, use_container_width=True)
-
+        
         if st.button("Finalizar e Registrar Requisição"):
             if requisicao and not st.session_state.itens_requisicao_temp.empty:
                 linhas_a_adicionar = []
@@ -472,7 +485,6 @@ else:
             edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
             edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
             
-            # Cálculo de DIAS_EMISSAO feito aqui, após a submissão do formulário
             edited_df['DIAS_EMISSAO'] = edited_df.apply(
                 lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
                 axis=1
@@ -609,18 +621,15 @@ else:
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
             
-            # Converte as colunas de data ANTES de fazer os cálculos
             edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
             edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
             edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
 
-            # Calcula DIAS_EMISSAO
             edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(
                 lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
                 axis=1
             )
             
-            # Calcula DIAS_ATRASO
             def calcular_dias_atraso(row):
                 if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['DATA_APROVACAO']):
                     data_limite = row['DATA_APROVACAO'] + pd.Timedelta(days=15)
@@ -630,7 +639,6 @@ else:
 
             edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
 
-            # Atualiza o DataFrame na session_state com os valores calculados
             # Mapeia as alterações de volta para o DataFrame principal
             for col in edited_history_df.columns:
                 if col in st.session_state.df_pedidos.columns and col not in ['Anexo']:
