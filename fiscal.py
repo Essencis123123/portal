@@ -170,7 +170,9 @@ def carregar_dados():
         # Renomeia colunas da planilha para nomes internos consistentes
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS', 
-            'OBSERVACAO': 'REGISTRO_ADICIONAL'
+            'OBSERVACAO': 'REGISTRO_ADICIONAL',
+            'V._TOTAL_NF': 'V_TOTAL_NF',
+            'DOC_NF': 'DOC_NF'
         })
         
         # Limpa e converte tipos de dados
@@ -429,7 +431,7 @@ else:
         st.header("💰 Gestão de Juros e Multas")
         
         if not df.empty:
-            nfs_com_problema = df[df['STATUS'].isin(['NF PROBLEMA', 'EM ANDAMENTO'])]
+            nfs_com_problema = df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]
             
             if not nfs_com_problema.empty:
                 st.subheader("Notas com Possibilidade de Juros")
