@@ -295,8 +295,11 @@ else:
         # Filtros de Período
         st.subheader("Filtros de Período")
         if 'DATA' in df.columns and not df['DATA'].isnull().all():
-            data_minima = st.date_input("De:", value=df['DATA'].min() or datetime.date.today())
-            data_maxima = st.date_input("Até:", value=df['DATA'].max() or datetime.date.today())
+            # CORREÇÃO: Pega a data mínima do DataFrame para evitar erros se o DataFrame estiver vazio.
+            min_date_value = df['DATA'].min() if not df['DATA'].isnull().all() else datetime.date.today()
+            max_date_value = df['DATA'].max() if not df['DATA'].isnull().all() else datetime.date.today()
+            data_minima = st.date_input("De:", value=min_date_value)
+            data_maxima = st.date_input("Até:", value=max_date_value)
         else:
             data_minima = None
             data_maxima = None
