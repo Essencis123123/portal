@@ -680,17 +680,6 @@ else:
         else:
             st.info("Não há dados para exportar.")
 
-        st.subheader("Limpeza de Dados")
-        st.warning("Aviso: Esta ação não pode ser desfeita e irá limpar o histórico de notas fiscais.")
-        if st.button("🧹 Limpar Dados do Almoxarifado"):
-            df_vazio = pd.DataFrame(columns=df.columns)
-            if salvar_dados(df_vazio):
-                st.session_state.df = df_vazio
-                st.success("Dados do almoxarifado limpos com sucesso!")
-                st.rerun()
-            else:
-                st.error("Erro ao tentar limpar os dados.")
-
         st.subheader("Log de Atividades")
         if 'log_messages' in st.session_state:
             log_text = "\n".join(st.session_state['log_messages'])
