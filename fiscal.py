@@ -276,7 +276,7 @@ else:
         if not df.empty:
             total_nfs = len(df)
             total_valor = df['V_TOTAL_NF'].sum()
-            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])]))
+            nfs_pendentes = len(df[df['STATUS'].isin(['EM ANDAMENTO', 'NF PROBLEMA'])])
             total_juros = df['VALOR_JUROS'].sum()
             total_frete = df['VALOR_FRETE'].sum()
 
