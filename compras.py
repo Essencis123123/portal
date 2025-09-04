@@ -277,7 +277,7 @@ def carregar_dados_almoxarifado():
 
         # Reordena e limpa as colunas para evitar KeyErrors
         ordem_colunas = ['ORDEM_COMPRA', 'DOC NF']
-        df = df.reindex(columns=ordem_colunas)
+        df = df.reindex(columns=ordem_colunas, fill_value="")
         
         return df
     except Exception as e:
@@ -565,21 +565,18 @@ else:
             st.warning("Nenhum registro encontrado com os filtros aplicados.")
             st.stop()
         
-        # Função para formatar o status com emojis
-        def formatar_status(status):
-            if status == 'ENTREGUE':
-                return '🟢 ENTREGUE'
-            elif status == 'PENDENTE':
-                return '⚪ PENDENTE'
-            else:
-                return '🟡 EM ANDAMENTO'
+        # Cria uma cópia para exibição com a coluna formatada
+        df_display = df_history.copy()
+        df_display['STATUS_DISPLAY'] = df_display['STATUS_PEDIDO'].map({
+            'ENTREGUE': '🟢 ENTREGUE',
+            'PENDENTE': '🟡 PENDENTE'
+        }).fillna(df_display['STATUS_PEDIDO'])
         
-        df_history['STATUS_PEDIDO'] = df_history['STATUS_PEDIDO'].apply(formatar_status)
-
         edited_history_df = st.data_editor(
-            df_history,
+            df_display,
             use_container_width=True,
             hide_index=False,
+            column_order=[col for col in df_display.columns if col != 'STATUS_PEDIDO'] + ['STATUS_PEDIDO'],
             column_config={
                 "DATA": st.column_config.DateColumn("Data Requisição"),
                 "SOLICITANTE": "Solicitante",
@@ -595,7 +592,8 @@ else:
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=["PENDENTE", "ENTREGUE", "EM ANDAMENTO"]),
+                "STATUS_DISPLAY": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE']),
+                "STATUS_PEDIDO": "Status (original)", # Coluna oculta para referência
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DIAS_EMISSAO": "Dias Emissão",
@@ -603,16 +601,20 @@ else:
             }
         )
 
-        if not edited_history_df.equals(df_history):
+        if not edited_history_df.equals(df_display):
             st.info("Salvando alterações...")
+
+            # Reverte os valores da coluna de exibição para os valores originais
+            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_DISPLAY'].map({
+                '🟢 ENTREGUE': 'ENTREGUE',
+                '🟡 PENDENTE': 'PENDENTE'
+            }).fillna(edited_history_df['STATUS_DISPLAY'])
             
+            # Remove a coluna de exibição para atualizar o DataFrame original
+            edited_history_df.drop(columns=['STATUS_DISPLAY'], inplace=True)
+
             for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
                 edited_history_df[col] = pd.to_datetime(edited_history_df[col], errors='coerce', dayfirst=True)
-            
-            # Remove a formatação de emoji para salvar os dados corretamente
-            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].str.replace('🟢 ENTREGUE', 'ENTREGUE')
-            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].str.replace('⚪ PENDENTE', 'PENDENTE')
-            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].str.replace('🟡 EM ANDAMENTO', 'EM ANDAMENTO')
 
             # Para que as edições não apaguem o link do DOC NF, precisamos separá-las
             df_history_merged = edited_history_df.drop(columns=['DOC NF'], errors='ignore')
