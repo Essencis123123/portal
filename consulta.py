@@ -183,6 +183,12 @@ def carregar_dados_pedidos():
         if 'PREVISAO_ENTREGA' not in df.columns:
             df['PREVISAO_ENTREGA'] = pd.NaT
 
+        # NOVO CÓDIGO AQUI:
+        # Define o status do pedido com base na data de entrega
+        df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
+            lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
+        )
+
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
