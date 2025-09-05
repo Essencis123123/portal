@@ -172,7 +172,7 @@ def carregar_dados_pedidos():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
@@ -183,6 +183,9 @@ def carregar_dados_pedidos():
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ""
         
+        if 'PREVISAO_ENTREGA' not in df.columns:
+            df['PREVISAO_ENTREGA'] = pd.NaT
+
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
@@ -194,7 +197,7 @@ def criar_dataframe_pedidos_vazio():
     return pd.DataFrame(columns=[
         "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO",
         "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-        "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
     ])
 
 def salvar_dados_pedidos(df):
@@ -205,7 +208,7 @@ def salvar_dados_pedidos(df):
         worksheet = spreadsheet.get_worksheet(0)
 
         df_to_save = df.copy()
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
@@ -408,7 +411,7 @@ else:
                         "TIPO_PEDIDO": tipo_pedido,
                         "REQUISICAO": requisicao,
                         "FORNECEDOR": "", "ORDEM_COMPRA": "", "VALOR_ITEM": 0.0, "VALOR_RENEGOCIADO": 0.0,
-                        "DATA_APROVACAO": pd.NaT, "CONDICAO_FRETE": "",
+                        "DATA_APROVACAO": pd.NaT, "PREVISAO_ENTREGA": pd.NaT, "CONDICAO_FRETE": "",
                         "STATUS_PEDIDO": "PENDENTE", "DATA_ENTREGA": pd.NaT,
                         "DIAS_ATRASO": 0, "DIAS_EMISSAO": 0, "DOC NF": ""
                     }
@@ -451,7 +454,7 @@ else:
         cols_para_editar = [
             "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "QUANTIDADE",
             "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-            "DATA_APROVACAO", "CONDICAO_FRETE"
+            "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
         ]
         
         df_editavel = pedidos_pendentes_oc[cols_para_editar].copy()
@@ -472,6 +475,7 @@ else:
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                     "VALOR_ITEM": st.column_config.NumberColumn("Valor do Item", format="%.2f"),
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
+                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
                 }
@@ -483,6 +487,7 @@ else:
             st.info("Detectando alterações...")
             
             edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
+            edited_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
             edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
             
             edited_df['DIAS_EMISSAO'] = edited_df.apply(
@@ -502,6 +507,7 @@ else:
                     st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_df.loc[index, 'VALOR_ITEM']
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
+                    st.session_state.df_pedidos.loc[original_index, 'PREVISAO_ENTREGA'] = edited_row['PREVISAO_ENTREGA']
                     st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
                     st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
                     st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = edited_row['DIAS_EMISSAO']
@@ -593,6 +599,7 @@ else:
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                 "VALOR_ITEM": st.column_config.NumberColumn("Valor do Item", format="%.2f"),
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
+                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
@@ -607,7 +614,7 @@ else:
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
                 "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-                "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
             ]
         )
 
@@ -623,6 +630,7 @@ else:
             
             edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
             edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
+            edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
             edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
 
             edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(
@@ -631,10 +639,9 @@ else:
             )
             
             def calcular_dias_atraso(row):
-                if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['DATA_APROVACAO']):
-                    data_limite = row['DATA_APROVACAO'] + pd.Timedelta(days=15)
-                    if row['DATA_ENTREGA'] > data_limite:
-                        return (row['DATA_ENTREGA'] - data_limite).days
+                if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
+                    if row['DATA_ENTREGA'] > row['PREVISAO_ENTREGA']:
+                        return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days
                 return 0
 
             edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
@@ -869,8 +876,8 @@ else:
         
         df_performance_local['ECONOMIA'] = df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']
         df_performance_local['PERC_ECONOMIA'] = np.where(df_performance_local['VALOR_ITEM'] > 0, 
-                                                        (df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']) / df_performance_local['VALOR_ITEM'] * 100, 
-                                                        0)
+                                                         (df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']) / df_performance_local['VALOR_ITEM'] * 100, 
+                                                         0)
 
         st.subheader("Visão Geral da Performance")
         col1, col2, col3 = st.columns(3)
