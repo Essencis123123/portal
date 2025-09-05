@@ -165,7 +165,8 @@ def carregar_dados_pedidos():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+        # Adiciona a nova coluna à lista de colunas de data
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
@@ -179,6 +180,8 @@ def carregar_dados_pedidos():
             df['ORDEM_COMPRA'] = ''
         if 'FORNECEDOR' not in df.columns:
             df['FORNECEDOR'] = ''
+        if 'PREVISAO_ENTREGA' not in df.columns:
+            df['PREVISAO_ENTREGA'] = pd.NaT
 
         return df
     except Exception as e:
@@ -186,7 +189,7 @@ def carregar_dados_pedidos():
         st.info("Verifique suas credenciais e a planilha.")
         return pd.DataFrame(columns=[
             "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "MATERIAL",
-            "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM", "FORNECEDOR"
+            "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM", "FORNECEDOR", "PREVISAO_ENTREGA"
         ])
 
 
@@ -215,7 +218,7 @@ with st.sidebar:
         meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
         anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
         meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                       7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+                        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
         filtro_mes_dash = st.multiselect(
             "Selecione os Meses:", 
@@ -357,16 +360,21 @@ if 'DATA_ENTREGA' in df_tabela.columns:
 else:
     df_tabela['DATA ENTREGA'] = 'N/A'
 
+if 'PREVISAO_ENTREGA' in df_tabela.columns:
+    df_tabela['PREVISÃO ENTREGA'] = df_tabela['PREVISAO_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+else:
+    df_tabela['PREVISÃO ENTREGA'] = 'N/A'
+
 st.dataframe(
     df_tabela[[
         'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL', 
-        'QUANTIDADE', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'DATA ENTREGA'
+        'QUANTIDADE', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ]],
     use_container_width=True,
     hide_index=True,
     column_order=[
         'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL', 
-        'QUANTIDADE', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'DATA ENTREGA'
+        'QUANTIDADE', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ],
     column_config={
         "DATA REQUISIÇÃO": st.column_config.DateColumn("Data Requisição"),
@@ -378,7 +386,8 @@ st.dataframe(
         "STATUS": "Status",
         "ORDEM_COMPRA": "N° Ordem de Compra",
         "FORNECEDOR": "Fornecedor",
-        "DATA ENTREGA": "Data Entrega"
+        "PREVISÃO ENTREGA": st.column_config.DateColumn("Previsão Entrega"),
+        "DATA ENTREGA": st.column_config.DateColumn("Data Entrega")
     }
 )
 
