@@ -8,7 +8,7 @@ import os
 from pandas.errors import EmptyDataError
 import plotly.express as px
 import re
-import openpyxl
+
 
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
