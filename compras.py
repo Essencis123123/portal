@@ -464,7 +464,10 @@ else:
             "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
         ]
         
+        # Converte as colunas de valor para string para evitar o erro de compatibilidade
         df_editavel = pedidos_pendentes_oc[cols_para_editar].copy()
+        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+            df_editavel[col_val] = df_editavel[col_val].astype(str)
         
         with st.form(key="form_atualizar_pedidos"):
             edited_df = st.data_editor(
