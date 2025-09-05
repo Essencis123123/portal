@@ -7,3 +7,4 @@ plotly
 requests
 Pillow
 openpyxl
+google-api-python-client
