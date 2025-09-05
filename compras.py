@@ -480,8 +480,8 @@ else:
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    "VALOR_ITEM": st.column_config.NumberColumn("Valor do Item", format="%.2f"),
-                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
+                    "VALOR_ITEM": st.column_config.TextColumn("Valor do Item"),  # Alterado para TextColumn
+                    "VALOR_RENEGOCIADO": st.column_config.TextColumn("Valor Renegociado"),  # Alterado para TextColumn
                     "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
@@ -493,6 +493,11 @@ else:
         if submitted:
             st.info("Detectando alterações...")
             
+            # Converte as colunas de valor de volta para numérico antes de salvar
+            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                edited_df[col_val] = edited_df[col_val].astype(str).str.replace(',', '.', regex=False)
+                edited_df[col_val] = pd.to_numeric(edited_df[col_val], errors='coerce').fillna(0)
+
             edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
             edited_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
             edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
@@ -604,8 +609,8 @@ else:
                 "REQUISICAO": "N° Requisição",
                 "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                "VALOR_ITEM": st.column_config.NumberColumn("Valor do Item", format="%.2f"),
-                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado", format="%.2f"),
+                "VALOR_ITEM": st.column_config.TextColumn("Valor do Item"),
+                "VALOR_RENEGOCIADO": st.column_config.TextColumn("Valor Renegociado"),
                 "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
@@ -634,6 +639,10 @@ else:
                 'EM ANDAMENTO': 'EM ANDAMENTO',
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
+
+            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                edited_history_df[col_val] = edited_history_df[col_val].astype(str).str.replace(',', '.', regex=False)
+                edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0)
             
             edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
             edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
