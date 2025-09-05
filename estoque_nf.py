@@ -14,6 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import gspread
 from google.oauth2.service_account import Credentials
+import json
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
@@ -213,10 +214,14 @@ def carregar_dados_pedidos():
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+        
+        if 'DOC NF' not in df.columns:
+            df['DOC NF'] = ''
+            
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de pedidos: {e}")
-        return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA"])
+        return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"])
 
 def salvar_dados_pedidos(df):
     """Salva os dados de pedidos no Google Sheets."""
@@ -229,7 +234,7 @@ def salvar_dados_pedidos(df):
         worksheet = spreadsheet.get_worksheet(0)
 
         df_copy = df.copy()
-        for col in ['DATA', 'DATA_APROVacao', 'DATA_ENTREGA']:
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         
@@ -382,10 +387,11 @@ else:
                                 ]
                                 
                                 if not pedidos_relacionados.empty:
-                                    # Atualiza o status e a data de entrega para todos os pedidos com essa OC
+                                    # Atualiza o status, a data de entrega e o doc da NF para todos os pedidos com essa OC
                                     indices_a_atualizar = pedidos_relacionados.index
                                     st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
                                     st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = doc_nf_link
 
                                     # Salva as alterações na planilha de pedidos
                                     salvar_dados_pedidos(st.session_state.df_pedidos)
@@ -415,12 +421,12 @@ else:
                                 st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
                             else:
                                 st.error("Erro ao salvar os dados da nota fiscal.")
-                        
+                    
                             st.balloons()
                             st.rerun()
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
-    
+        
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
         if not st.session_state.df_almoxarifado.empty:
@@ -548,8 +554,8 @@ else:
                     cores = {
                         "EM ANDAMENTO": "🟡",  # Amarelo
                         "NF PROBLEMA": "🔴",   # Vermelho  
-                        "CAPTURADO": "🟠",     # Laranja
-                        "FINALIZADO": "🟢"     # Verde
+                        "CAPTURADO": "🟠",      # Laranja
+                        "FINALIZADO": "🟢"      # Verde
                     }
                     return f"{cores.get(status, '⚪')} {status}"
                 
@@ -582,7 +588,8 @@ else:
                     label="📥 Download Resultados",
                     data=csv_consulta,
                     file_name="consulta_nfs.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    help="Clique para baixar os dados da tabela filtrada."
                 )
             else:
                 st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
