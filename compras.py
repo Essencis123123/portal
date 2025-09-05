@@ -464,8 +464,9 @@ else:
             "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
         ]
         
-        # Converte as colunas de valor para string para evitar o erro de compatibilidade
         df_editavel = pedidos_pendentes_oc[cols_para_editar].copy()
+
+        # Converte as colunas de valor para string para evitar o erro de compatibilidade
         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
             df_editavel[col_val] = df_editavel[col_val].astype(str)
         
@@ -582,6 +583,11 @@ else:
             st.stop()
         
         df_display = df_history.copy()
+
+        # Adiciona a conversão de valor para string para o data_editor
+        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+            if col_val in df_display.columns:
+                df_display[col_val] = df_display[col_val].astype(str).str.replace('.', ',', regex=False)
         
         def formatar_status_display(status):
             if status == 'ENTREGUE':
