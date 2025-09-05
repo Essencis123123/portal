@@ -217,7 +217,7 @@ def fazer_login(email, senha):
         st.error("Planilha de usuários não encontrada ou vazia.")
         return False
 
-# Lista de Departamentos
+# Lista de Departamentos (Número sempre antes do nome)
 DEPARTAMENTOS = [
     "1601 - Financeiro / Administrativo",
     "1201 - Administração da Manutenção",
@@ -345,14 +345,9 @@ else:
         with st.expander("➕ Adicionar Nova Solicitação", expanded=True):
             st.subheader("Dados do Colaborador")
             nome_colaborador = st.text_input("Seu Nome Completo*", value=st.session_state.get('nome_colaborador', ''), disabled=True, key="nome_form")
-            departamento = st.selectbox("Seu Departamento*", options=DEPARTAMENTOS, key="depto_form")
+            departamento = st.selectbox("Custo / Departamento*", options=DEPARTAMENTOS, key="depto_form")
             
             st.subheader("Detalhes dos Reembolsos")
-            
-            # Botão para adicionar mais reembolsos
-            if st.button("➕ Adicionar Outro Reembolso"):
-                st.session_state.reembolsos_a_enviar.append({})
-                st.rerun()
             
             reembolsos_validos = True
             
@@ -387,47 +382,54 @@ else:
                     "justificativa": justificativa,
                     "comprovantes": comprovantes
                 }
-            
-            if st.button("✅ Enviar Todas as Solicitações", key="enviar_todos"):
-                reembolsos_validos = True
-                
-                for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
-                    if not all([st.session_state.nome_form, st.session_state.depto_form, reembolso['tipo_despesa'], reembolso['valor_reembolso'], reembolso['justificativa'], reembolso['comprovantes']]):
-                        st.error(f"⚠️ Por favor, preencha todos os campos obrigatórios para o Reembolso #{i+1} e anexe os comprovantes.")
-                        reembolsos_validos = False
-                        break
-                    elif reembolso['valor_reembolso'] <= 0:
-                        st.error(f"⚠️ O valor do Reembolso #{i+1} deve ser maior que zero.")
-                        reembolsos_validos = False
-                        break
-                
-                if reembolsos_validos:
-                    novos_registros = []
-                    for reembolso in st.session_state.reembolsos_a_enviar:
-                        # Esta é a parte que você precisa adaptar para salvar links
-                        nomes_comprovantes = ", ".join([c.name for c in reembolso['comprovantes']])
-                        
-                        novo_registro = {
-                            "DATA": reembolso['data_despesa'].strftime("%d/%m/%Y"),
-                            "NOME": st.session_state.nome_form,
-                            "DEPARTAMENTO": st.session_state.depto_form,
-                            "TIPO_DESPESA": reembolso['tipo_despesa'],
-                            "VALOR": reembolso['valor_reembolso'],
-                            "JUSTIFICATIVA": reembolso['justificativa'],
-                            "STATUS": "PENDENTE",
-                            "ID_COMPROVANTE": nomes_comprovantes  # Alterar para salvar os links de download aqui
-                        }
-                        novos_registros.append(novo_registro)
-                    
-                    df_novos_registros = pd.DataFrame(novos_registros)
-                    st.session_state.df_reembolsos = pd.concat([st.session_state.df_reembolsos, df_novos_registros], ignore_index=True)
 
-                    if salvar_dados_reembolsos(st.session_state.df_reembolsos):
-                        st.success("🎉 Todas as solicitações de reembolso foram registradas com sucesso!")
-                        st.session_state.reembolsos_a_enviar = [{}] # Limpa o formulário após o sucesso
-                        st.rerun()
-                    else:
-                        st.error("❌ Erro ao salvar os dados. Tente novamente.")
+            col_add_send = st.columns(2)
+
+            with col_add_send[0]:
+                if st.button("➕ Adicionar Outro Reembolso", use_container_width=True):
+                    st.session_state.reembolsos_a_enviar.append({})
+                    st.rerun()
+            
+            with col_add_send[1]:
+                if st.button("✅ Enviar Todas as Solicitações", key="enviar_todos", use_container_width=True):
+                    reembolsos_validos = True
+                    
+                    for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
+                        if not all([st.session_state.nome_form, st.session_state.depto_form, reembolso['tipo_despesa'], reembolso['valor_reembolso'], reembolso['justificativa'], reembolso['comprovantes']]):
+                            st.error(f"⚠️ Por favor, preencha todos os campos obrigatórios para o Reembolso #{i+1} e anexe os comprovantes.")
+                            reembolsos_validos = False
+                            break
+                        elif reembolso['valor_reembolso'] <= 0:
+                            st.error(f"⚠️ O valor do Reembolso #{i+1} deve ser maior que zero.")
+                            reembolsos_validos = False
+                            break
+                    
+                    if reembolsos_validos:
+                        novos_registros = []
+                        for reembolso in st.session_state.reembolsos_a_enviar:
+                            nomes_comprovantes = ", ".join([c.name for c in reembolso['comprovantes']])
+                            
+                            novo_registro = {
+                                "DATA": reembolso['data_despesa'].strftime("%d/%m/%Y"),
+                                "NOME": st.session_state.nome_form,
+                                "DEPARTAMENTO": st.session_state.depto_form,
+                                "TIPO_DESPESA": reembolso['tipo_despesa'],
+                                "VALOR": reembolso['valor_reembolso'],
+                                "JUSTIFICATIVA": reembolso['justificativa'],
+                                "STATUS": "PENDENTE",
+                                "ID_COMPROVANTE": nomes_comprovantes
+                            }
+                            novos_registros.append(novo_registro)
+                        
+                        df_novos_registros = pd.DataFrame(novos_registros)
+                        st.session_state.df_reembolsos = pd.concat([st.session_state.df_reembolsos, df_novos_registros], ignore_index=True)
+
+                        if salvar_dados_reembolsos(st.session_state.df_reembolsos):
+                            st.success("🎉 Todas as solicitações de reembolso foram registradas com sucesso!")
+                            st.session_state.reembolsos_a_enviar = [{}] # Limpa o formulário após o sucesso
+                            st.rerun()
+                        else:
+                            st.error("❌ Erro ao salvar os dados. Tente novamente.")
         
         st.markdown("---")
         
