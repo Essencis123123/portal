@@ -4,7 +4,6 @@ import datetime
 import requests
 from PIL import Image
 from io import BytesIO
-import openpyxl
 import os
 from pandas.errors import EmptyDataError
 import plotly.express as px
