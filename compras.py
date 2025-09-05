@@ -531,6 +531,12 @@ else:
             df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
             df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
+        # Adiciona a nova coluna 'Previsão de Entrega'
+        df_history['PREVISAO_ENTREGA'] = df_history.apply(
+            lambda row: row['DATA_APROVACAO'] + pd.Timedelta(days=14) if pd.notna(row['DATA_APROVACAO']) else pd.NaT,
+            axis=1
+        )
+        
         if not df_history['DATA'].isnull().all():
             with col_filter_h1:
                 meses_disponiveis = df_history['DATA'].dt.month.unique()
@@ -572,7 +578,19 @@ else:
         
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
-        df_display['Anexo'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
+        # Lógica de formatação para 'Previsão de Entrega'
+        def format_date_with_color(row):
+            date_str = ""
+            if pd.notna(row['PREVISAO_ENTREGA']):
+                date_str = row['PREVISAO_ENTREGA'].strftime('%d/%m/%Y')
+            
+            if pd.notna(row['DATA_APROVACAO']) and pd.isna(row['DATA_ENTREGA']) and row['PREVISAO_ENTREGA'] < pd.Timestamp.now():
+                # Formatação em HTML/CSS para a cor vermelha
+                return f"<p style='color:red; font-weight:bold;'>{date_str} 🚨</p>"
+            else:
+                return date_str
+
+        df_display['PREVISAO_ENTREGA_FORMATADA'] = df_display.apply(format_date_with_color, axis=1)
 
         edited_history_df = st.data_editor(
             df_display,
@@ -602,12 +620,14 @@ else:
                     "Anexo NF",
                     help="Clique para visualizar o anexo",
                     display_text="📥 Anexo"
-                )
+                ),
+                "PREVISAO_ENTREGA_FORMATADA": st.column_config.Column("Previsão de Entrega", help="Data de Aprovação + 14 dias. Em vermelho, se estiver atrasado."),
+                "PREVISAO_ENTREGA": None, # Oculta a coluna original
             },
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
                 "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-                "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+                "PREVISAO_ENTREGA_FORMATADA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
             ]
         )
 
@@ -641,7 +661,7 @@ else:
 
             # Mapeia as alterações de volta para o DataFrame principal
             for col in edited_history_df.columns:
-                if col in st.session_state.df_pedidos.columns and col not in ['Anexo']:
+                if col in st.session_state.df_pedidos.columns and col not in ['Anexo', 'PREVISAO_ENTREGA_FORMATADA', 'PREVISAO_ENTREGA']:
                     st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
@@ -869,8 +889,8 @@ else:
         
         df_performance_local['ECONOMIA'] = df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']
         df_performance_local['PERC_ECONOMIA'] = np.where(df_performance_local['VALOR_ITEM'] > 0, 
-                                                        (df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']) / df_performance_local['VALOR_ITEM'] * 100, 
-                                                        0)
+                                                       (df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']) / df_performance_local['VALOR_ITEM'] * 100, 
+                                                       0)
 
         st.subheader("Visão Geral da Performance")
         col1, col2, col3 = st.columns(3)
