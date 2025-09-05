@@ -208,6 +208,13 @@ def salvar_dados_pedidos(df):
         worksheet = spreadsheet.get_worksheet(0)
 
         df_to_save = df.copy()
+        
+        # Converte as colunas de valor para tipo string e substitui vírgulas por pontos
+        # para garantir o formato numérico correto para o Google Sheets
+        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+            if col_val in df_to_save.columns:
+                df_to_save[col_val] = df_to_save[col_val].astype(str).str.replace(',', '.', regex=False)
+
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
