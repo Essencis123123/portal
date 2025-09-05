@@ -7,6 +7,14 @@ from io import BytesIO
 import os
 from pandas.errors import EmptyDataError
 import plotly.express as px
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+import base64
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import io
 import re
 
 # --- Configuração do Layout e Tema ---
@@ -129,43 +137,75 @@ def load_logo(url):
         st.error(f"Erro ao carregar a logo: {e}")
         return None
 
-# --- Configuração de Dados e Lógica de Backend (Local) ---
-ARQUIVO_USUARIOS = "usuarios.xlsx"
-ARQUIVO_REEMBOLSOS = "reembolsos.xlsx"
+# --- Configuração de Dados e Lógica de Backend (Google Sheets e Drive) ---
+SHEET_ID = st.secrets["sheet_id"]
+PASTA_DRIVE_ID = "1FyHsl2dR9kMiRvBhp0i_WV1fvYgEeNPY"
 
-def criar_planilha_se_nao_existir(caminho, colunas):
-    if not os.path.exists(caminho):
-        df = pd.DataFrame(columns=colunas)
-        df.to_excel(caminho, index=False)
+# Conexão com Google Sheets (gspread)
+@st.cache_resource(ttl=3600)
+def get_gspread_client():
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        st.secrets["gcp_service_account"],
+        ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    )
+    return gspread.authorize(creds)
+
+# Conexão com Google Drive e Gmail API
+@st.cache_resource(ttl=3600)
+def get_google_api_service():
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        st.secrets["gcp_service_account"],
+        ['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/gmail.send']
+    )
+    drive_service = build('drive', 'v3', credentials=creds)
+    gmail_service = build('gmail', 'v1', credentials=creds)
+    return drive_service, gmail_service
+
+gs_client = get_gspread_client()
+drive_service, gmail_service = get_google_api_service()
+
+
+def carregar_dados_usuarios():
+    try:
+        sheet = gs_client.open_by_key(SHEET_ID).worksheet("Usuarios")
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
+        return df
+    except gspread.exceptions.WorksheetNotFound:
+        st.error("A planilha 'Usuarios' não foi encontrada. Certifique-se de que ela existe na planilha 'despesas'.")
+        return pd.DataFrame(columns=['Nome', 'Matricula', 'Email', 'Senha'])
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de usuários: {e}")
+        return pd.DataFrame(columns=['Nome', 'Matricula', 'Email', 'Senha'])
 
 def carregar_dados_reembolsos():
-    criar_planilha_se_nao_existir(
-        ARQUIVO_REEMBOLSOS,
-        ['DATA', 'NOME', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS', 'ID_COMPROVANTE']
-    )
     try:
-        df = pd.read_excel(ARQUIVO_REEMBOLSOS)
+        sheet = gs_client.open_by_key(SHEET_ID).worksheet("Reembolsos")
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
         return df
-    except (FileNotFoundError, EmptyDataError):
+    except gspread.exceptions.WorksheetNotFound:
+        st.error("A planilha 'Reembolsos' não foi encontrada. Certifique-se de que ela existe na planilha 'despesas'.")
         return pd.DataFrame(columns=['DATA', 'NOME', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS', 'ID_COMPROVANTE'])
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de reembolsos: {e}")
+        return pd.DataFrame(columns=['DATA', 'NOME', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS', 'ID_COMPROVANTE'])
+
 
 def salvar_dados_reembolsos(df):
     try:
-        df.to_excel(ARQUIVO_REEMBOLSOS, index=False)
+        sheet = gs_client.open_by_key(SHEET_ID).worksheet("Reembolsos")
+        sheet.clear()
+        sheet.update([df.columns.values.tolist()] + df.values.tolist())
         return True
     except Exception as e:
-        st.error(f"Erro ao salvar dados localmente: {e}")
+        st.error(f"Erro ao salvar dados na planilha do Google: {e}")
         return False
 
-# --- Lógica de Login e Cadastro (Local) ---
+# --- Lógica de Login e Cadastro (Google Sheets) ---
 def cadastrar_usuario(nome, matricula, email, senha):
-    criar_planilha_se_nao_existir(
-        ARQUIVO_USUARIOS,
-        ['Nome', 'Matricula', 'Email', 'Senha']
-    )
-    df_usuarios = pd.read_excel(ARQUIVO_USUARIOS)
+    df_usuarios = carregar_dados_usuarios()
     
-    # Limpa os espaços dos valores de entrada
     email_limpo = email.strip()
     matricula_limpa = matricula.strip()
 
@@ -183,23 +223,23 @@ def cadastrar_usuario(nome, matricula, email, senha):
         'Senha': senha
     }])
     df_usuarios = pd.concat([df_usuarios, novo_usuario], ignore_index=True)
-    df_usuarios.to_excel(ARQUIVO_USUARIOS, index=False)
     
-    st.success("🎉 Cadastro realizado com sucesso! Você já pode fazer login.")
-    return True
+    try:
+        sheet = gs_client.open_by_key(SHEET_ID).worksheet("Usuarios")
+        sheet.clear()
+        sheet.update([df_usuarios.columns.values.tolist()] + df_usuarios.values.tolist())
+        st.success("🎉 Cadastro realizado com sucesso! Você já pode fazer login.")
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados de usuário: {e}")
+        return False
 
 def fazer_login(email, senha):
-    criar_planilha_se_nao_existir(
-        ARQUIVO_USUARIOS,
-        ['Nome', 'Matricula', 'Email', 'Senha']
-    )
-    try:
-        df_usuarios = pd.read_excel(ARQUIVO_USUARIOS)
-        
-        # Limpa os espaços dos valores da planilha para comparação
+    df_usuarios = carregar_dados_usuarios()
+    
+    if not df_usuarios.empty:
         df_usuarios['Email'] = df_usuarios['Email'].astype(str).str.strip()
         df_usuarios['Senha'] = df_usuarios['Senha'].astype(str).str.strip()
-        
         usuario_encontrado = df_usuarios[
             (df_usuarios['Email'] == email.strip()) & (df_usuarios['Senha'] == senha.strip())
         ]
@@ -207,15 +247,53 @@ def fazer_login(email, senha):
         if not usuario_encontrado.empty:
             st.session_state['logado'] = True
             st.session_state['nome_colaborador'] = usuario_encontrado.iloc[0]['Nome']
+            st.session_state['email_colaborador'] = usuario_encontrado.iloc[0]['Email'] # Guarda o email do usuário
             st.success(f"✅ Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
             st.rerun()
             return True
         else:
             st.error("❌ Email ou senha incorretos.")
             return False
-    except (FileNotFoundError, EmptyDataError):
+    else:
         st.error("Planilha de usuários não encontrada ou vazia.")
         return False
+
+# Função para enviar e-mail
+def send_email(to_email, subject, body, from_email='suprimentosessencis.com.br'):
+    try:
+        message = MIMEMultipart()
+        message['to'] = to_email
+        message['from'] = from_email
+        message['subject'] = subject
+        message.attach(MIMEText(body, 'html'))
+        
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+        
+        sent_message = gmail_service.users().messages().send(
+            userId=from_email,
+            body={'raw': raw_message}).execute()
+        return sent_message
+    except Exception as e:
+        st.error(f"Erro ao enviar e-mail para {to_email}: {e}")
+        return None
+
+# Função para fazer upload para o Google Drive
+def upload_to_drive(file, folder_id):
+    try:
+        file_metadata = {
+            'name': file.name,
+            'parents': [folder_id]
+        }
+        media = MediaIoBaseUpload(io.BytesIO(file.getvalue()), mimetype=file.type)
+        uploaded_file = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, webContentLink'
+        ).execute()
+        return uploaded_file.get('webContentLink')
+    except Exception as e:
+        st.error(f"Erro ao fazer upload do arquivo para o Google Drive: {e}")
+        return None
 
 # Lista de Departamentos (Número sempre antes do nome)
 DEPARTAMENTOS = [
@@ -406,8 +484,14 @@ else:
                     
                     if reembolsos_validos:
                         novos_registros = []
+                        comprovante_links = []
                         for reembolso in st.session_state.reembolsos_a_enviar:
-                            nomes_comprovantes = ", ".join([c.name for c in reembolso['comprovantes']])
+                            nomes_comprovantes = []
+                            for comprovante in reembolso['comprovantes']:
+                                link = upload_to_drive(comprovante, PASTA_DRIVE_ID)
+                                if link:
+                                    nomes_comprovantes.append(f"{comprovante.name}")
+                                    comprovante_links.append(f"[{comprovante.name}]({link})")
                             
                             novo_registro = {
                                 "DATA": reembolso['data_despesa'].strftime("%d/%m/%Y"),
@@ -417,7 +501,7 @@ else:
                                 "VALOR": reembolso['valor_reembolso'],
                                 "JUSTIFICATIVA": reembolso['justificativa'],
                                 "STATUS": "PENDENTE",
-                                "ID_COMPROVANTE": nomes_comprovantes
+                                "ID_COMPROVANTE": ", ".join(comprovante_links)
                             }
                             novos_registros.append(novo_registro)
                         
@@ -426,7 +510,35 @@ else:
 
                         if salvar_dados_reembolsos(st.session_state.df_reembolsos):
                             st.success("🎉 Todas as solicitações de reembolso foram registradas com sucesso!")
-                            st.session_state.reembolsos_a_enviar = [{}] # Limpa o formulário após o sucesso
+                            
+                            # Envio de e-mails
+                            user_email = st.session_state.get('email_colaborador', '')
+                            admin_email = "earaujo@essencis.com.br"
+                            
+                            if user_email:
+                                subject_user = "Confirmação de Solicitação de Reembolso"
+                                body_user = f"""
+                                Olá {st.session_state.nome_form},<br><br>
+                                Sua solicitação de reembolso foi registrada com sucesso.<br>
+                                Acompanhe o status pelo dashboard do sistema.<br><br>
+                                Atenciosamente,<br>
+                                Equipe de Reembolsos
+                                """
+                                send_email(user_email, subject_user, body_user)
+                            
+                            subject_admin = f"Novo Reembolso Registrado - {st.session_state.nome_colaborador}"
+                            body_admin = f"""
+                            Olá,<br><br>
+                            Um novo reembolso foi registrado por {st.session_state.nome_colaborador} ({st.session_state.depto_form}).<br><br>
+                            **Detalhes do(s) Reembolso(s):**<br>
+                            {df_novos_registros.to_html(index=False)}<br><br>
+                            Acesse o sistema para analisar as solicitações.<br><br>
+                            Atenciosamente,<br>
+                            Sistema de Reembolsos
+                            """
+                            send_email(admin_email, subject_admin, body_admin)
+
+                            st.session_state.reembolsos_a_enviar = [{}] # Limpa o formulário
                             st.rerun()
                         else:
                             st.error("❌ Erro ao salvar os dados. Tente novamente.")
@@ -485,9 +597,9 @@ else:
                     st.metric("Valor Total Solicitado", f"R$ {valor_total_solicitado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 with col_metrica2:
                     if total_pedidos > 0:
-                         st.metric("Média por Reembolso", f"R$ {df_reembolsos_usuario['VALOR'].mean():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                        st.metric("Média por Reembolso", f"R$ {df_reembolsos_usuario['VALOR'].mean():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                     else:
-                         st.metric("Média por Reembolso", "R$ 0,00")
+                        st.metric("Média por Reembolso", "R$ 0,00")
                 
                 st.subheader("Distribuição das suas Despesas por Tipo")
                 dep_val = df_reembolsos_usuario.groupby('TIPO_DESPESA')['VALOR'].sum().reset_index()
