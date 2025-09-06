@@ -452,6 +452,9 @@ else:
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")
         ].copy()
         
+        # --- CORREÇÃO: Garante que a coluna DATA é do tipo datetime ANTES de tentar formatá-la
+        pedidos_pendentes_oc['DATA'] = pd.to_datetime(pedidos_pendentes_oc['DATA'], errors='coerce', dayfirst=True)
+        
         if pedidos_pendentes_oc.empty:
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
             st.stop()
@@ -564,6 +567,8 @@ else:
         col_filter_h1, col_filter_h2, col_filter_h3, col_filter_h4 = st.columns(4)
         
         df_history = st.session_state.df_pedidos.copy()
+        
+        # --- CORREÇÃO: Garante que a coluna DATA é do tipo datetime
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
 
         df_almox = st.session_state.df_almoxarifado.copy()
@@ -766,6 +771,7 @@ else:
             st.stop()
 
         df_analise = st.session_state.df_pedidos.copy()
+        # --- CORREÇÃO: Garante que a coluna DATA é do tipo datetime
         df_analise['DATA'] = pd.to_datetime(df_analise['DATA'], errors='coerce', dayfirst=True)
         
         st.subheader("Filtros de Período")
@@ -899,6 +905,7 @@ else:
         df_performance = st.session_state.df_pedidos.copy()
         df_performance_local = df_performance[df_performance['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
+        # --- CORREÇÃO: Garante que a coluna DATA é do tipo datetime
         df_performance_local['DATA'] = pd.to_datetime(df_performance_local['DATA'], errors='coerce', dayfirst=True)
         
         st.markdown("---")
