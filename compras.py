@@ -176,10 +176,15 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
+        # --- MODIFICAÇÃO: Converte 'VALOR_ITEM' para numérico
         for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
+        # --- NOVO: Adiciona a coluna de valor total
+        if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
+            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ""
         
@@ -202,7 +207,7 @@ def criar_dataframe_pedidos_vazio():
     return pd.DataFrame(columns=[
         "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO",
         "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL"
     ])
 
 def salvar_dados_pedidos(df):
@@ -504,7 +509,7 @@ else:
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    "VALOR_ITEM": st.column_config.TextColumn("Valor do Item"),
+                    "VALOR_ITEM": st.column_config.TextColumn("Valor Unitário"),
                     "VALOR_RENEGOCIADO": st.column_config.TextColumn("Valor Renegociado"),
                     "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
@@ -798,7 +803,8 @@ else:
         if df_filtrado_dash.empty:
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
-
+        
+        # --- NOVO CÁLCULO: Usa VALOR_TOTAL para as métricas
         st.subheader("Visão Geral")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -810,7 +816,7 @@ else:
             st.markdown(f"### {pedidos_pendentes}")
             st.markdown("Pedidos Pendentes")
         with col3:
-            valor_total = df_filtrado_dash['VALOR_ITEM'].sum()
+            valor_total = df_filtrado_dash['VALOR_TOTAL'].sum()
             st.markdown(f"### R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             st.markdown("Valor Total dos Itens")
         with col4:
@@ -834,10 +840,11 @@ else:
             st.info("Nenhum pedido com atraso de entrega registrado no período.")
 
         st.subheader("Custo Total por Departamento")
-        pedidos_com_custo = df_filtrado_dash[df_filtrado_dash['DEPARTAMENTO'].notna() & (df_filtrado_dash['VALOR_ITEM'] > 0)]
+        # --- NOVO CÁLCULO: Usa VALOR_TOTAL para o custo por departamento
+        pedidos_com_custo = df_filtrado_dash[df_filtrado_dash['DEPARTAMENTO'].notna() & (df_filtrado_dash['VALOR_TOTAL'] > 0)]
         
         if not pedidos_com_custo.empty:
-            custo_por_departamento = pedidos_com_custo.groupby('DEPARTAMENTO')['VALOR_ITEM'].sum().sort_values(ascending=False).reset_index()
+            custo_por_departamento = pedidos_com_custo.groupby('DEPARTAMENTO')['VALOR_TOTAL'].sum().sort_values(ascending=False).reset_index()
             custo_por_departamento.columns = ['Departamento', 'Custo Total']
             
             fig_custo = px.bar(
@@ -855,7 +862,7 @@ else:
         
         st.subheader("Evolução Mensal de Pedidos e Entregas")
         
-        df_com_data_aprovacao = df_filtrado_dash.dropna(subset=['DATA_APROVACAO'])
+        df_com_data_aprovacao = df_filtrado_dash.dropna(subset=['DATA_APROVACAO']).copy()
         if not df_com_data_aprovacao.empty:
             df_com_data_aprovacao['MES_APROVACAO'] = df_com_data_aprovacao['DATA_APROVACAO'].dt.to_period('M').astype(str)
             mensal = df_com_data_aprovacao.groupby('MES_APROVACAO').agg(
@@ -941,9 +948,9 @@ else:
             st.info("Nenhum pedido local com valores de negociação preenchidos para análise.")
             st.stop()
         
-        df_performance_local['ECONOMIA'] = df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']
-        df_performance_local['PERC_ECONOMIA'] = np.where(df_performance_local['VALOR_ITEM'] > 0, 
-                                                         (df_performance_local['VALOR_ITEM'] - df_performance_local['VALOR_RENEGOCIADO']) / df_performance_local['VALOR_ITEM'] * 100, 
+        df_performance_local['ECONOMIA'] = (df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_ITEM']) - (df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_RENEGOCIADO'])
+        df_performance_local['PERC_ECONOMIA'] = np.where((df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_ITEM']) > 0, 
+                                                         ((df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_ITEM']) - (df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_RENEGOCIADO'])) / (df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_ITEM']) * 100, 
                                                          0)
 
         st.subheader("Visão Geral da Performance")
