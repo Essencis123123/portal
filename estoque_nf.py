@@ -154,7 +154,7 @@ def carregar_dados_almoxarifado():
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-            "ORDEM_COMPRA"
+            "ORDEM_COMPRA", "REGISTRO_ENVIO"
         ]
 
         # Adiciona as colunas faltantes para garantir que o dataframe tenha a estrutura completa
@@ -165,6 +165,7 @@ def carregar_dados_almoxarifado():
         # Agora a conversão de tipos pode ser feita com segurança
         df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
         df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
+        df['REGISTRO_ENVIO'] = pd.to_datetime(df['REGISTRO_ENVIO'], errors='coerce', dayfirst=True)
         df['V. TOTAL NF'] = pd.to_numeric(df['V. TOTAL NF'], errors='coerce').fillna(0)
         df['VALOR FRETE'] = pd.to_numeric(df['VALOR FRETE'], errors='coerce').fillna(0)
         df['VOLUME'] = pd.to_numeric(df['VOLUME'], errors='coerce').fillna(0).astype(int)
@@ -188,6 +189,10 @@ def salvar_dados_almoxarifado(df):
         for col in ['DATA', 'VENCIMENTO']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        
+        # Formata a nova coluna
+        if 'REGISTRO_ENVIO' in df_copy.columns:
+            df_copy['REGISTRO_ENVIO'] = df_copy['REGISTRO_ENVIO'].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
         
         data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
         worksheet.clear()
@@ -391,7 +396,8 @@ else:
                                 "STATUS_FINANCEIRO": "EM ANDAMENTO",
                                 "CONDICAO_PROBLEMA": "N/A",
                                 "REGISTRO_ADICIONAL": "",
-                                "ORDEM_COMPRA": ordem_compra_nf
+                                "ORDEM_COMPRA": ordem_compra_nf,
+                                "REGISTRO_ENVIO": datetime.datetime.now() # NOVO CAMPO: Registra a data e hora do envio
                             }
                             st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
                             
