@@ -149,44 +149,31 @@ def carregar_dados_almoxarifado():
         df = pd.DataFrame(data)
 
         # SE O DATAFRAME ESTIVER VAZIO, GARANTA QUE AS COLUNAS ESSENCIAIS EXISTAM
-        if df.empty:
-            df = pd.DataFrame(columns=[
-                "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
-                "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
-                "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-                "ORDEM_COMPRA"
-            ])
+        # Essa é a principal correção
+        colunas_obrigatorias_almoxarifado = [
+            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
+            "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
+            "ORDEM_COMPRA"
+        ]
 
-        for col in ['DATA', 'VENCIMENTO']:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
-        
-        for col in ['V. TOTAL NF', 'VALOR FRETE']:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        # Adiciona as colunas faltantes para garantir que o dataframe tenha a estrutura completa
+        for col in colunas_obrigatorias_almoxarifado:
+            if col not in df.columns:
+                df[col] = pd.NA if df.empty else ''
 
-        # GARANTA QUE AS NOVAS COLUNAS SEMPRE EXISTAM
-        if 'CONDICAO_PROBLEMA' not in df.columns:
-            df['CONDICAO_PROBLEMA'] = ''
-        if 'REGISTRO_ADICIONAL' not in df.columns:
-            df['REGISTRO_ADICIONAL'] = ''
-        if 'ORDEM_COMPRA' not in df.columns:
-            df['ORDEM_COMPRA'] = ''
-        if 'STATUS_FINANCEIRO' not in df.columns:
-            df['STATUS_FINANCEIRO'] = ''
-        if 'DOC NF' not in df.columns:
-            df['DOC NF'] = ''
+        # Agora a conversão de tipos pode ser feita com segurança
+        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
+        df['V. TOTAL NF'] = pd.to_numeric(df['V. TOTAL NF'], errors='coerce').fillna(0)
+        df['VALOR FRETE'] = pd.to_numeric(df['VALOR FRETE'], errors='coerce').fillna(0)
+        df['VOLUME'] = pd.to_numeric(df['VOLUME'], errors='coerce').fillna(0).astype(int)
 
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
         # Retorne um DataFrame com as colunas em caso de erro
-        return pd.DataFrame(columns=[
-            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
-            "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
-            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-            "ORDEM_COMPRA"
-        ])
+        return pd.DataFrame(columns=colunas_obrigatorias_almoxarifado)
 
 def salvar_dados_almoxarifado(df):
     try:
@@ -222,40 +209,20 @@ def carregar_dados_pedidos():
         worksheet = spreadsheet.get_worksheet(0)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
+        
+        colunas_obrigatorias_pedidos = ["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"]
+        for col in colunas_obrigatorias_pedidos:
+            if col not in df.columns:
+                df[col] = pd.NA if df.empty else ''
+
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
-        
-        if 'DOC NF' not in df.columns:
-            df['DOC NF'] = ''
             
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de pedidos: {e}")
-        return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"])
-
-def salvar_dados_pedidos(df):
-    """Salva os dados de pedidos no Google Sheets."""
-    try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(0)
-
-        df_copy = df.copy()
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
-            if col in df_copy.columns:
-                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
-        
-        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
-        worksheet.clear()
-        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar dados de pedidos: {e}")
-        return False
+        return pd.DataFrame(columns=colunas_obrigatorias_pedidos)
 
 def carregar_dados_solicitantes():
     try:
