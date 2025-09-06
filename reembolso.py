@@ -10,7 +10,7 @@ import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from googleapapi.http import MediaIoBaseUpload
 import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -542,7 +542,7 @@ else:
                             st.rerun()
                         else:
                             st.error("❌ Erro ao salvar os dados. Tente novamente.")
-        
+    
         st.markdown("---")
         
         # --- EXIBE O HISTÓRICO DO USUÁRIO NA PRÓPRIA PÁGINA ---
