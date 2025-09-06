@@ -17,9 +17,6 @@ import io
 import re
 import mimetypes
 
-# URL do seu novo formulário no Formspree
-FORMSPREE_ENDPOINT = "https://formspree.io/f/xkgvkjjn"
-
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
 
@@ -282,40 +279,18 @@ def send_email(to_email, subject, body, from_email=st.secrets.gcp_service_accoun
 if 'last_error' not in st.session_state:
     st.session_state.last_error = None
 
-# NOVA FUNÇÃO DE ENVIO PARA O FORMSPREE
-def enviar_para_formspree(dados):
-    """Envia os dados do formulário, incluindo arquivos, para o Formspree."""
+# NOVA FUNÇÃO QUE CONVERTE O ARQUIVO EM BASE64
+def file_to_base64(uploaded_file):
+    """Converte um arquivo enviado em uma string Base64."""
+    if uploaded_file is None:
+        return ""
     try:
-        # Reseta o erro antes de cada tentativa
-        st.session_state.last_error = None
-        
-        # SEPARA OS DADOS DE TEXTO DOS ARQUIVOS
-        text_data = {
-            "Nome": dados.get("Nome", ""),
-            "Departamento": dados.get("Departamento", ""),
-            "Tipo de Despesa": dados.get("Tipo de Despesa", ""),
-            "Data da Despesa": dados.get("Data da Despesa", ""),
-            "Valor": dados.get("Valor", ""),
-            "Justificativa": dados.get("Justificativa", "")
-        }
-        
-        files_to_send = {}
-        for i, comprovante in enumerate(dados.get('comprovantes', [])):
-            file_name = comprovante.name
-            file_content = comprovante.getvalue()
-            mime_type = comprovante.type or mimetypes.guess_type(file_name)[0]
-            
-            # Formato de upload para o Formspree com "file"
-            files_to_send[f'comprovante_{i}'] = (file_name, file_content, mime_type)
-
-        response = requests.post(FORMSPREE_ENDPOINT, data=text_data, files=files_to_send)
-        response.raise_for_status()
-
-        return response.status_code == 200
+        bytes_data = uploaded_file.getvalue()
+        base64_string = base64.b64encode(bytes_data).decode('utf-8')
+        return base64_string
     except Exception as e:
-        st.session_state.last_error = str(e)
-        return False
-
+        st.session_state.last_error = f"Erro ao converter arquivo: {e}"
+        return ""
 
 # Lista de Departamentos (Número sempre antes do nome)
 DEPARTAMENTOS = [
@@ -508,25 +483,56 @@ else:
                         novos_registros = []
                         
                         for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
-                            dados_para_enviar = {
-                                "Nome": st.session_state.nome_form,
-                                "Departamento": st.session_state.depto_form,
-                                "Tipo de Despesa": reembolso['tipo_despesa'],
-                                "Data da Despesa": reembolso['data_despesa'].strftime("%d/%m/%Y"),
-                                "Valor": reembolso['valor_reembolso'],
-                                "Justificativa": reembolso['justificativa'],
-                                "comprovantes": reembolso['comprovantes']
-                            }
+                            comprovantes_base64 = [file_to_base64(c) for c in reembolso['comprovantes']]
                             
-                            if enviar_para_formspree(dados_para_enviar):
-                                st.success(f"🎉 Solicitação de Reembolso #{i + 1} enviada com sucesso! Você receberá uma confirmação por e-mail.")
-                                
-                                # AQUI NÃO SALVAMOS MAIS NA PLANILHA, POIS O FORMSPREE CUIDA DO REGISTRO
-                                # Se você quiser manter a planilha, você pode adaptar o código para adicionar
-                                # uma nova linha com os dados, mas sem o link do comprovante.
-                                
-                            else:
-                                st.error(f"❌ Erro ao enviar a solicitação #{i + 1}.")
+                            novo_registro = {
+                                "DATA": reembolso['data_despesa'].strftime("%d/%m/%Y"),
+                                "NOME": st.session_state.nome_form,
+                                "DEPARTAMENTO": st.session_state.depto_form,
+                                "TIPO_DESPESA": reembolso['tipo_despesa'],
+                                "VALOR": reembolso['valor_reembolso'],
+                                "JUSTIFICATIVA": reembolso['justificativa'],
+                                "STATUS": "PENDENTE",  # Adicionado status inicial
+                                # Junta todas as strings Base64 em uma única célula
+                                "ID_COMPROVANTE": ", ".join(comprovantes_base64)
+                            }
+                            novos_registros.append(novo_registro)
+
+                        df_novos_registros = pd.DataFrame(novos_registros)
+                        st.session_state.df_reembolsos = pd.concat([st.session_state.df_reembolsos, df_novos_registros], ignore_index=True)
+
+                        if salvar_dados_reembolsos(st.session_state.df_reembolsos):
+                            st.success("🎉 Todas as solicitações de reembolso foram registradas com sucesso!")
+                            
+                            # Envio de e-mails
+                            user_email = st.session_state.get('email_colaborador', '')
+                            admin_email = "earaujo@essencis.com.br"
+                            
+                            if user_email:
+                                subject_user = "Confirmação de Solicitação de Reembolso"
+                                body_user = f"""
+                                Olá {st.session_state.nome_form},<br><br>
+                                Sua solicitação de reembolso foi registrada com sucesso.<br>
+                                Acompanhe o status pelo dashboard do sistema.<br><br>
+                                Atenciosamente,<br>
+                                Equipe de Reembolsos
+                                """
+                                send_email(user_email, subject_user, body_user)
+                            
+                            subject_admin = f"Novo Reembolso Registrado - {st.session_state.nome_colaborador}"
+                            body_admin = f"""
+                            Olá,<br><br>
+                            Um novo reembolso foi registrado por {st.session_state.nome_colaborador} ({st.session_state.depto_form}).<br><br>
+                            **Detalhes do(s) Reembolso(s):**<br>
+                            {df_novos_registros.to_html(index=False)}<br><br>
+                            Acesse o sistema para analisar as solicitações.<br><br>
+                            Atenciosamente,<br>
+                            Sistema de Reembolsos
+                            """
+                            send_email(admin_email, subject_admin, body_admin)
+                            
+                        else:
+                            st.error("❌ Erro ao salvar os dados na planilha do Google Sheets.")
 
                         st.session_state.reembolsos_a_enviar = [{}]
                         st.rerun()
