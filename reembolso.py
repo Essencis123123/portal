@@ -278,10 +278,17 @@ def send_email(to_email, subject, body, from_email=st.secrets.gcp_service_accoun
         st.error(f"Erro ao enviar e-mail para {to_email}: {e}")
         return None
 
+# Lógica para guardar e exibir erros
+if 'last_error' not in st.session_state:
+    st.session_state.last_error = None
+
 # NOVA FUNÇÃO DE ENVIO PARA O FORMSPREE
 def enviar_para_formspree(dados):
     """Envia os dados do formulário, incluindo arquivos, para o Formspree."""
     try:
+        # Reseta o erro antes de cada tentativa
+        st.session_state.last_error = None
+        
         files_to_send = {}
         for i, comprovante in enumerate(dados.get('comprovantes', [])):
             file_name = comprovante.name
@@ -295,7 +302,8 @@ def enviar_para_formspree(dados):
 
         return response.status_code == 200
     except Exception as e:
-        st.error(f"Erro ao enviar para o Formspree: {e}")
+        # AQUI SALVAMOS O ERRO NA VARIÁVEL DE ESTADO
+        st.session_state.last_error = str(e)
         return False
 
 
@@ -488,7 +496,6 @@ else:
                     
                     if reembolsos_validos:
                         novos_registros = []
-                        comprovante_links = []
                         
                         for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
                             dados_para_enviar = {
@@ -513,6 +520,10 @@ else:
 
                         st.session_state.reembolsos_a_enviar = [{}]
                         st.rerun()
+
+    # Exibe o erro persistente, se houver
+    if st.session_state.last_error:
+        st.error(f"Erro: {st.session_state.last_error}")
 
     # --- PÁGINA: DASHBOARD ---
     elif menu_option == "📊 Dashboard":
