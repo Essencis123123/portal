@@ -16,6 +16,7 @@ from email.mime.text import MIMEText
 import io
 import re
 import mimetypes
+import time
 
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
@@ -542,7 +543,7 @@ else:
                             send_email(admin_email, subject_admin, body_admin)
                             
                         except Exception as e:
-                            # Adicionado para exibir o erro completo e persistente
+                            # Esta linha vai capturar e exibir o erro completo e persistente
                             st.exception(e)
 
                         st.session_state.reembolsos_a_enviar = [{}]
@@ -569,9 +570,7 @@ else:
             else:
                 df_reembolsos_usuario = pd.DataFrame()
             
-            if df_reembolsos_usuario.empty:
-                st.info("Você ainda não tem dados para o dashboard. Envie sua primeira solicitação de reembolso!")
-            else:
+            if not df_reembolsos_usuario.empty:
                 df_reembolsos_usuario['VALOR'] = pd.to_numeric(df_reembolsos_usuario['VALOR'], errors='coerce').fillna(0)
             
                 # --- MÉTRICAS DO USUÁRIO ---
