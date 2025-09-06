@@ -463,7 +463,7 @@ else:
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
             pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
-        # CORREÇÃO: Converter NaT para None antes de passar para o data_editor
+        # CORREÇÃO: Converter NaT para None nas colunas de data
         data_cols = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
         for col in data_cols:
             if col in pedidos_pendentes_oc.columns:
@@ -579,12 +579,21 @@ else:
         else:
             mes_selecionado_h = None
             ano_selecionado_h = None
+        
+        # NOVO: Adiciona o filtro de status em uma nova coluna
+        col_filter_s1, col_filter_s2 = st.columns(2)
+        with col_filter_s1:
+            status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
+            status_selecionado_h = st.selectbox("Status", status_options)
 
-        with col_filter_h3:
+        if status_selecionado_h != 'Todos':
+            df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
+
+        with col_filter_s2:
             solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
             solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
-        with col_filter_h4:
-            req_filter = st.text_input("N° Requisição")
+        
+        req_filter = st.text_input("N° Requisição")
 
         if solicitante_selecionado_h != 'Todos':
             df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
@@ -612,7 +621,7 @@ else:
         
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
-        # CORREÇÃO: Converter NaT para None antes de passar para o data_editor
+        # CORREÇÃO: Converter NaT para None nas colunas de data
         data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
         for col in data_cols_history:
             if col in df_display.columns:
