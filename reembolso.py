@@ -480,34 +480,40 @@ else:
                             break
                     
                     if reembolsos_validos:
-                        novos_registros = []
-                        
-                        for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
-                            comprovantes_base64 = [file_to_base64(c) for c in reembolso['comprovantes']]
+                        try:
+                            sheet = gs_client.open_by_key(SHEET_ID).worksheet("Reembolsos")
                             
-                            novo_registro = {
-                                "DATA": reembolso['data_despesa'].strftime("%d/%m/%Y"),
-                                "NOME": st.session_state.nome_form,
-                                "DEPARTAMENTO": st.session_state.depto_form,
-                                "TIPO_DESPESA": reembolso['tipo_despesa'],
-                                "VALOR": reembolso['valor_reembolso'],
-                                "JUSTIFICATIVA": reembolso['justificativa'],
-                                "STATUS": "PENDENTE",  # Adicionado status inicial
-                                # Junta todas as strings Base64 em uma única célula
-                                "ID_COMPROVANTE": ", ".join(comprovantes_base64)
-                            }
-                            novos_registros.append(novo_registro)
+                            for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
+                                comprovantes_base64 = ", ".join([file_to_base64(c) for c in reembolso['comprovantes']])
+                                
+                                # Adiciona a nova linha no final da planilha
+                                row = [
+                                    reembolso['data_despesa'].strftime("%d/%m/%Y"),
+                                    st.session_state.nome_form,
+                                    st.session_state.depto_form,
+                                    reembolso['tipo_despesa'],
+                                    reembolso['valor_reembolso'],
+                                    reembolso['justificativa'],
+                                    "PENDENTE",
+                                    comprovantes_base64
+                                ]
+                                sheet.append_row(row)
 
-                        df_novos_registros = pd.DataFrame(novos_registros)
-                        st.session_state.df_reembolsos = pd.concat([st.session_state.df_reembolsos, df_novos_registros], ignore_index=True)
-
-                        if salvar_dados_reembolsos(st.session_state.df_reembolsos):
                             st.success("🎉 Todas as solicitações de reembolso foram registradas com sucesso!")
+
+                            # Atualiza a tabela local (no aplicativo) para mostrar o novo dado
+                            st.session_state.df_reembolsos = carregar_dados_reembolsos()
                             
                             # Envio de e-mails
                             user_email = st.session_state.get('email_colaborador', '')
                             admin_email = "earaujo@essencis.com.br"
                             
+                            # Crie uma tabela HTML para os detalhes do e-mail de admin
+                            novos_registros_html = "<table><tr><th>Data</th><th>Nome</th><th>Departamento</th><th>Tipo</th><th>Valor</th><th>Justificativa</th></tr>"
+                            for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
+                                novos_registros_html += f"<tr><td>{reembolso['data_despesa'].strftime('%d/%m/%Y')}</td><td>{st.session_state.nome_form}</td><td>{st.session_state.depto_form}</td><td>{reembolso['tipo_despesa']}</td><td>R$ {reembolso['valor_reembolso']:.2f}</td><td>{reembolso['justificativa']}</td></tr>"
+                            novos_registros_html += "</table>"
+
                             if user_email:
                                 subject_user = "Confirmação de Solicitação de Reembolso"
                                 body_user = f"""
@@ -524,15 +530,15 @@ else:
                             Olá,<br><br>
                             Um novo reembolso foi registrado por {st.session_state.nome_colaborador} ({st.session_state.depto_form}).<br><br>
                             **Detalhes do(s) Reembolso(s):**<br>
-                            {df_novos_registros.to_html(index=False)}<br><br>
+                            {novos_registros_html}<br><br>
                             Acesse o sistema para analisar as solicitações.<br><br>
                             Atenciosamente,<br>
                             Sistema de Reembolsos
                             """
                             send_email(admin_email, subject_admin, body_admin)
                             
-                        else:
-                            st.error("❌ Erro ao salvar os dados na planilha do Google Sheets.")
+                        except Exception as e:
+                            st.error(f"❌ Erro ao salvar os dados na planilha do Google Sheets: {e}")
 
                         st.session_state.reembolsos_a_enviar = [{}]
                         st.rerun()
@@ -612,7 +618,19 @@ else:
         if not df_reembolsos.empty:
             df_consulta = df_reembolsos.copy()
             df_consulta['VALOR'] = pd.to_numeric(df_consulta['VALOR'], errors='coerce').fillna(0)
+            
+            # --- Cria a coluna de download ---
+            def create_download_link(row):
+                base64_string = row['ID_COMPROVANTE']
+                if not base64_string:
+                    return ""
+                
+                # A primeira parte do Base64 pode ter o cabeçalho do tipo de arquivo,
+                # mas vamos assumir que são sempre imagens ou PDFs para simplificar.
+                # Como não temos o nome do arquivo, usaremos 'comprovante'.
+                return f'<a href="data:image/png;base64,{base64_string}" download="comprovante.png">📥 Download</a>'
 
+            # Aplica os filtros
             col1, col2 = st.columns(2)
             with col1:
                 nome_consulta = st.text_input("Buscar por Nome", placeholder="Digite o nome do colaborador...")
@@ -620,7 +638,6 @@ else:
                 status_options = ["TODOS"] + sorted(df_reembolsos['STATUS'].dropna().unique().tolist())
                 status_consulta = st.selectbox("Filtrar por Status", options=status_options)
 
-            # Aplica os filtros
             if nome_consulta:
                 df_consulta = df_consulta[df_consulta['NOME'].str.contains(nome_consulta, case=False, na=False)]
             if status_consulta != "TODOS":
@@ -630,10 +647,13 @@ else:
             if 'DATA' in df_consulta.columns:
                 df_consulta['DATA'] = pd.to_datetime(df_consulta['DATA'], format='%d/%m/%Y', errors='coerce').dt.strftime('%d/%m/%Y')
             
-            # Exibe a tabela com a coluna de links clicáveis
-            st.dataframe(
-                df_consulta, 
-                use_container_width=True
+            # Exibe a tabela com o link de download
+            df_exibicao = df_consulta.drop(columns=['ID_COMPROVANTE'])
+            df_exibicao['Comprovante'] = df_consulta.apply(create_download_link, axis=1)
+            
+            st.markdown(
+                df_exibicao.to_html(escape=False),
+                unsafe_allow_html=True
             )
 
             csv_download = df_consulta.to_csv(index=False).encode('utf-8')
