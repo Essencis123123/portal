@@ -573,8 +573,11 @@ else:
         
         df_history = st.session_state.df_pedidos.copy()
         
-        # --- CORREÇÃO: Garante que a coluna DATA é do tipo datetime
+        # --- NOVO: Garante que a coluna DATA é do tipo datetime
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+        
+        # --- IMPORTANTE: Garante que o valor total é calculado na visualização
+        df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
 
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
@@ -623,7 +626,7 @@ else:
         df_display = df_history.copy()
 
         # Adiciona a conversão de valor para string para o data_editor
-        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
             if col_val in df_display.columns:
                 df_display[col_val] = df_display[col_val].astype(str).str.replace('.', ',', regex=False)
 
@@ -662,7 +665,8 @@ else:
                 "REQUISICAO": "N° Requisição",
                 "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                "VALOR_ITEM": st.column_config.TextColumn("Valor do Item"),
+                "VALOR_ITEM": st.column_config.TextColumn("Valor Unitário"),
+                "VALOR_TOTAL": st.column_config.TextColumn("Valor Total", disabled=True),
                 "VALOR_RENEGOCIADO": st.column_config.TextColumn("Valor Renegociado"),
                 "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
@@ -677,7 +681,7 @@ else:
             },
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
-                "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
+                "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
                 "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
             ]
         )
@@ -700,8 +704,8 @@ else:
             edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
             edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
             edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
-
-            # LÓGICA DO CAMPO 'DIAS_EMISSAO' FOI REMOVIDA DESTA SEÇÃO, MAS MANTIDA NA 'Pedidos (OC)' CASO NECESSÁRIO
+            
+            # --- ATENÇÃO: A LÓGICA DE CALCULO DE DIAS EMISSAO E ATRAZOS NAO É MAIS NECESSARIO NESTE PONTO DO CODIGO
             
             def calcular_dias_atraso(row):
                 if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
@@ -718,13 +722,18 @@ else:
             
             # Garante que 'DIAS_EMISSAO' continue no DataFrame principal, mesmo que não seja exibida no histórico
             if 'DIAS_EMISSAO' not in edited_history_df.columns and 'DIAS_EMISSAO' in st.session_state.df_pedidos.columns:
-                # O valor não muda, então não precisa de ação aqui.
                 pass
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Histórico atualizado com sucesso!")
             st.rerun()
 
+        # --- NOVO CARD: Autosoma do Valor Total ---
+        st.markdown("---")
+        st.subheader("💰 Resumo do Custo Total")
+        total_historico = df_history['VALOR_TOTAL'].sum()
+        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        
     elif menu == "👤 Cadastro ":
         st.markdown("""
             <div class='header-container'>
@@ -899,6 +908,42 @@ else:
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
             st.info("Não há pedidos entregues no período para criar o ranking.")
+
+        # --- NOVOS DASHBOARDS ---
+        st.markdown("---")
+        st.header("Análise Detalhada por Departamento")
+        
+        # Dashboard de Custo por Departamento e Tipo de Pedido
+        st.subheader("Custo Total por Tipo de Pedido e Departamento")
+        custo_por_departamento_tipo = df_filtrado_dash.groupby(['DEPARTAMENTO', 'TIPO_PEDIDO'])['VALOR_TOTAL'].sum().reset_index()
+        fig_custo_tipo = px.bar(
+            custo_por_departamento_tipo,
+            x='DEPARTAMENTO',
+            y='VALOR_TOTAL',
+            color='TIPO_PEDIDO',
+            title='Custo de Pedidos por Departamento e Tipo',
+            labels={'VALOR_TOTAL': 'Custo Total (R$)', 'DEPARTAMENTO': 'Departamento', 'TIPO_PEDIDO': 'Tipo de Pedido'},
+            barmode='stack',
+            text_auto='.2s'
+        )
+        st.plotly_chart(fig_custo_tipo, use_container_width=True)
+
+        # Dashboard de Quantidade de Pedidos por Departamento e Tipo
+        st.subheader("Quantidade de Pedidos por Tipo e Departamento")
+        quantidade_por_departamento_tipo = df_filtrado_dash.groupby(['DEPARTAMENTO', 'TIPO_PEDIDO'])['REQUISICAO'].count().reset_index()
+        quantidade_por_departamento_tipo.rename(columns={'REQUISICAO': 'Quantidade de Pedidos'}, inplace=True)
+        fig_quantidade_tipo = px.bar(
+            quantidade_por_departamento_tipo,
+            x='DEPARTAMENTO',
+            y='Quantidade de Pedidos',
+            color='TIPO_PEDIDO',
+            title='Quantidade de Pedidos por Departamento e Tipo',
+            labels={'Quantidade de Pedidos': 'Quantidade de Pedidos', 'DEPARTAMENTO': 'Departamento', 'TIPO_PEDIDO': 'Tipo de Pedido'},
+            barmode='stack',
+            text_auto=True
+        )
+        st.plotly_chart(fig_quantidade_tipo, use_container_width=True)
+
 
     elif menu == "📊 Performance ":
         st.markdown("""
