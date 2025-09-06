@@ -289,20 +289,30 @@ def enviar_para_formspree(dados):
         # Reseta o erro antes de cada tentativa
         st.session_state.last_error = None
         
+        # SEPARA OS DADOS DE TEXTO DOS ARQUIVOS
+        text_data = {
+            "Nome": dados.get("Nome", ""),
+            "Departamento": dados.get("Departamento", ""),
+            "Tipo de Despesa": dados.get("Tipo de Despesa", ""),
+            "Data da Despesa": dados.get("Data da Despesa", ""),
+            "Valor": dados.get("Valor", ""),
+            "Justificativa": dados.get("Justificativa", "")
+        }
+        
         files_to_send = {}
         for i, comprovante in enumerate(dados.get('comprovantes', [])):
             file_name = comprovante.name
             file_content = comprovante.getvalue()
             mime_type = comprovante.type or mimetypes.guess_type(file_name)[0]
             
+            # Formato de upload para o Formspree com "file"
             files_to_send[f'comprovante_{i}'] = (file_name, file_content, mime_type)
 
-        response = requests.post(FORMSPREE_ENDPOINT, data=dados, files=files_to_send)
+        response = requests.post(FORMSPREE_ENDPOINT, data=text_data, files=files_to_send)
         response.raise_for_status()
 
         return response.status_code == 200
     except Exception as e:
-        # AQUI SALVAMOS O ERRO NA VARIÁVEL DE ESTADO
         st.session_state.last_error = str(e)
         return False
 
