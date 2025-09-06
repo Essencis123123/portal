@@ -409,8 +409,13 @@ else:
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
         if not st.session_state.df_almoxarifado.empty:
-            df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
+            df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
             
+            # NOVO: Formata as colunas de data para exibição
+            df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
+            df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+            df_ultimas_nfs['REGISTRO_ENVIO'] = df_ultimas_nfs['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S')
+
             st.dataframe(
                 df_ultimas_nfs,
                 use_container_width=True,
