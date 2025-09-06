@@ -16,7 +16,10 @@ from email.mime.text import MIMEText
 import io
 import re
 import mimetypes
-import time
+import logging # <-- Nova importação
+
+# Configuração básica do logger para imprimir no console
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
@@ -545,6 +548,8 @@ else:
                         except Exception as e:
                             # Esta linha vai capturar e exibir o erro completo e persistente
                             st.exception(e)
+                            # Adicionado para exibir o erro de forma persistente no console
+                            logging.exception("Erro ao salvar dados na planilha do Google Sheets")
 
                         st.session_state.reembolsos_a_enviar = [{}]
                         st.rerun()
