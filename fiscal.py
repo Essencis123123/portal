@@ -91,6 +91,7 @@ st.markdown(
 # Carregar a imagem do logo a partir da URL
 @st.cache_data(show_spinner=False)
 def load_logo(url: str):
+    """Carrega logo da URL."""
     try:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
@@ -126,7 +127,7 @@ def _to_datetime(series):
 def carregar_dados() -> pd.DataFrame:
     """
     Carrega os dados da aba 'Almoxarifado' da planilha 'dados_pedido' do Google Sheets
-    e prepara para o painel fiscal.
+    e prepara para o painel financeiro.
     """
     try:
         client = get_gspread_client()
@@ -135,44 +136,29 @@ def carregar_dados() -> pd.DataFrame:
 
         df = pd.DataFrame(worksheet.get_all_records())
 
-        if df.empty or all(pd.Series(df.columns).isnull()):
-            st.warning("A planilha existe, mas está vazia. Adicione dados pelo Painel do Almoxarifado.")
-            return pd.DataFrame(columns=[
-                "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "STATUS",
-                "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
-                "DOC_NF", "RECEBEDOR", "VENCIMENTO", "DIAS_VENCIMENTO"
-            ])
+        # Adicionei a nova coluna na lista de colunas esperadas
+        colunas_obrigatorias = [
+            "DATA", "FORNECEDOR_NF", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO",
+            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "OBSERVACAO", "VALOR_JUROS",
+            "VALOR_FRETE", "DOC_NF", "RECEBEDOR", "CONDICAO_FRETE",
+            "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
+        ]
 
-        # Padroniza os nomes das colunas de forma mais robusta
-        df.columns = df.columns.str.strip().str.upper().str.replace('.', '').str.replace(' ', '_').str.replace('/', '_')
+        # Garante que as colunas existam e renomeia
+        for col in colunas_obrigatorias:
+            if col not in df.columns:
+                df[col] = None
 
-        # Renomeia com um mapeamento explícito para garantir nomes internos consistentes
         df = df.rename(columns={
             'STATUS_FINANCEIRO': 'STATUS',
             'OBSERVACAO': 'REGISTRO_ADICIONAL',
             'FORNECEDOR_NF': 'FORNECEDOR',
-            'V_TOTAL_NF': 'V_TOTAL_NF', 
-            'DOC_NF': 'DOC_NF',
+            'V. TOTAL NF': 'V_TOTAL_NF',
+            'DOC NF': 'DOC_NF',
         }, errors='ignore')
 
-        # --- NOVA CORREÇÃO AQUI: Remove colunas duplicadas ou indesejadas
+        # Garante que não haja colunas duplicadas
         df = df.loc[:,~df.columns.duplicated()]
-        
-        # Define a lista final de colunas na ordem desejada
-        colunas_finais = [
-            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO",
-            "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
-            "DOC_NF", "RECEBEDOR"
-        ]
-        
-        # Garante que as colunas existam antes de reindexar
-        for col in colunas_finais:
-            if col not in df.columns:
-                df[col] = None
-        
-        # Reindexa para a ordem e colunas desejadas, eliminando o erro de duplicatas
-        df = df.reindex(columns=colunas_finais)
-        # --- FIM DA NOVA CORREÇÃO ---
 
         # Remove linhas totalmente vazias, apara espaços
         df = df.dropna(how='all')
@@ -186,6 +172,8 @@ def carregar_dados() -> pd.DataFrame:
         # Datas
         df["DATA"] = _to_datetime(df["DATA"])
         df["VENCIMENTO"] = _to_datetime(df["VENCIMENTO"])
+        df["REGISTRO_ENVIO"] = _to_datetime(df["REGISTRO_ENVIO"])
+        df["REGISTRO_LANCAMENTO"] = _to_datetime(df["REGISTRO_LANCAMENTO"])
 
         # DIAS_VENCIMENTO (robusto)
         ref = pd.Timestamp.today().normalize()
@@ -196,9 +184,10 @@ def carregar_dados() -> pd.DataFrame:
     except Exception as e:
         st.error(f"Erro ao carregar dados da planilha. Verifique nome/aba/credenciais. Detalhe: {e}")
         return pd.DataFrame(columns=[
-            "DATA","FORNECEDOR","NF","ORDEM_COMPRA","V_TOTAL_NF","STATUS",
-            "CONDICAO_PROBLEMA","REGISTRO_ADICIONAL","VALOR_JUROS","VALOR_FRETE",
-            "DOC_NF","RECEBEDOR","VENCIMENTO","DIAS_VENCIMENTO"
+            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "STATUS",
+            "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
+            "DOC_NF", "RECEBEDOR", "VENCIMENTO", "DIAS_VENCIMENTO",
+            "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ])
 
 def salvar_dados(df: pd.DataFrame) -> bool:
@@ -213,6 +202,8 @@ def salvar_dados(df: pd.DataFrame) -> bool:
         # Garante tipos antes de formatar
         df_to_save["DATA"] = _to_datetime(df_to_save["DATA"])
         df_to_save["VENCIMENTO"] = _to_datetime(df_to_save["VENCIMENTO"])
+        df_to_save["REGISTRO_ENVIO"] = _to_datetime(df_to_save["REGISTRO_ENVIO"])
+        df_to_save["REGISTRO_LANCAMENTO"] = _to_datetime(df_to_save["REGISTRO_LANCAMENTO"])
 
         # Mapeia para nomes da planilha
         df_to_save = df_to_save.rename(columns={
@@ -221,13 +212,17 @@ def salvar_dados(df: pd.DataFrame) -> bool:
             "V_TOTAL_NF": "V. TOTAL NF",
             "DOC_NF": "DOC NF",
             "FORNECEDOR": "FORNECEDOR_NF"
-        })
+        }, errors='ignore')
 
         # Formata datas como string dd/mm/yyyy
         if "DATA" in df_to_save.columns:
             df_to_save["DATA"] = df_to_save["DATA"].dt.strftime("%d/%m/%Y")
         if "VENCIMENTO" in df_to_save.columns:
             df_to_save["VENCIMENTO"] = df_to_save["VENCIMENTO"].dt.strftime("%d/%m/%Y")
+        if "REGISTRO_ENVIO" in df_to_save.columns:
+            df_to_save["REGISTRO_ENVIO"] = df_to_save["REGISTRO_ENVIO"].dt.strftime("%d/%m/%Y %H:%M:%S")
+        if "REGISTRO_LANCAMENTO" in df_to_save.columns:
+            df_to_save["REGISTRO_LANCAMENTO"] = df_to_save["REGISTRO_LANCAMENTO"].dt.strftime("%d/%m/%Y %H:%M:%S")
 
         # Remove colunas de cálculo antes de salvar
         df_to_save = df_to_save.drop(columns=["DIAS_VENCIMENTO"], errors="ignore")
@@ -404,8 +399,7 @@ else:
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
 
-            # --- CORREÇÃO AQUI: Lógica para as bolinhas visuais nas colunas ---
-            # Mapeia Status para bolinhas
+            # --- Lógica para as colunas visuais ---
             status_map = {
                 'FINALIZADO': '🟢 FINALIZADO',
                 'EM ANDAMENTO': '🟡 EM ANDAMENTO',
@@ -413,7 +407,6 @@ else:
             }
             df_display['STATUS_VISUAL'] = df_display['STATUS'].map(status_map).fillna(df_display['STATUS'])
             
-            # Lógica para Dias de Vencimento
             def formatar_vencimento_visual(dias):
                 if pd.isna(dias): return "N/A"
                 if dias <= 7:
@@ -423,25 +416,29 @@ else:
                 return str(dias)
             df_display['DIAS_VENCIMENTO_VISUAL'] = df_display['DIAS_VENCIMENTO'].apply(formatar_vencimento_visual)
 
-            # Lógica para Problema com 'Chamado' vencido
-            # É necessário ter uma coluna 'DATA_PROBLEMA' na planilha para que a lógica funcione
-            # Se você ainda não tem, crie uma coluna chamada DATA_PROBLEMA
             def formatar_problema_visual(row):
                 if row['CONDICAO_PROBLEMA'] == 'CHAMADO':
-                    # A lógica aqui depende de uma coluna de data de problema, que não existe no seu df
-                    # Vamos assumir que você adicionará uma. Por enquanto, usamos uma data fixa.
-                    # Adapte a linha abaixo para usar sua coluna de data real, se houver
                     data_problema = datetime.date(2025, 9, 29) # Substitua pela sua coluna de data real, se houver
                     dias_passados = (datetime.date.today() - data_problema).days
                     if dias_passados > 5:
                         return f"🔴 {row['CONDICAO_PROBLEMA']}"
                 return row['CONDICAO_PROBLEMA']
             
-            # Aplica a lógica condicional
             df_display['PROBLEMA_VISUAL'] = df_display.apply(lambda row: formatar_problema_visual(row), axis=1)
 
             status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
+
+            # Formata colunas de data/hora para exibição
+            if 'REGISTRO_ENVIO' in df_display.columns:
+                df_display['REGISTRO_ENVIO_VISUAL'] = df_display['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S')
+            else:
+                df_display['REGISTRO_ENVIO_VISUAL'] = None
+
+            if 'REGISTRO_LANCAMENTO' in df_display.columns:
+                df_display['REGISTRO_LANCAMENTO_VISUAL'] = df_display['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S')
+            else:
+                df_display['REGISTRO_LANCAMENTO_VISUAL'] = None
 
             edited_df = st.data_editor(
                 df_display,
@@ -461,10 +458,14 @@ else:
                     "VALOR_FRETE": st.column_config.NumberColumn("Frete (R$)", format="%.2f"),
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
+                    # NOVO: Adiciona as colunas de registro na visualização
+                    "REGISTRO_ENVIO_VISUAL": st.column_config.TextColumn("Reg. Envio (Almox.)", disabled=True),
+                    "REGISTRO_LANCAMENTO_VISUAL": st.column_config.TextColumn("Reg. Lançamento (Fin.)", disabled=True),
                 },
                 column_order=[
                     "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO_VISUAL",
-                    "STATUS_VISUAL", "PROBLEMA_VISUAL", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR"
+                    "STATUS_VISUAL", "PROBLEMA_VISUAL", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE", "DOC_NF", "RECEBEDOR",
+                    "REGISTRO_ENVIO_VISUAL", "REGISTRO_LANCAMENTO_VISUAL"
                 ],
                 hide_index=True
             )
@@ -474,9 +475,23 @@ else:
             if not edited_df.equals(df_display):
                 st.session_state.alteracoes_pendentes = True
 
+                # Lógica para registrar a data de lançamento
+                for index, row in edited_df.iterrows():
+                    # Mapeia o valor visual de volta para o original
+                    status_original = row['STATUS_VISUAL'].replace('🟢 FINALIZADO', 'FINALIZADO').replace('🟡 EM ANDAMENTO', 'EM ANDAMENTO').replace('🔴 NF PROBLEMA', 'NF PROBLEMA')
+                    
+                    # Se o status foi alterado para FINALIZADO E a coluna de lançamento está vazia
+                    if status_original == 'FINALIZADO' and pd.isna(df_display.loc[index, 'REGISTRO_LANCAMENTO']):
+                        edited_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now()
+
                 # Normaliza tipos antes de salvar
                 edited_df["DATA"] = _to_datetime(edited_df["DATA"])
                 edited_df["VENCIMENTO"] = _to_datetime(edited_df["VENCIMENTO"])
+                
+                # NOVO: Normaliza as colunas de registro de volta para datetime
+                edited_df['REGISTRO_ENVIO'] = _to_datetime(edited_df['REGISTRO_ENVIO_VISUAL'])
+                edited_df['REGISTRO_LANCAMENTO'] = _to_datetime(edited_df['REGISTRO_LANCAMENTO_VISUAL'])
+
                 for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
                     edited_df[c] = pd.to_numeric(edited_df[c], errors="coerce").fillna(0.0)
                 
@@ -488,7 +503,7 @@ else:
                 edited_df["STATUS"] = edited_df["STATUS_VISUAL"].str.replace('🟢 ', '').str.replace('🟡 ', '').str.replace('🔴 ', '')
                 edited_df["CONDICAO_PROBLEMA"] = edited_df["PROBLEMA_VISUAL"].str.replace('🔴 ', '')
                 
-                edited_df.drop(columns=['STATUS_VISUAL', 'DIAS_VENCIMENTO_VISUAL', 'PROBLEMA_VISUAL'], inplace=True, errors='ignore')
+                edited_df.drop(columns=['STATUS_VISUAL', 'DIAS_VENCIMENTO_VISUAL', 'PROBLEMA_VISUAL', 'REGISTRO_ENVIO_VISUAL', 'REGISTRO_LANCAMENTO_VISUAL'], inplace=True, errors='ignore')
                 # --- FIM DA CORREÇÃO ---
                 
                 st.session_state.df = edited_df.copy()
