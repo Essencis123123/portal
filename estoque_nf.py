@@ -148,6 +148,15 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
+        # SE O DATAFRAME ESTIVER VAZIO, GARANTA QUE AS COLUNAS ESSENCIAIS EXISTAM
+        if df.empty:
+            df = pd.DataFrame(columns=[
+                "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
+                "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+                "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
+                "ORDEM_COMPRA"
+            ])
+
         for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
@@ -156,6 +165,7 @@ def carregar_dados_almoxarifado():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
+        # GARANTA QUE AS NOVAS COLUNAS SEMPRE EXISTAM
         if 'CONDICAO_PROBLEMA' not in df.columns:
             df['CONDICAO_PROBLEMA'] = ''
         if 'REGISTRO_ADICIONAL' not in df.columns:
@@ -170,6 +180,7 @@ def carregar_dados_almoxarifado():
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
+        # Retorne um DataFrame com as colunas em caso de erro
         return pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
@@ -421,7 +432,7 @@ else:
                                 st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
                             else:
                                 st.error("Erro ao salvar os dados da nota fiscal.")
-                    
+                        
                             st.balloons()
                             st.rerun()
                         except ValueError:
@@ -514,7 +525,13 @@ else:
             with col1:
                 nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
                 ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
-                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + sorted(df['FORNECEDOR'].dropna().unique().tolist()))
+                
+                # CORREÇÃO APLICADA AQUI: Adiciona verificação para evitar o KeyError
+                if 'FORNECEDOR' in df.columns:
+                    fornecedores_unicos = sorted(df['FORNECEDOR'].dropna().unique().tolist())
+                else:
+                    fornecedores_unicos = []
+                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + fornecedores_unicos)
             
             with col2:
                 status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
