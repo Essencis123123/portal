@@ -398,7 +398,7 @@ else:
         """, unsafe_allow_html=True)
 
         # Filtra os dados para o usuário logado
-        if not df_reembolsos.empty:
+        if not df_reembolsos.empty and 'NOME' in df_reembolsos.columns:
             df_reembolsos_usuario = df_reembolsos[df_reembolsos['NOME'] == st.session_state.nome_colaborador].copy()
         else:
             df_reembolsos_usuario = pd.DataFrame()
@@ -515,7 +515,7 @@ else:
                             # Crie uma tabela HTML para os detalhes do e-mail de admin
                             novos_registros_html = "<table><tr><th>Data</th><th>Nome</th><th>Departamento</th><th>Tipo</th><th>Valor</th><th>Justificativa</th></tr>"
                             for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
-                                novos_registros_html += f"<tr><td>{reembolso['data_despesa'].strftime('%d/%m/%Y')}</td><td>{st.session_state.nome_form}</td><td>{st.session_state.depto_form}</td><td>{reembolso['tipo_despesa']}</td></td><td>{reembolso['justificativa']}</td></tr>"
+                                novos_registros_html += f"<tr><td>{reembolso['data_despesa'].strftime('%d/%m/%Y')}</td><td>{st.session_state.nome_form}</td><td>{st.session_state.depto_form}</td><td>{reembolso['tipo_despesa']}</td><td>R$ {reembolso['valor_reembolso']:.2f}</td><td>{reembolso['justificativa']}</td></tr>"
                             novos_registros_html += "</table>"
                             
                             if user_email:
@@ -542,7 +542,8 @@ else:
                             send_email(admin_email, subject_admin, body_admin)
                             
                         except Exception as e:
-                            st.error(f"❌ Erro ao salvar os dados na planilha do Google Sheets: {e}")
+                            # Adicionado para exibir o erro completo e persistente
+                            st.exception(e)
 
                         st.session_state.reembolsos_a_enviar = [{}]
                         st.rerun()
