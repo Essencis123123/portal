@@ -9,6 +9,7 @@ from google.oauth2.service_account import Credentials
 import json
 import plotly.express as px
 from pandas.errors import EmptyDataError
+import numpy as np # Importando numpy para usar np.where
 
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
@@ -183,12 +184,15 @@ def carregar_dados_pedidos():
         if 'PREVISAO_ENTREGA' not in df.columns:
             df['PREVISAO_ENTREGA'] = pd.NaT
 
-        # NOVO CÓDIGO AQUI:
         # Define o status do pedido com base na data de entrega
         df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
             lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
         )
 
+        # --- NOVO: Calcula a coluna VALOR_TOTAL ---
+        if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
+            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+        
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
@@ -312,7 +316,8 @@ if df_filtrado.empty:
 
 # --- Análise e Métricas ---
 st.subheader("Visão Geral do Período")
-col1, col2, col3 = st.columns(3)
+# --- NOVO: Adicionando o autosoma em um card
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     total_pedidos = len(df_filtrado)
     st.metric("Total de Pedidos", total_pedidos)
@@ -322,6 +327,11 @@ with col2:
 with col3:
     pedidos_entregues = len(df_filtrado[df_filtrado['STATUS_PEDIDO'] == 'ENTREGUE'])
     st.metric("Pedidos Entregues", pedidos_entregues)
+with col4:
+    # Calcula e exibe o autosoma do valor total
+    valor_total_soma = df_filtrado['VALOR_TOTAL'].sum()
+    st.metric("Valor Total dos Pedidos", f"R$ {valor_total_soma:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
 
 st.markdown("---")
 
@@ -370,17 +380,24 @@ if 'PREVISAO_ENTREGA' in df_tabela.columns:
     df_tabela['PREVISÃO ENTREGA'] = df_tabela['PREVISAO_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
 else:
     df_tabela['PREVISÃO ENTREGA'] = 'N/A'
+    
+# Formata as colunas de valor para o display
+df_tabela['VALOR_ITEM'] = df_tabela['VALOR_ITEM'].astype(str).str.replace('.', ',', regex=False)
+df_tabela['VALOR_TOTAL'] = df_tabela['VALOR_TOTAL'].astype(str).str.replace('.', ',', regex=False)
+df_tabela['VALOR_RENEGOCIADO'] = df_tabela['VALOR_RENEGOCIADO'].astype(str).str.replace('.', ',', regex=False)
 
 st.dataframe(
     df_tabela[[
-        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL', 
-        'QUANTIDADE', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
+        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL',  
+        'QUANTIDADE', 'VALOR_ITEM', 'VALOR_TOTAL', 'VALOR_RENEGOCIADO',
+        'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ]],
     use_container_width=True,
     hide_index=True,
     column_order=[
-        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL', 
-        'QUANTIDADE', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
+        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL',  
+        'QUANTIDADE', 'VALOR_ITEM', 'VALOR_TOTAL', 'VALOR_RENEGOCIADO',
+        'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ],
     column_config={
         "DATA REQUISIÇÃO": st.column_config.DateColumn("Data Requisição"),
@@ -389,6 +406,9 @@ st.dataframe(
         "DEPARTAMENTO": "Departamento",
         "MATERIAL": "Material",
         "QUANTIDADE": "Quantidade",
+        "VALOR_ITEM": "Valor Unitário",
+        "VALOR_TOTAL": "Valor Total",
+        "VALOR_RENEGOCIADO": "Valor Renegociado",
         "STATUS": "Status",
         "ORDEM_COMPRA": "N° Ordem de Compra",
         "FORNECEDOR": "Fornecedor",
