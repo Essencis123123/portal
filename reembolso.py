@@ -10,12 +10,15 @@ import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import io
 import re
+import mimetypes
+
+# URL do seu formulário no Formspree
+FORMSPREE_ENDPOINT = "https://formspree.io/f/mvgbdkzg"
 
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
@@ -137,9 +140,8 @@ def load_logo(url):
         st.error(f"Erro ao carregar a logo: {e}")
         return None
 
-# --- Configuração de Dados e Lógica de Backend (Google Sheets e Drive) ---
+# --- Configuração de Dados e Lógica de Backend (Google Sheets) ---
 SHEET_ID = st.secrets["sheet_id"]
-PASTA_DRIVE_ID = "1FyHsl2dR9kMiRvBhp0i_WV1fvYgEeNPY"
 
 # Conexão com Google Sheets (gspread)
 @st.cache_resource(ttl=3600)
@@ -150,19 +152,18 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-# Conexão com Google Drive e Gmail API
+# Conexão com Gmail API (mantida para envio de e-mails)
 @st.cache_resource(ttl=3600)
 def get_google_api_service():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
         st.secrets["gcp_service_account"],
-        ['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/gmail.send']
+        ['https://www.googleapis.com/auth/gmail.send']
     )
-    drive_service = build('drive', 'v3', credentials=creds)
     gmail_service = build('gmail', 'v1', credentials=creds)
-    return drive_service, gmail_service
+    return gmail_service
 
 gs_client = get_gspread_client()
-drive_service, gmail_service = get_google_api_service()
+gmail_service = get_google_api_service()
 
 
 def carregar_dados_usuarios():
@@ -259,7 +260,7 @@ def fazer_login(email, senha):
         return False
 
 # Função para enviar e-mail
-def send_email(to_email, subject, body, from_email='suprimentosessencis.com.br'):
+def send_email(to_email, subject, body, from_email=st.secrets.gcp_service_account.get("client_email", "")):
     try:
         message = MIMEMultipart()
         message['to'] = to_email
@@ -277,23 +278,26 @@ def send_email(to_email, subject, body, from_email='suprimentosessencis.com.br')
         st.error(f"Erro ao enviar e-mail para {to_email}: {e}")
         return None
 
-# Função para fazer upload para o Google Drive
-def upload_to_drive(file, folder_id):
+# NOVA FUNÇÃO DE ENVIO PARA O FORMSPREE
+def enviar_para_formspree(dados):
+    """Envia os dados do formulário, incluindo arquivos, para o Formspree."""
     try:
-        file_metadata = {
-            'name': file.name,
-            'parents': [folder_id]
-        }
-        media = MediaIoBaseUpload(io.BytesIO(file.getvalue()), mimetype=file.type)
-        uploaded_file = drive_service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id, webContentLink'
-        ).execute()
-        return uploaded_file.get('webContentLink')
+        files_to_send = {}
+        for i, comprovante in enumerate(dados.get('comprovantes', [])):
+            file_name = comprovante.name
+            file_content = comprovante.getvalue()
+            mime_type = comprovante.type or mimetypes.guess_type(file_name)[0]
+            
+            files_to_send[f'comprovante_{i}'] = (file_name, file_content, mime_type)
+
+        response = requests.post(FORMSPREE_ENDPOINT, data=dados, files=files_to_send)
+        response.raise_for_status()
+
+        return response.status_code == 200
     except Exception as e:
-        st.error(f"Erro ao fazer upload do arquivo para o Google Drive: {e}")
-        return None
+        st.error(f"Erro ao enviar para o Formspree: {e}")
+        return False
+
 
 # Lista de Departamentos (Número sempre antes do nome)
 DEPARTAMENTOS = [
@@ -485,75 +489,30 @@ else:
                     if reembolsos_validos:
                         novos_registros = []
                         comprovante_links = []
-                        for reembolso in st.session_state.reembolsos_a_enviar:
-                            nomes_comprovantes = []
-                            for comprovante in reembolso['comprovantes']:
-                                link = upload_to_drive(comprovante, PASTA_DRIVE_ID)
-                                if link:
-                                    nomes_comprovantes.append(f"{comprovante.name}")
-                                    comprovante_links.append(f"[{comprovante.name}]({link})")
-                            
-                            novo_registro = {
-                                "DATA": reembolso['data_despesa'].strftime("%d/%m/%Y"),
-                                "NOME": st.session_state.nome_form,
-                                "DEPARTAMENTO": st.session_state.depto_form,
-                                "TIPO_DESPESA": reembolso['tipo_despesa'],
-                                "VALOR": reembolso['valor_reembolso'],
-                                "JUSTIFICATIVA": reembolso['justificativa'],
-                                "STATUS": "PENDENTE",
-                                "ID_COMPROVANTE": ", ".join(comprovante_links)
-                            }
-                            novos_registros.append(novo_registro)
                         
-                        df_novos_registros = pd.DataFrame(novos_registros)
-                        st.session_state.df_reembolsos = pd.concat([st.session_state.df_reembolsos, df_novos_registros], ignore_index=True)
-
-                        if salvar_dados_reembolsos(st.session_state.df_reembolsos):
-                            st.success("🎉 Todas as solicitações de reembolso foram registradas com sucesso!")
+                        for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
+                            dados_para_enviar = {
+                                "Nome": st.session_state.nome_form,
+                                "Departamento": st.session_state.depto_form,
+                                "Tipo de Despesa": reembolso['tipo_despesa'],
+                                "Data da Despesa": reembolso['data_despesa'].strftime("%d/%m/%Y"),
+                                "Valor": reembolso['valor_reembolso'],
+                                "Justificativa": reembolso['justificativa'],
+                                "comprovantes": reembolso['comprovantes']
+                            }
                             
-                            # Envio de e-mails
-                            user_email = st.session_state.get('email_colaborador', '')
-                            admin_email = "earaujo@essencis.com.br"
-                            
-                            if user_email:
-                                subject_user = "Confirmação de Solicitação de Reembolso"
-                                body_user = f"""
-                                Olá {st.session_state.nome_form},<br><br>
-                                Sua solicitação de reembolso foi registrada com sucesso.<br>
-                                Acompanhe o status pelo dashboard do sistema.<br><br>
-                                Atenciosamente,<br>
-                                Equipe de Reembolsos
-                                """
-                                send_email(user_email, subject_user, body_user)
-                            
-                            subject_admin = f"Novo Reembolso Registrado - {st.session_state.nome_colaborador}"
-                            body_admin = f"""
-                            Olá,<br><br>
-                            Um novo reembolso foi registrado por {st.session_state.nome_colaborador} ({st.session_state.depto_form}).<br><br>
-                            **Detalhes do(s) Reembolso(s):**<br>
-                            {df_novos_registros.to_html(index=False)}<br><br>
-                            Acesse o sistema para analisar as solicitações.<br><br>
-                            Atenciosamente,<br>
-                            Sistema de Reembolsos
-                            """
-                            send_email(admin_email, subject_admin, body_admin)
+                            if enviar_para_formspree(dados_para_enviar):
+                                st.success(f"🎉 Solicitação de Reembolso #{i + 1} enviada com sucesso! Você receberá uma confirmação por e-mail.")
+                                
+                                # AQUI NÃO SALVAMOS MAIS NA PLANILHA, POIS O FORMSPREE CUIDA DO REGISTRO
+                                # Se você quiser manter a planilha, você pode adaptar o código para adicionar
+                                # uma nova linha com os dados, mas sem o link do comprovante.
+                                
+                            else:
+                                st.error(f"❌ Erro ao enviar a solicitação #{i + 1}.")
 
-                            st.session_state.reembolsos_a_enviar = [{}] # Limpa o formulário
-                            st.rerun()
-                        else:
-                            st.error("❌ Erro ao salvar os dados. Tente novamente.")
-    
-        st.markdown("---")
-        
-        # --- EXIBE O HISTÓRICO DO USUÁRIO NA PRÓPRIA PÁGINA ---
-        st.subheader("Suas Solicitações Enviadas Recentemente")
-        if not df_reembolsos_usuario.empty:
-            df_usuario = df_reembolsos_usuario.copy()
-            df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            st.dataframe(df_usuario, use_container_width=True)
-        else:
-            st.info("Você ainda não enviou nenhuma solicitação de reembolso.")
-
+                        st.session_state.reembolsos_a_enviar = [{}]
+                        st.rerun()
 
     # --- PÁGINA: DASHBOARD ---
     elif menu_option == "📊 Dashboard":
@@ -647,14 +606,7 @@ else:
             # Exibe a tabela com a coluna de links clicáveis
             st.dataframe(
                 df_consulta, 
-                use_container_width=True,
-                column_config={
-                    "ID_COMPROVANTE": st.column_config.LinkColumn(
-                        "Comprovante",
-                        help="Clique para baixar o comprovante",
-                        display_text="📥 Download"
-                    )
-                }
+                use_container_width=True
             )
 
             csv_download = df_consulta.to_csv(index=False).encode('utf-8')
