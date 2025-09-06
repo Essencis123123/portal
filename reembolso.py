@@ -17,8 +17,8 @@ import io
 import re
 import mimetypes
 
-# URL do seu formulário no Formspree
-FORMSPREE_ENDPOINT = "https://formspree.io/f/mvgbdkzg"
+# URL do seu novo formulário no Formspree
+FORMSPREE_ENDPOINT = "https://formspree.io/f/xkgvkjjn"
 
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
