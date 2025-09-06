@@ -186,7 +186,6 @@ def carregar_dados_pedidos():
         if 'PREVISAO_ENTREGA' not in df.columns:
             df['PREVISAO_ENTREGA'] = pd.NaT
 
-        # NOVO CÓDIGO AQUI:
         # Define o status do pedido com base na data de entrega
         df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
             lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
@@ -216,7 +215,6 @@ def salvar_dados_pedidos(df):
         df_to_save = df.copy()
         
         # Converte as colunas de valor para tipo string e substitui vírgulas por pontos
-        # para garantir o formato numérico correto para o Google Sheets
         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
             if col_val in df_to_save.columns:
                 df_to_save[col_val] = df_to_save[col_val].astype(str).str.replace(',', '.', regex=False)
@@ -463,8 +461,16 @@ else:
             df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
             pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
-            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True)
+            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
+        # CORREÇÃO: Converter NaT para None antes de passar para o data_editor
+        data_cols = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
+        for col in data_cols:
+            if col in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
+                    lambda x: x.date() if pd.notna(x) else None
+                )
+        
         cols_para_editar = [
             "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "QUANTIDADE",
             "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
@@ -491,8 +497,8 @@ else:
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    "VALOR_ITEM": st.column_config.TextColumn("Valor do Item"),  # Alterado para TextColumn
-                    "VALOR_RENEGOCIADO": st.column_config.TextColumn("Valor Renegociado"),  # Alterado para TextColumn
+                    "VALOR_ITEM": st.column_config.TextColumn("Valor do Item"),
+                    "VALOR_RENEGOCIADO": st.column_config.TextColumn("Valor Renegociado"),
                     "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
@@ -595,7 +601,7 @@ else:
         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
             if col_val in df_display.columns:
                 df_display[col_val] = df_display[col_val].astype(str).str.replace('.', ',', regex=False)
-        
+
         def formatar_status_display(status):
             if status == 'ENTREGUE':
                 return '🟢 ENTREGUE'
@@ -606,7 +612,13 @@ else:
         
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
-        df_display['Anexo'] = df_display['DOC NF'].apply(lambda x: "📥 Anexo" if pd.notna(x) and x != "" else "N/A")
+        # CORREÇÃO: Converter NaT para None antes de passar para o data_editor
+        data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
+        for col in data_cols_history:
+            if col in df_display.columns:
+                df_display[col] = df_display[col].apply(
+                    lambda x: x.date() if pd.notna(x) else None
+                )
 
         edited_history_df = st.data_editor(
             df_display,
