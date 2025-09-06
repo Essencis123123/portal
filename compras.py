@@ -463,9 +463,13 @@ else:
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
             pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
-        # CORREÇÃO: Converter NaT para None nas colunas de data
-        data_cols = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
-        for col in data_cols:
+        # CORREÇÃO: Converter a coluna 'DATA' para string para ser exibida na tabela
+        if 'DATA' in pedidos_pendentes_oc.columns:
+            pedidos_pendentes_oc['DATA'] = pedidos_pendentes_oc['DATA'].dt.strftime('%d/%m/%Y').fillna('')
+
+        # CORREÇÃO: Converter NaT para None nas outras colunas de data
+        data_cols_to_convert = ['DATA_APROVACAO', 'PREVISAO_ENTREGA']
+        for col in data_cols_to_convert:
             if col in pedidos_pendentes_oc.columns:
                 pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
                     lambda x: x.date() if pd.notna(x) else None
@@ -491,7 +495,7 @@ else:
                 column_order=cols_para_editar,
                 column_config={
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                    "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
+                    "DATA": st.column_config.TextColumn("Data da Requisição", disabled=True),
                     "SOLICITANTE": "Solicitante",
                     "MATERIAL": "Material",
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
@@ -517,6 +521,8 @@ else:
 
             edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
             edited_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
+            
+            # Converte a coluna DATA de volta para o formato de data
             edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
             
             edited_df['DIAS_EMISSAO'] = edited_df.apply(
@@ -653,7 +659,6 @@ else:
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
                 "DIAS_ATRASO": "Dias Atraso",
-                "DIAS_EMISSAO": "Dias Emissão",
                 "DOC NF": st.column_config.LinkColumn(
                     "Anexo NF",
                     help="Clique para visualizar o anexo",
@@ -663,7 +668,7 @@ else:
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
                 "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
             ]
         )
 
@@ -686,10 +691,7 @@ else:
             edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
             edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
 
-            edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(
-                lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
-                axis=1
-            )
+            # LÓGICA DO CAMPO 'DIAS_EMISSAO' FOI REMOVIDA DESTA SEÇÃO, MAS MANTIDA NA 'Pedidos (OC)' CASO NECESSÁRIO
             
             def calcular_dias_atraso(row):
                 if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
@@ -701,8 +703,13 @@ else:
 
             # Mapeia as alterações de volta para o DataFrame principal
             for col in edited_history_df.columns:
-                if col in st.session_state.df_pedidos.columns and col not in ['Anexo']:
+                if col in st.session_state.df_pedidos.columns:
                     st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
+            
+            # Garante que 'DIAS_EMISSAO' continue no DataFrame principal, mesmo que não seja exibida no histórico
+            if 'DIAS_EMISSAO' not in edited_history_df.columns and 'DIAS_EMISSAO' in st.session_state.df_pedidos.columns:
+                # O valor não muda, então não precisa de ação aqui.
+                pass
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Histórico atualizado com sucesso!")
