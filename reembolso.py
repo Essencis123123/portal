@@ -191,6 +191,7 @@ def carregar_dados_reembolsos():
 
 
 def salvar_dados_reembolsos(df):
+    """Função para salvar o DataFrame inteiro. Usada para inicialização ou backup."""
     try:
         sheet = gs_client.open_by_key(SHEET_ID).worksheet("Reembolsos")
         sheet.clear()
@@ -279,7 +280,7 @@ def send_email(to_email, subject, body, from_email=st.secrets.gcp_service_accoun
 if 'last_error' not in st.session_state:
     st.session_state.last_error = None
 
-# NOVA FUNÇÃO QUE CONVERTE O ARQUIVO EM BASE64
+# FUNÇÃO QUE CONVERTE O ARQUIVO EM BASE64
 def file_to_base64(uploaded_file):
     """Converte um arquivo enviado em uma string Base64."""
     if uploaded_file is None:
@@ -397,8 +398,11 @@ else:
         """, unsafe_allow_html=True)
 
         # Filtra os dados para o usuário logado
-        df_reembolsos_usuario = df_reembolsos[df_reembolsos['NOME'] == st.session_state.nome_colaborador].copy()
-        
+        if not df_reembolsos.empty:
+            df_reembolsos_usuario = df_reembolsos[df_reembolsos['NOME'] == st.session_state.nome_colaborador].copy()
+        else:
+            df_reembolsos_usuario = pd.DataFrame()
+
         if not df_reembolsos_usuario.empty:
             df_reembolsos_usuario['VALOR'] = pd.to_numeric(df_reembolsos_usuario['VALOR'], errors='coerce').fillna(0)
             
@@ -511,9 +515,9 @@ else:
                             # Crie uma tabela HTML para os detalhes do e-mail de admin
                             novos_registros_html = "<table><tr><th>Data</th><th>Nome</th><th>Departamento</th><th>Tipo</th><th>Valor</th><th>Justificativa</th></tr>"
                             for i, reembolso in enumerate(st.session_state.reembolsos_a_enviar):
-                                novos_registros_html += f"<tr><td>{reembolso['data_despesa'].strftime('%d/%m/%Y')}</td><td>{st.session_state.nome_form}</td><td>{st.session_state.depto_form}</td><td>{reembolso['tipo_despesa']}</td><td>R$ {reembolso['valor_reembolso']:.2f}</td><td>{reembolso['justificativa']}</td></tr>"
+                                novos_registros_html += f"<tr><td>{reembolso['data_despesa'].strftime('%d/%m/%Y')}</td><td>{st.session_state.nome_form}</td><td>{st.session_state.depto_form}</td><td>{reembolso['tipo_despesa']}</td></td><td>{reembolso['justificativa']}</td></tr>"
                             novos_registros_html += "</table>"
-
+                            
                             if user_email:
                                 subject_user = "Confirmação de Solicitação de Reembolso"
                                 body_user = f"""
@@ -559,7 +563,10 @@ else:
         if not df_reembolsos.empty:
             
             # Filtra os dados para o usuário logado
-            df_reembolsos_usuario = df_reembolsos[df_reembolsos['NOME'] == st.session_state.nome_colaborador].copy()
+            if 'NOME' in df_reembolsos.columns:
+                df_reembolsos_usuario = df_reembolsos[df_reembolsos['NOME'] == st.session_state.nome_colaborador].copy()
+            else:
+                df_reembolsos_usuario = pd.DataFrame()
             
             if df_reembolsos_usuario.empty:
                 st.info("Você ainda não tem dados para o dashboard. Envie sua primeira solicitação de reembolso!")
@@ -621,14 +628,27 @@ else:
             
             # --- Cria a coluna de download ---
             def create_download_link(row):
-                base64_string = row['ID_COMPROVANTE']
-                if not base64_string:
-                    return ""
+                base64_strings = row['ID_COMPROVANTE'].split(', ')
+                links = []
+                for i, base64_string in enumerate(base64_strings):
+                    if not base64_string:
+                        continue
+                    
+                    # Tenta adivinhar o tipo de arquivo
+                    if base64_string.startswith('JVBER'):
+                        mime_type = 'application/pdf'
+                        file_ext = 'pdf'
+                    elif base64_string.startswith('/9j/') or base64_string.startswith('iVBORw0KGgo'):
+                        mime_type = 'image/jpeg'
+                        file_ext = 'jpg'
+                    else:
+                        mime_type = 'application/octet-stream'
+                        file_ext = 'bin'
+
+                    href = f"data:{mime_type};base64,{base64_string}"
+                    links.append(f'<a href="{href}" download="comprovante_{i+1}.{file_ext}">📥 Download {i+1}</a>')
                 
-                # A primeira parte do Base64 pode ter o cabeçalho do tipo de arquivo,
-                # mas vamos assumir que são sempre imagens ou PDFs para simplificar.
-                # Como não temos o nome do arquivo, usaremos 'comprovante'.
-                return f'<a href="data:image/png;base64,{base64_string}" download="comprovante.png">📥 Download</a>'
+                return " | ".join(links)
 
             # Aplica os filtros
             col1, col2 = st.columns(2)
@@ -648,11 +668,11 @@ else:
                 df_consulta['DATA'] = pd.to_datetime(df_consulta['DATA'], format='%d/%m/%Y', errors='coerce').dt.strftime('%d/%m/%Y')
             
             # Exibe a tabela com o link de download
-            df_exibicao = df_consulta.drop(columns=['ID_COMPROVANTE'])
-            df_exibicao['Comprovante'] = df_consulta.apply(create_download_link, axis=1)
-            
+            df_exibicao = df_consulta.drop(columns=['ID_COMPROVANTE'], errors='ignore')
+            df_exibicao.insert(len(df_exibicao.columns), 'Comprovantes', df_consulta.apply(create_download_link, axis=1))
+
             st.markdown(
-                df_exibicao.to_html(escape=False),
+                df_exibicao.to_html(escape=False, index=False),
                 unsafe_allow_html=True
             )
 
