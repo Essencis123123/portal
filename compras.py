@@ -219,16 +219,21 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df.copy()
         
-        # Converte as colunas de valor para tipo string e substitui vírgulas por pontos
-        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-            if col_val in df_to_save.columns:
-                df_to_save[col_val] = df_to_save[col_val].astype(str).str.replace(',', '.', regex=False)
-
+        # CORREÇÃO: Preenche valores NaN em colunas numéricas com 0
+        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        for col in numeric_cols:
+            if col in df_to_save.columns:
+                df_to_save[col] = df_to_save[col].fillna(0)
+        
+        # Converte as colunas de data para o formato de string
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
+        
+        # Preenche quaisquer NaNs restantes em todo o DataFrame com uma string vazia
+        df_to_save = df_to_save.fillna('')
         
         data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
         
