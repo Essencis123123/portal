@@ -148,21 +148,18 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # SE O DATAFRAME ESTIVER VAZIO, GARANTA QUE AS COLUNAS ESSENCIAIS EXISTAM
-        # Essa é a principal correção
+        # Atualizado: A coluna de referência agora é FORNECEDOR_NF
         colunas_obrigatorias_almoxarifado = [
-            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
+            "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
             "ORDEM_COMPRA", "REGISTRO_ENVIO"
         ]
 
-        # Adiciona as colunas faltantes para garantir que o dataframe tenha a estrutura completa
         for col in colunas_obrigatorias_almoxarifado:
             if col not in df.columns:
                 df[col] = pd.NA if df.empty else ''
 
-        # Agora a conversão de tipos pode ser feita com segurança
         df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
         df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
         df['REGISTRO_ENVIO'] = pd.to_datetime(df['REGISTRO_ENVIO'], errors='coerce', dayfirst=True)
@@ -173,7 +170,6 @@ def carregar_dados_almoxarifado():
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
-        # Retorne um DataFrame com as colunas em caso de erro
         return pd.DataFrame(columns=colunas_obrigatorias_almoxarifado)
 
 def salvar_dados_almoxarifado(df):
@@ -190,7 +186,6 @@ def salvar_dados_almoxarifado(df):
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         
-        # Formata a nova coluna
         if 'REGISTRO_ENVIO' in df_copy.columns:
             df_copy['REGISTRO_ENVIO'] = df_copy['REGISTRO_ENVIO'].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
         
@@ -321,6 +316,7 @@ else:
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
+                    # Atualizado: Usando a coluna 'FORNECEDOR' da planilha de pedidos para o selectbox
                     fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
                     fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                     
@@ -362,21 +358,17 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            # Adicionado a busca para garantir que a OC exista na planilha de pedidos
                             if 'ORDEM_COMPRA' in st.session_state.df_pedidos.columns:
-                                # Encontra as linhas na planilha de pedidos com a OC informada
                                 pedidos_relacionados = st.session_state.df_pedidos[
                                     st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
                                 ]
                                 
                                 if not pedidos_relacionados.empty:
-                                    # Atualiza o status, a data de entrega e o doc da NF para todos os pedidos com essa OC
                                     indices_a_atualizar = pedidos_relacionados.index
                                     st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
                                     st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
                                     st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = doc_nf_link
 
-                                    # Salva as alterações na planilha de pedidos
                                     salvar_dados_pedidos(st.session_state.df_pedidos)
                                 else:
                                     st.warning(f"ℹ️ A Ordem de Compra '{ordem_compra_nf}' não foi encontrada na planilha de pedidos. O status não foi atualizado.")
@@ -384,7 +376,7 @@ else:
                             novo_registro_nf = {
                                 "DATA": pd.to_datetime(data_recebimento),
                                 "RECEBEDOR": recebedor,
-                                "FORNECEDOR": fornecedor_nf,
+                                "FORNECEDOR_NF": fornecedor_nf, # Alterado aqui
                                 "NF": nf_numero,
                                 "VOLUME": volume_nf,
                                 "V. TOTAL NF": valor_total_float,
@@ -397,7 +389,7 @@ else:
                                 "CONDICAO_PROBLEMA": "N/A",
                                 "REGISTRO_ADICIONAL": "",
                                 "ORDEM_COMPRA": ordem_compra_nf,
-                                "REGISTRO_ENVIO": datetime.datetime.now() # NOVO CAMPO: Registra a data e hora do envio
+                                "REGISTRO_ENVIO": datetime.datetime.now()
                             }
                             st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
                             
@@ -469,7 +461,8 @@ else:
             with col_g2:
                 problemas_df = df_almoxarifado_filtrado[df_almoxarifado_filtrado['STATUS_FINANCEIRO'] == 'NF PROBLEMA']
                 if not problemas_df.empty:
-                    top_problemas = problemas_df['FORNECEDOR'].value_counts().head(10).reset_index()
+                    # Atualizado: Top 10 fornecedores com problemas, usando a nova coluna
+                    top_problemas = problemas_df['FORNECEDOR_NF'].value_counts().head(10).reset_index()
                     top_problemas.columns = ['Fornecedor', 'Notas com Problema']
                     fig_barras = px.bar(top_problemas, x='Notas com Problema', y='Fornecedor', orientation='h', title='Top 10 Fornecedores com Problemas')
                     st.plotly_chart(fig_barras, use_container_width=True)
@@ -499,9 +492,9 @@ else:
                 nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
                 ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
                 
-                # CORREÇÃO APLICADA AQUI: Adiciona verificação para evitar o KeyError
-                if 'FORNECEDOR' in df.columns:
-                    fornecedores_unicos = sorted(df['FORNECEDOR'].dropna().unique().tolist())
+                # Atualizado: O filtro de fornecedor agora usa a coluna 'FORNECEDOR_NF'
+                if 'FORNECEDOR_NF' in df.columns:
+                    fornecedores_unicos = sorted(df['FORNECEDOR_NF'].dropna().unique().tolist())
                 else:
                     fornecedores_unicos = []
                 fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + fornecedores_unicos)
@@ -523,7 +516,8 @@ else:
             
             if nf_consulta: df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False)]
             if ordem_compra_consulta: df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False)]
-            if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR'] == fornecedor_consulta]
+            # Atualizado: O filtro de consulta usa a coluna 'FORNECEDOR_NF'
+            if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
             if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
             
             df_consulta = df_consulta[
@@ -534,18 +528,19 @@ else:
             st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
             
             if not df_consulta.empty:
+                # Atualizado: A exibição da tabela usa a coluna 'FORNECEDOR_NF'
                 df_exibir_consulta = df_consulta[[
-                    'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
+                    'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
                     'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE'
                 ]].copy()
                 
                 # Função para adicionar bolinhas coloridas aos status
                 def colorir_status(status):
                     cores = {
-                        "EM ANDAMENTO": "🟡",  # Amarelo
-                        "NF PROBLEMA": "🔴",   # Vermelho  
-                        "CAPTURADO": "🟠",      # Laranja
-                        "FINALIZADO": "🟢"      # Verde
+                        "EM ANDAMENTO": "🟡",
+                        "NF PROBLEMA": "🔴",
+                        "CAPTURADO": "🟠",
+                        "FINALIZADO": "🟢"
                     }
                     return f"{cores.get(status, '⚪')} {status}"
                 
