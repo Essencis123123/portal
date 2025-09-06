@@ -412,6 +412,11 @@ st.dataframe(
     }
 )
 
+# --- NOVO: Adiciona a autosoma do valor total abaixo da tabela ---
+if not df_filtrado.empty:
+    valor_total_soma = df_filtrado['VALOR_TOTAL'].sum()
+    st.markdown(f"<div style='text-align: right; font-size: 20px; font-weight: bold; padding-top: 15px;'>Valor Total dos Itens Filtrados: R$ {valor_total_soma:,.2f}</div>".replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
+
 # Botão de download para o CSV
 csv_pedidos = df_filtrado.to_csv(index=False).encode('utf-8')
 st.download_button(
