@@ -590,20 +590,27 @@ else:
             df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
             df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
-        if not df_history['DATA'].isnull().all():
+        # --- CORREÇÃO: Verificação antes de criar o selectbox ---
+        df_valid_dates = df_history.dropna(subset=['DATA'])
+        
+        if not df_valid_dates.empty:
+            meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
+            anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
+            
+            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+            
             with col_filter_h1:
-                meses_disponiveis = df_history['DATA'].dt.month.unique()
-                meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
                 mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
             with col_filter_h2:
-                anos_disponiveis = df_history['DATA'].dt.year.unique()
                 ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
             
+            # Aplica os filtros *depois* de obter as opções
             df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
         else:
-            mes_selecionado_h = None
-            ano_selecionado_h = None
-        
+            st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
+            st.stop()
+        # --- FIM DA CORREÇÃO ---
+
         # NOVO: Adiciona o filtro de status em uma nova coluna
         col_filter_s1, col_filter_s2 = st.columns(2)
         with col_filter_s1:
@@ -971,17 +978,18 @@ else:
         
         mes_selecionado_p = []
         ano_selecionado_p = None
-        if not df_performance_local['DATA'].isnull().all():
-            meses_disponiveis_p = df_performance_local['DATA'].dt.month.unique()
+        
+        df_valid_dates_p = df_performance_local.dropna(subset=['DATA'])
+        if not df_valid_dates_p.empty:
+            meses_disponiveis_p = df_valid_dates_p['DATA'].dt.month.unique()
+            anos_disponiveis_p = df_valid_dates_p['DATA'].dt.year.unique()
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             mes_selecionado_p = col_filtro_p1.multiselect("Selecione o Mês", sorted(meses_disponiveis_p), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis_p))
-        
-        if not df_performance_local['DATA'].isnull().all():
-            anos_disponiveis_p = df_performance_local['DATA'].dt.year.unique()
             ano_selecionado_p = col_filtro_p2.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
-            ano_selecionado_p = None
-
+            st.info("Nenhum pedido local com data válida para análise.")
+            st.stop()
+        
         if mes_selecionado_p and ano_selecionado_p:
             df_performance_local = df_performance_local[(df_performance_local['DATA'].dt.month.isin(mes_selecionado_p)) & (df_performance_local['DATA'].dt.year == ano_selecionado_p)]
         else:
