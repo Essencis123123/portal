@@ -10,7 +10,7 @@ import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from googleapiclient.discovery import build
-from googleapapi.http import MediaIoBaseUpload
+from googleapiclient.http import MediaIoBaseUpload
 import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
