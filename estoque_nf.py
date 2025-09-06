@@ -528,10 +528,10 @@ else:
             st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
             
             if not df_consulta.empty:
-                # Atualizado: A exibição da tabela usa a coluna 'FORNECEDOR_NF'
+                # Alterado: Adicionando 'REGISTRO_ENVIO' na lista de colunas para exibição
                 df_exibir_consulta = df_consulta[[
                     'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
-                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE'
+                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE', 'REGISTRO_ENVIO'
                 ]].copy()
                 
                 # Função para adicionar bolinhas coloridas aos status
@@ -548,6 +548,9 @@ else:
                 
                 df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['VENCIMENTO'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+                # Adicionado: Formatação para a coluna 'REGISTRO_ENVIO'
+                df_exibir_consulta['REGISTRO_ENVIO'] = df_exibir_consulta['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S')
+
                 df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
