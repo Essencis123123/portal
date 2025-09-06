@@ -552,9 +552,11 @@ else:
                 
                 df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
                 
+                # ALTERADO: Formatação apenas da data para as colunas DATA e VENCIMENTO
                 df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['VENCIMENTO'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-                # Adicionado: Formatação para a coluna 'REGISTRO_ENVIO'
+                
+                # MANTIDO: Formatação completa de data e hora para a coluna REGISTRO_ENVIO
                 df_exibir_consulta['REGISTRO_ENVIO'] = df_exibir_consulta['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S')
 
                 df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
