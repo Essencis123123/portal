@@ -309,6 +309,9 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
+        # NOVO: Exibe a data e hora atual
+        st.info(f"📅 Data e Hora Atual: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}**")
+
         with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
             with st.form("formulario_nota", clear_on_submit=True):
                 col1, col2, col3 = st.columns(3)
@@ -430,6 +433,9 @@ else:
                 <p>Análise estratégica dos custos por departamento</p>
             </div>
         """, unsafe_allow_html=True)
+        
+        # NOVO: Exibe a data e hora atual no dashboard
+        st.info(f"📅 Data e Hora Atual: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}**")
         
         df = st.session_state.df_almoxarifado
         if not df.empty:
