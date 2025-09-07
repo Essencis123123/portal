@@ -415,6 +415,10 @@ else:
             ["📝 Requisição", "✍️ Pedidos (OC)", "📜 Histórico ", "👤 Cadastro", "📊 Dashboards ", "📊 Performance "]
         )
         st.divider()
+        if st.sidebar.button("Atualizar Dados"):
+            st.session_state.df_pedidos = carregar_dados_pedidos()
+            st.success("Dados atualizados com sucesso!")
+            st.rerun()
         if st.sidebar.button("Logout"):
             st.session_state['logado'] = False
             st.session_state.pop('nome_colaborador', None)
@@ -750,8 +754,8 @@ else:
             key='history_editor',
             column_config={
                 "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
-                "REQUISICAO": st.column_config.TextColumn("N° Requisição", disabled=True),
-                "DATA": st.column_config.DateColumn("Data Requisição", disabled=True),
+                "REQUISICAO": "N° Requisição",
+                "DATA": st.column_config.DateColumn("Data Requisição"),
                 "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                 "DEPARTAMENTO": "Departamento",
                 "FILIAL": "Filial",
@@ -808,14 +812,18 @@ else:
                         return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days
                 return 0
 
+            def calcular_dias_emissao(row):
+                if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
+                    return (row['DATA_APROVACAO'] - row['DATA']).days
+                return 0
+            
             edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
+            edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(calcular_dias_emissao, axis=1)
+
 
             for col in edited_history_df.columns:
                 if col in st.session_state.df_pedidos.columns:
                     st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
-            
-            if 'DIAS_EMISSAO' not in edited_history_df.columns and 'DIAS_EMISSAO' in st.session_state.df_pedidos.columns:
-                pass
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Histórico atualizado com sucesso!")
@@ -1205,7 +1213,7 @@ else:
         else:
             st.info("Nenhum pedido com data válida para análise.")
             st.stop()
-        
+
         if mes_selecionado_p and ano_selecionado_p:
             df_performance_filtrado = df_performance[(df_performance['DATA'].dt.month.isin(mes_selecionado_p)) & (df_performance['DATA'].dt.year == ano_selecionado_p)]
         else:
