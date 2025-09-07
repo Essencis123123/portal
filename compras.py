@@ -635,7 +635,7 @@ else:
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
                     "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
                     "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
-                    "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material", disabled=True),
+                    "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
                     "UN": st.column_config.TextColumn("UN", disabled=True),
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
@@ -804,7 +804,7 @@ else:
                 "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                 "DEPARTAMENTO": "Departamento",
                 "FILIAL": "Filial",
-                "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material", disabled=True),
+                "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                 "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
                 "UN": st.column_config.TextColumn("UN", disabled=True),
                 "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
@@ -1292,7 +1292,7 @@ else:
             total_pedidos_local = len(df_performance_local)
             st.metric("Total de Pedidos Locais", total_pedidos_local)
         with col2:
-            media_economia = df_negociados['PERC_ECONOMIA'].mean() if 'PERC_ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
+            media_economia = df_negociados['PERC_ECONOMIA'].mean() if 'PERC_ECONIOMIA' in df_negociados.columns and not df_negociados.empty else 0
             st.metric("Média de Economia (%)", f"{media_economia:.2f}%")
         with col3:
             total_economizado = df_negociados['ECONOMIA'].sum() if 'ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
