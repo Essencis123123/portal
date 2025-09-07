@@ -402,9 +402,10 @@ else:
 
             # --- Lógica para as colunas visuais ---
             status_map = {
-                'FINALIZADO': '🟢 FINALIZADO',
                 'EM ANDAMENTO': '🟡 EM ANDAMENTO',
-                'NF PROBLEMA': '🔴 NF PROBLEMA'
+                'NF PROBLEMA': '🔴 NF PROBLEMA',
+                'CAPTURADO': '🟣 CAPTURADO',
+                'FINALIZADO': '🟢 FINALIZADO'
             }
             df_display['STATUS_VISUAL'] = df_display['STATUS'].map(status_map).fillna(df_display['STATUS'])
             
@@ -427,7 +428,7 @@ else:
             
             df_display['PROBLEMA_VISUAL'] = df_display.apply(lambda row: formatar_problema_visual(row), axis=1)
 
-            status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA"]
+            status_options = ["EM ANDAMENTO", "FINALIZADO", "NF PROBLEMA", "CAPTURADO"]
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
             # Formata colunas de data/hora para exibição
@@ -479,7 +480,7 @@ else:
                 # Lógica para registrar a data de lançamento
                 for index, row in edited_df.iterrows():
                     # Mapeia o valor visual de volta para o original
-                    status_original = row['STATUS_VISUAL'].replace('🟢 FINALIZADO', 'FINALIZADO').replace('🟡 EM ANDAMENTO', 'EM ANDAMENTO').replace('🔴 NF PROBLEMA', 'NF PROBLEMA')
+                    status_original = row['STATUS_VISUAL'].replace('🟢 FINALIZADO', 'FINALIZADO').replace('🟡 EM ANDAMENTO', 'EM ANDAMENTO').replace('🔴 NF PROBLEMA', 'NF PROBLEMA').replace('🟣 CAPTURADO', 'CAPTURADO')
                     
                     # Se o status foi alterado para FINALIZADO E a coluna de lançamento está vazia
                     if status_original == 'FINALIZADO' and pd.isna(df_display.loc[index, 'REGISTRO_LANCAMENTO']):
@@ -501,7 +502,7 @@ else:
                 edited_df["DIAS_VENCIMENTO"] = (edited_df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
 
                 # --- CORREÇÃO: Mapeia as colunas visuais de volta para as originais antes de salvar ---
-                edited_df["STATUS"] = edited_df["STATUS_VISUAL"].str.replace('🟢 ', '').str.replace('🟡 ', '').str.replace('🔴 ', '')
+                edited_df["STATUS"] = edited_df["STATUS_VISUAL"].str.replace('🟢 ', '').str.replace('🟡 ', '').str.replace('🔴 ', '').str.replace('🟣 ', '')
                 edited_df["CONDICAO_PROBLEMA"] = edited_df["PROBLEMA_VISUAL"].str.replace('🔴 ', '')
                 
                 edited_df.drop(columns=['STATUS_VISUAL', 'DIAS_VENCIMENTO_VISUAL', 'PROBLEMA_VISUAL', 'REGISTRO_ENVIO_VISUAL', 'REGISTRO_LANCAMENTO_VISUAL'], inplace=True, errors='ignore')
