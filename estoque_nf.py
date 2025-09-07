@@ -218,9 +218,18 @@ def carregar_dados_pedidos():
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # --- ALTERAÇÃO AQUI: Tratamento do valor com vírgula ---
+        # --- CORREÇÃO AQUI: Tratamento de valores numéricos com vírgula ---
         if 'VALOR_ITEM' in df.columns:
-            df['VALOR_ITEM'] = df['VALOR_ITEM'].astype(str).str.replace(',', '.', regex=True)
+            # Converte para string para garantir a manipulação
+            df['VALOR_ITEM'] = df['VALOR_ITEM'].astype(str)
+            
+            # Remove pontos de milhar
+            df['VALOR_ITEM'] = df['VALOR_ITEM'].str.replace('.', '', regex=False)
+            
+            # Substitui a vírgula por ponto decimal
+            df['VALOR_ITEM'] = df['VALOR_ITEM'].str.replace(',', '.', regex=False)
+            
+            # Converte para numérico
             df['VALOR_ITEM'] = pd.to_numeric(df['VALOR_ITEM'], errors='coerce').fillna(0)
         
         if 'DOC NF' not in df.columns:
@@ -411,6 +420,7 @@ def render_registrar_nf_page():
                     st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
                 else:
                     try:
+                        # O valor da NF digitado já é tratado aqui para aceitar vírgula e ponto
                         valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                         valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                         
@@ -421,7 +431,7 @@ def render_registrar_nf_page():
                         valor_oc_total = 0.0
                         if not pedidos_relacionados.empty:
                             try:
-                                # A CORREÇÃO JÁ FOI FEITA NA FUNÇÃO carregar_dados_pedidos()
+                                # O valor_oc_total já está numérico após a correção na função de carregamento
                                 valor_oc_total = pedidos_relacionados['VALOR_ITEM'].sum()
                             except ValueError:
                                 st.warning("Não foi possível calcular o valor da OC. Verifique o formato dos dados.")
