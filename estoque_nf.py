@@ -536,10 +536,7 @@ def render_registrar_nf_page():
         else:
             df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = ''
         
-        if not df_ultimas_nfs.empty and pd.api.types.is_datetime64_any_dtype(df_ultimas_nfs['REGISTRO_LANCAMENTO']):
-            df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
-        else:
-            df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = ''
+        # A coluna de REGISTRO_LANCAMENTO_VISUAL é removida da visualização
         
         col_map = {
             'DATA': 'Data',
@@ -551,7 +548,6 @@ def render_registrar_nf_page():
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
             'REGISTRO_ENVIO_VISUAL': 'Reg. Envio',
-            'REGISTRO_LANCAMENTO_VISUAL': 'Reg. Lançamento'
         }
         df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map)
         
@@ -567,7 +563,10 @@ def render_registrar_nf_page():
         df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
         
         st.dataframe(
-            df_ultimas_nfs_display,
+            df_ultimas_nfs_display[[
+                'Data', 'Fornecedor', 'Número NF', 'Ordem de Compra', 'Volume', 
+                'Valor Total NF', 'Status Financeiro', 'Anexo NF', 'Reg. Envio'
+            ]],
             use_container_width=True,
             column_config={
                 "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
