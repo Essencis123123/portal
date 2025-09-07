@@ -183,6 +183,8 @@ def carregar_dados_pedidos():
             df['FORNECEDOR'] = ''
         if 'PREVISAO_ENTREGA' not in df.columns:
             df['PREVISAO_ENTREGA'] = pd.NaT
+        if 'CODIGO_MATERIAL' not in df.columns:
+            df['CODIGO_MATERIAL'] = ''
 
         # Define o status do pedido com base na data de entrega
         df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
@@ -198,7 +200,7 @@ def carregar_dados_pedidos():
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
         st.info("Verifique suas credenciais e a planilha.")
         return pd.DataFrame(columns=[
-            "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "MATERIAL",
+            "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "CODIGO_MATERIAL", "MATERIAL",
             "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM", "FORNECEDOR", "PREVISAO_ENTREGA"
         ])
 
@@ -387,13 +389,13 @@ df_tabela['VALOR_TOTAL'] = df_tabela['VALOR_TOTAL'].astype(str).str.replace('.',
 
 st.dataframe(
     df_tabela[[
-        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL',  
+        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
         'QUANTIDADE', 'VALOR_TOTAL', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ]],
     use_container_width=True,
     hide_index=True,
     column_order=[
-        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL',  
+        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
         'QUANTIDADE', 'VALOR_TOTAL', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ],
     column_config={
@@ -401,6 +403,7 @@ st.dataframe(
         "REQUISICAO": "N° Requisição",
         "SOLICITANTE": "Solicitante",
         "DEPARTAMENTO": "Departamento",
+        "CODIGO_MATERIAL": "Cód. Material",
         "MATERIAL": "Material",
         "QUANTIDADE": "Quantidade",
         "VALOR_TOTAL": "Valor Total",
