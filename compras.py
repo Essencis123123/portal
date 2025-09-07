@@ -831,7 +831,8 @@ else:
 
 
         
-    elif menu == "👤 Cadastro ":
+    elif menu == "👤 Cadastro":
+
         st.markdown("""
             <div class='header-container'>
                 <h1>👤 CADASTRO</h1>
