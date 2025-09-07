@@ -180,13 +180,12 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # Trata colunas numéricas: Substitui vírgula por ponto e converte para numérico
+        # Trata colunas numéricas: Remove separadores de milhar e converte para numérico
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Remove separador de milhar (ponto) e substitui vírgula por ponto decimal
-                # CORREÇÃO AQUI: Usa regex para tratar vírgula e ponto de forma segura
-                df[col] = df[col].astype(str).str.replace(r'[.,]', '', regex=True)
+                # Primeiro remove o ponto (separador de milhar), depois troca a vírgula por ponto decimal
+                df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         # Garante que colunas importantes existam
