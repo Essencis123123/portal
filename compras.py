@@ -215,9 +215,12 @@ def carregar_dados_pedidos():
                 if df[col].dtype == 'object':
                     df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                # Arredonda para 2 casas decimais
+                df[col] = df[col].round(2)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+            df['VALOR_TOTAL'] = df['VALOR_TOTAL'].round(2)
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ""
@@ -239,7 +242,6 @@ def carregar_dados_pedidos():
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
         st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
         return pd.DataFrame()
-
 
 
 
