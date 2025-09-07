@@ -340,19 +340,34 @@ def render_registrar_nf_page():
         </div>
     """, unsafe_allow_html=True)
     
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+        # O seletor de fornecedor está fora do formulário para habilitar o filtro dinâmico
+        fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+        nf_numero = st.text_input("Número da NF*")
+
+    # Lógica para filtrar as Ordens de Compra com base no fornecedor selecionado
+    ordens_disponiveis = ['']
+    if fornecedor_selecionado:
+        pedidos_filtrados = st.session_state.df_pedidos[
+            (st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado)
+        ]
+        ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
+    
     with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
         with st.form("formulario_nota", clear_on_submit=True):
-            col1, col2, col3 = st.columns(3)
+            col1_form, col2_form, col3_form = st.columns(3)
             
-            with col1:
+            with col1_form:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
-                fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
-                fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                # Exibe o fornecedor selecionado do widget fora do formulário
+                st.write(f"**Fornecedor Selecionado:** `{fornecedor_selecionado}`")
+                st.write(f"**Número da NF:** `{nf_numero}`")
                 
-                nf_numero = st.text_input("Número da NF*")
-                
-            with col2:
+            with col2_form:
                 recebedor_options = [
                     "ARLEY GONCALVES DOS SANTOS", "EVIANE DAS GRACAS DE ASSIS",
                     "ANDRE CASTRO DE SOUZA", "ISABELA CAROLINA DE PAURA SOARES",
@@ -361,25 +376,15 @@ def render_registrar_nf_page():
                 ]
                 recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
 
-                # Lógica para filtrar as Ordens de Compra com base no fornecedor selecionado
-                if fornecedor_nf and fornecedor_nf != '':
-                    ordens_disponiveis = st.session_state.df_pedidos[
-                        (st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_nf) &
-                        (st.session_state.df_pedidos['STATUS_PEDIDO'].isin(['APROVADO', 'ENTREGUE']))
-                    ]['ORDEM_COMPRA'].dropna().unique().tolist()
-                else:
-                    ordens_disponiveis = st.session_state.df_pedidos['ORDEM_COMPRA'].dropna().unique().tolist()
-                
-                # O campo "N° Ordem de Compra*" agora é um selectbox
                 ordem_compra_nf = st.selectbox(
                     "N° Ordem de Compra*",
-                    options=[''] + sorted(ordens_disponiveis),
+                    options=sorted(ordens_disponiveis),
                     help="Selecione o número da ordem de compra para vincular a nota."
                 )
                 
                 volume_nf = st.number_input("Volume*", min_value=1, value=1)
                 
-            with col3:
+            with col3_form:
                 valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
                 condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
                 valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
@@ -392,7 +397,7 @@ def render_registrar_nf_page():
             
             if enviar:
                 campos_validos = all([
-                    fornecedor_nf.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
+                    fornecedor_selecionado.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
                     valor_total_nf.strip() not in ["", "0,00"]
                 ])
                 
@@ -419,7 +424,7 @@ def render_registrar_nf_page():
                         st.session_state['novo_registro_nf'] = {
                             "DATA": pd.to_datetime(data_recebimento),
                             "RECEBEDOR": recebedor,
-                            "FORNECEDOR_NF": fornecedor_nf, 
+                            "FORNECEDOR_NF": fornecedor_selecionado, 
                             "NF": nf_numero,
                             "VOLUME": volume_nf,
                             "V. TOTAL NF": valor_total_float,
