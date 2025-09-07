@@ -674,40 +674,40 @@ else:
             st.success("Dados atualizados com sucesso!")
             st.rerun()
 
-elif menu == "📜 Histórico ":
-    st.markdown("""
-        <div class='header-container'>
-            <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
-            <p>Gerencie e Edite os Registros Anteriores</p>
-        </div>
-    """, unsafe_allow_html=True)
-    st.header("📜 Histórico de Requisições e Pedidos")
-    st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
-    
-    df_history = st.session_state.df_pedidos.copy()
-    
-    df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
-    
-    # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
-    df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
-    df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
-
-    df_almox = st.session_state.df_almoxarifado.copy()
-    if not df_almox.empty:
-        df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
-        df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
-        df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
-
-    df_valid_dates = df_history.dropna(subset=['DATA'])
-    
-    if not df_valid_dates.empty:
-        meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
-        anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
+    elif menu == "📜 Histórico ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
+                <p>Gerencie e Edite os Registros Anteriores</p>
+            </div>
+        """, unsafe_allow_html=True)
+        st.header("📜 Histórico de Requisições e Pedidos")
+        st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
         
-        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+        df_history = st.session_state.df_pedidos.copy()
         
-        col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
-        col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
+        df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+        
+        # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
+        df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
+        df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
+    
+        df_almox = st.session_state.df_almoxarifado.copy()
+        if not df_almox.empty:
+            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
+            df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+    
+        df_valid_dates = df_history.dropna(subset=['DATA'])
+        
+        if not df_valid_dates.empty:
+            meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
+            anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
+            
+            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+            
+            col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
+            col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
 
         with col_filter_row1_1:
             mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
