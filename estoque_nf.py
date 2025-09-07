@@ -192,15 +192,17 @@ def parse_brazil_number(value_str):
     """
     if not isinstance(value_str, str):
         return value_str
-    
+
     cleaned_value = value_str.strip()
     
-    # Se o valor contém vírgula, assume que é o separador decimal.
-    # Remove todos os pontos e substitui a vírgula por ponto.
-    if ',' in cleaned_value:
-        cleaned_value = cleaned_value.replace('.', '')
-        cleaned_value = cleaned_value.replace(',', '.')
-    # Se não há vírgula, o ponto é o separador decimal. Não removemos.
+    # Remove 'R$' e espaços.
+    cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
+    
+    # Remove separadores de milhar (pontos)
+    cleaned_value = cleaned_value.replace('.', '')
+    
+    # Substitui o separador decimal (vírgula) por ponto
+    cleaned_value = cleaned_value.replace(',', '.')
     
     try:
         return float(cleaned_value)
