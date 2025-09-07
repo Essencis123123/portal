@@ -186,29 +186,55 @@ def carregar_dados_pedidos():
        # --- TRECHO COMPLETAMENTE REFEITO ---
         # --- TRECHO FINAL CORRIGIDO PARA LIMPEZA DE DADOS ---
         # --- TRECHO COMPLETAMENTE CORRIGIDO ---
+        # --- SOLUÇÃO ALTERNATIVA - PROCESSAMENTO MANUAL ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Converte para string
-                df[col] = df[col].astype(str)
+                valores_processados = []
                 
-                # Remove apenas símbolos de moeda e espaços, mas MANTÉM pontos e vírgulas
-                df[col] = df[col].str.replace(r'[R$\s]', '', regex=True)
+                for valor in df[col]:
+                    # Converter para string
+                    str_valor = str(valor)
+                    
+                    # DEBUG: Mostrar valor original
+                    if col == 'VALOR_ITEM' and len(valores_processados) < 3:
+                        print(f"Valor original: {str_valor}")
+                    
+                    # Remover qualquer caractere que não seja dígito, ponto ou vírgula
+                    str_limpo = ''.join(c for c in str_valor if c.isdigit() or c in ['.', ','])
+                    
+                    # Verificar se está no formato brasileiro (com ponto de milhar)
+                    if '.' in str_limpo and ',' in str_limpo:
+                        # Formato: 1.234,56 - remover pontos e trocar vírgula por ponto
+                        partes = str_limpo.split(',')
+                        parte_inteira = partes[0].replace('.', '')
+                        valor_final = parte_inteira + '.' + partes[1]
+                    elif ',' in str_limpo:
+                        # Formato: 1234,56 - só trocar vírgula por ponto
+                        valor_final = str_limpo.replace(',', '.')
+                    else:
+                        # Formato: 1234.56 ou 1234 - manter como está
+                        valor_final = str_limpo
+                    
+                    # Converter para float
+                    try:
+                        valor_float = float(valor_final)
+                    except:
+                        valor_float = 0.0
+                        
+                    # DEBUG: Mostrar valor processado
+                    if col == 'VALOR_ITEM' and len(valores_processados) < 3:
+                        print(f"Valor processado: {valor_float}")
+                        
+                    valores_processados.append(valor_float)
                 
-                # Processamento para formato brasileiro: 8.600,00
-                # Primeiro remove pontos (que são separadores de milhar)
-                df[col] = df[col].str.replace('.', '', regex=False)
+                df[col] = valores_processados
                 
-                # Depois troca vírgula por ponto (para o padrão float internacional)
-                df[col] = df[col].str.replace(',', '.', regex=False)
-                
-                # Converte para numérico
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                
-                # DEBUG: Verifique se está correto
-                print(f"Coluna {col} - Primeiros valores:")
-                print(df[col].head(3).tolist())
-        # --- FIM DO TRECHO ---
+                # DEBUG: Mostrar resultado final
+                if col == 'VALOR_ITEM':
+                    print(f"Valores finais da coluna {col}:")
+                    print(df[col].head(3).tolist())
         
         # Garante que colunas importantes existam
         if 'STATUS_PEDIDO' not in df.columns:
