@@ -491,7 +491,7 @@ def render_registrar_nf_page():
                             "OBSERVACAO": observacao,
                             "DOC NF": doc_nf_link,
                             "VENCIMENTO": vencimento_nf,
-                            "STATUS_FINANCEIRO": "CAPTURADO", # Status inicial CAPTURADO
+                            "STATUS_FINANCEIRO": "EM ANDAMENTO",  # Alterado para "EM ANDAMENTO"
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
@@ -704,6 +704,9 @@ def render_consultar_nfs_page():
         with col2:
             status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
             status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
+            
+            # Garante que a coluna 'DATA' é do tipo datetime antes de encontrar o mínimo e máximo
+            df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
             
             data_minima = df['DATA'].min().date() if pd.notna(df['DATA'].min()) else datetime.date.today()
             data_maxima = df['DATA'].max().date() if pd.notna(df['DATA'].max()) else datetime.date.today()
