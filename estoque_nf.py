@@ -143,7 +143,7 @@ def get_gspread_client():
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     return gspread.authorize(credentials)
     
-# Funções auxiliares para formatação e parsing de datas
+# Funções auxiliares para formatação e parsing de datas e números
 def parse_date_from_editor(date_value):
     """Converte valores do editor para datetime (suporte a hífen, barra e ISO)"""
     if date_value is None or pd.isna(date_value) or date_value == '':
@@ -185,6 +185,28 @@ def formatar_data_brasil_hifen(data):
     except:
         return str(data)
 
+def parse_brazil_number(value_str):
+    """
+    Converte uma string de número no formato brasileiro (1.234,56) para float (1234.56).
+    """
+    if not isinstance(value_str, str):
+        return value_str
+    
+    cleaned_value = value_str.strip()
+    
+    # Troca a vírgula pelo ponto decimal
+    cleaned_value = cleaned_value.replace(',', '.')
+    
+    # Remove todos os pontos restantes, tratando-os como separadores de milhar
+    if cleaned_value.count('.') > 1:
+        parts = cleaned_value.split('.')
+        cleaned_value = ''.join(parts[:-1]) + '.' + parts[-1]
+    
+    try:
+        return float(cleaned_value)
+    except (ValueError, TypeError):
+        return pd.NaT
+
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
     """Carrega dados do Google Sheets (aba de Almoxarifado)."""
@@ -215,7 +237,7 @@ def carregar_dados_almoxarifado():
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                df[col] = df[col].apply(parse_brazil_number).fillna(0)
         
         return df
     except Exception as e:
@@ -261,18 +283,9 @@ def carregar_dados_pedidos():
             if col in df.columns:
                 df[col] = df[col].apply(parse_date_from_editor)
         
-        # --- CORREÇÃO AQUI: Tratamento de valores numéricos com vírgula ---
+        # --- Tratamento de valores numéricos com a função robusta ---
         if 'VALOR_ITEM' in df.columns:
-            df['VALOR_ITEM'] = df['VALOR_ITEM'].astype(str)
-            
-            # Remove pontos de milhar, se existirem
-            df['VALOR_ITEM'] = df['VALOR_ITEM'].str.replace('.', '', regex=False)
-            
-            # Substitui a vírgula por ponto decimal
-            df['VALOR_ITEM'] = df['VALOR_ITEM'].str.replace(',', '.', regex=False)
-            
-            # Converte para numérico
-            df['VALOR_ITEM'] = pd.to_numeric(df['VALOR_ITEM'], errors='coerce').fillna(0)
+            df['VALOR_ITEM'] = df['VALOR_ITEM'].apply(parse_brazil_number).fillna(0)
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
