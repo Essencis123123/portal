@@ -171,13 +171,18 @@ def carregar_dados_pedidos():
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
         
-        data = worksheet.get_all_records()
-
-        if not data:
+        # Use UNFORMATTED_VALUE para obter os valores brutos
+        data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
+        
+        if not data or len(data) <= 1:
             st.warning("A planilha está vazia ou não contém dados.")
             return pd.DataFrame()
             
-        df = pd.DataFrame(data)
+        # O cabeçalho é a primeira linha
+        headers = data[0]
+        records = data[1:]
+        
+        df = pd.DataFrame(records, columns=headers)
 
         # Trata colunas de data
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
@@ -188,14 +193,24 @@ def carregar_dados_pedidos():
         # --- TRECHO CORRIGIDO PARA LIMPEZA DE DADOS NUMÉRICOS ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
-            if col in df.columns and not df[col].empty:
-                series = df[col].astype(str)
-                # Remove o ponto apenas se ele for um separador de milhar (seguido por números e uma vírgula)
-                series = series.str.replace(r'\.(?=.*\d,)', '', regex=True)
-                # Substitui a vírgula por ponto decimal
-                series = series.str.replace(',', '.', regex=False)
-                # Converte para numérico e preenche NaNs com 0
-                df[col] = pd.to_numeric(series, errors='coerce').fillna(0)
+            if col in df.columns:
+                # Converte para string primeiro para tratamento consistente
+                df[col] = df[col].astype(str)
+                
+                # Remove possíveis espaços em branco
+                df[col] = df[col].str.strip()
+                
+                # Substitui vírgula por ponto para conversão numérica
+                df[col] = df[col].str.replace(',', '.', regex=False)
+                
+                # Remove qualquer caractere não numérico (exceto ponto decimal)
+                df[col] = df[col].str.replace(r'[^\d.]', '', regex=True)
+                
+                # Converte para numérico
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                
+                # Arredonda para 2 casas decimais
+                df[col] = df[col].round(2)
 
         # Garante que colunas importantes existam
         if 'STATUS_PEDIDO' not in df.columns:
@@ -210,23 +225,26 @@ def carregar_dados_pedidos():
             df['CODIGO_MATERIAL'] = ''
 
         # Define o status do pedido com base na data de entrega
-        df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
-            lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
+        df['STATUS_PEDIDO'] = df.apply(
+            lambda row: 'ENTREGUE' if pd.notna(row.get('DATA_ENTREGA')) else 'PENDENTE', 
+            axis=1
         )
 
         # Calcula a coluna VALOR_TOTAL após a conversão numérica
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
-            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+            df['VALOR_TOTAL'] = (df['QUANTIDADE'] * df['VALOR_ITEM']).round(2)
         
         return df
+        
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        import traceback
+        st.error(f"Detalhes do erro: {traceback.format_exc()}")
         st.info("Verifique suas credenciais e a planilha.")
         return pd.DataFrame(columns=[
             "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "CODIGO_MATERIAL", "MATERIAL",
             "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM", "FORNECEDOR", "PREVISAO_ENTREGA"
         ])
-
 
 # Carrega os dados uma vez para o app
 df_pedidos = carregar_dados_pedidos()
