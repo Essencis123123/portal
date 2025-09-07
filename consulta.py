@@ -180,13 +180,14 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # Trata colunas numéricas: Remove separadores de milhar e converte para numérico
+        # --- Trecho de correção principal ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Primeiro remove o ponto (separador de milhar), depois troca a vírgula por ponto decimal
+                # Remove o separador de milhar (ponto) e substitui a vírgula pelo ponto decimal
                 df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        # --- Fim do trecho de correção principal ---
         
         # Garante que colunas importantes existam
         if 'STATUS_PEDIDO' not in df.columns:
