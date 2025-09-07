@@ -247,7 +247,55 @@ def carregar_dados_pedidos():
         ])
 
 # Carrega os dados uma vez para o app
+# Carrega os dados uma vez para o app
 df_pedidos = carregar_dados_pedidos()
+
+# Verifica se o DataFrame não está vazio antes de continuar
+if df_pedidos is None or df_pedidos.empty:
+    st.info("Nenhum pedido registrado no sistema.")
+    st.stop()
+
+# --- FILTROS MOVIDOS PARA A PÁGINA PRINCIPAL ---
+st.markdown("---")
+st.subheader("Filtros de Dados")
+
+col_filters1, col_filters2, col_filters3, col_filters4 = st.columns(4)
+
+with col_filters1:
+    filtro_solicitante = 'Todos'
+    if 'SOLICITANTE' in df_pedidos.columns:
+        solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
+        filtro_solicitante = st.selectbox(
+            "Solicitante:",
+            options=['Todos'] + solicitantes_disponiveis
+        )
+
+with col_filters2:
+    filtro_departamento = 'Todos'
+    if 'DEPARTAMENTO' in df_pedidos.columns:
+        departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
+        filtro_departamento = st.selectbox(
+            "Departamento:",
+            options=['Todos'] + departamentos_disponiveis
+        )
+
+with col_filters3:
+    filtro_status = 'Todos'
+    if 'STATUS_PEDIDO' in df_pedidos.columns:
+        status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
+        filtro_status = st.selectbox(
+            "Status:",
+            options=['Todos'] + sorted(status_disponiveis)
+        )
+
+with col_filters4:
+    filtro_material_cod = 'Todos'
+    if 'CODIGO_MATERIAL' in df_pedidos.columns:
+        cod_materiais_disponiveis = sorted(df_pedidos['CODIGO_MATERIAL'].dropna().unique().tolist())
+        filtro_material_cod = st.selectbox(
+            "Cód. Material:",
+            options=['Todos'] + cod_materiais_disponiveis
+        )
 
 # --- LAYOUT DO SIDEBAR ---
 with st.sidebar:
