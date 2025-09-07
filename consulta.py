@@ -181,8 +181,12 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
+        # --- CORREÇÃO AQUI: Substitui vírgula por ponto antes de converter para numérico ---
         for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
             if col in df.columns and not df[col].empty:
+                # Primeiro, converte a coluna para string para aplicar a substituição
+                df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
+                # Em seguida, converte para numérico
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         if 'STATUS_PEDIDO' not in df.columns:
@@ -239,7 +243,7 @@ with st.sidebar:
         meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
         anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
         meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                       7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+                        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
         # Filtro de Mês como multiselect
         filtro_mes_dash = st.multiselect(
