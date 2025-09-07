@@ -185,13 +185,16 @@ def carregar_dados_pedidos():
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # --- CORREÇÃO: Lógica para tratar os números corretamente ---
+        # Esta é a lógica mais robusta. Garante que 5,5 se torne 5.5 e 1.000,50 se torne 1000.50
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns:
-                # Converte para string e remove o ponto de milhar, se houver,
-                # e substitui a vírgula por ponto decimal.
-                # A expressão regular (r'\.(?=.*\d,)') remove o ponto apenas se ele for um separador de milhar.
-                series = df[col].astype(str).str.replace(r'\.(?=.*\d,)', '', regex=True).str.replace(',', '.', regex=False)
+                series = df[col].astype(str)
+                # Remove o ponto apenas se ele for um separador de milhar (seguido por números e uma vírgula)
+                series = series.str.replace(r'\.(?=.*\d,)', '', regex=True)
+                # Em seguida, substitui a vírgula por ponto decimal
+                series = series.str.replace(',', '.', regex=False)
+                # Converte para numérico e preenche NaNs com 0
                 df[col] = pd.to_numeric(series, errors='coerce').fillna(0)
         
         # Garante que colunas importantes existam antes de serem usadas
