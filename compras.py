@@ -146,6 +146,7 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Conexão e Carregamento de Dados ---
+# --- Funções de Conexão e Carregamento de Dados ---
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
@@ -169,30 +170,34 @@ def carregar_dados_pedidos():
     try:
         gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(0)
+        worksheet = spreadsheet.get_all_records()
         
-        data = worksheet.get_all_records()
-        df = pd.DataFrame(data)
+        if not worksheet:
+            st.warning("A planilha está vazia ou não contém dados.")
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(worksheet)
 
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
+        # Trata colunas de data
+        date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+        for col in date_cols:
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # --- CORREÇÃO: Lógica para tratar os números corretamente ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
-            if col in df.columns and not df[col].empty:
-                series = df[col].astype(str)
-                # Remove o ponto apenas se for um separador de milhar (seguido por números e uma vírgula)
-                series = series.str.replace(r'\.(?=.*\d,)', '', regex=True)
-                # Substitui a vírgula por ponto decimal
-                series = series.str.replace(',', '.', regex=False)
-                # Converte para numérico e preenche NaNs com 0
+            if col in df.columns:
+                # Converte para string e remove o ponto de milhar, se houver,
+                # e substitui a vírgula por ponto decimal.
+                # A expressão regular (r'\.(?=.*\d,)') remove o ponto apenas se ele for um separador de milhar.
+                series = df[col].astype(str).str.replace(r'\.(?=.*\d,)', '', regex=True).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(series, errors='coerce').fillna(0)
         
+        # Garante que colunas importantes existam antes de serem usadas
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
-            df['VALOR_TOTAL'] = df['QUANTIDADE'].astype(float) * df['VALOR_ITEM'].astype(float)
-
+            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+        
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ""
         
@@ -212,7 +217,10 @@ def carregar_dados_pedidos():
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
         st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
-        return criar_dataframe_pedidos_vazio()
+        return pd.DataFrame() # Retorna um DataFrame vazio em caso de erro
+
+
+
 
 def criar_dataframe_pedidos_vazio():
     """Cria um DataFrame de pedidos vazio com a estrutura correta."""
