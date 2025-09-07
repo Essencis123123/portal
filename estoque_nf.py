@@ -234,6 +234,17 @@ def salvar_dados_almoxarifado(df):
         worksheet = spreadsheet.get_worksheet(2)
 
         df_copy = df.copy()
+
+        # Mapeia as colunas do DataFrame para os nomes exatos da planilha
+        df_copy = df_copy.rename(columns={
+            "FORNECEDOR_NF": "FORNECEDOR_NF",
+            "V. TOTAL NF": "V. TOTAL NF",
+            "DOC NF": "DOC NF",
+            "CONDICAO FRETE": "CONDICAO FRETE",
+            "VALOR FRETE": "VALOR FRETE",
+            "OBSERVACAO": "OBSERVACAO",
+            "REGISTRO_ADICIONAL": "REGISTRO_ADICIONAL"
+        }, errors='ignore')
         
         # Formata colunas de data/hora para o formato de string antes de salvar
         for col in ['DATA', 'VENCIMENTO']:
@@ -243,6 +254,9 @@ def salvar_dados_almoxarifado(df):
         for col in ['REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
+
+        # Remove colunas duplicadas e de visualização
+        df_copy = df_copy.loc[:,~df_copy.columns.duplicated()]
         
         set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
@@ -560,7 +574,7 @@ def render_registrar_nf_page():
             }
             return f"{cores.get(status, '⚪')} {status}"
         
-        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
+        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['STATUS_FINANCEIRO'].apply(colorir_status_display)
         
         st.dataframe(
             df_ultimas_nfs_display[[
