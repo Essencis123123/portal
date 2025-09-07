@@ -652,9 +652,58 @@ else:
                 <p>Gerencie e Edite os Registros Anteriores</p>
             </div>
         """, unsafe_allow_html=True)
-        st.header("📜 Histórico de Requisições e Pedidos")
-        st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
         
+        st.header("📝 Adicionar Histórico em Lote")
+        st.info("Envie um arquivo `.csv` ou `.xlsx` com o histórico de pedidos para adicionar ao sistema.")
+        
+        uploaded_file = st.file_uploader("Escolha um arquivo para upload", type=["csv", "xlsx"])
+        
+        if uploaded_file:
+            try:
+                # Carrega o arquivo
+                if uploaded_file.name.endswith('.csv'):
+                    df_novo_historico = pd.read_csv(uploaded_file, sep=';', on_bad_lines='skip')
+                else:
+                    df_novo_historico = pd.read_excel(uploaded_file)
+                
+                # Padroniza nomes das colunas para maiúsculas e sem espaços
+                df_novo_historico.columns = [col.upper().replace(' ', '_') for col in df_novo_historico.columns]
+                
+                # Garante que todas as colunas necessárias existam
+                colunas_necessarias = st.session_state.df_pedidos.columns.tolist()
+                colunas_presentes = df_novo_historico.columns.tolist()
+                
+                if not all(col in colunas_presentes for col in colunas_necessarias):
+                    colunas_faltando = [col for col in colunas_necessarias if col not in colunas_presentes]
+                    st.error(f"Erro: As seguintes colunas obrigatórias estão faltando no seu arquivo: {', '.join(colunas_faltando)}")
+                    st.stop()
+                
+                # Trata as colunas do novo DataFrame
+                for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
+                    if col in df_novo_historico.columns:
+                        df_novo_historico[col] = pd.to_datetime(df_novo_historico[col], errors='coerce', dayfirst=True)
+                
+                for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
+                    if col in df_novo_historico.columns:
+                        df_novo_historico[col] = pd.to_numeric(df_novo_historico[col], errors='coerce').fillna(0)
+                        
+                # Concatena os DataFrames
+                st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_novo_historico], ignore_index=True)
+                
+                # Salva os dados atualizados
+                salvar_dados_pedidos(st.session_state.df_pedidos)
+                st.success(f"🎉 {len(df_novo_historico)} registros foram adicionados ao histórico com sucesso!")
+                st.balloons()
+                time.sleep(3)
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
+
+        st.markdown("---")
+        st.header("📜 Visualização e Edição do Histórico")
+        st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
+
         df_history = st.session_state.df_pedidos.copy()
         
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
@@ -892,14 +941,14 @@ else:
             with col_upload:
                 st.subheader("⬆️ Cadastro em Lote")
                 st.info("Envie um arquivo .csv ou .xlsx com as colunas `CODIGO` e `DESCRICAO` para cadastrar vários materiais de uma vez.")
-                uploaded_file = st.file_uploader("Escolha um arquivo para upload", type=["csv", "xlsx"])
+                uploaded_file_material = st.file_uploader("Escolha um arquivo para upload", type=["csv", "xlsx"], key="material_upload")
                 
-                if uploaded_file:
+                if uploaded_file_material:
                     try:
-                        if uploaded_file.name.endswith('.csv'):
-                            df_novos_materiais = pd.read_csv(uploaded_file)
+                        if uploaded_file_material.name.endswith('.csv'):
+                            df_novos_materiais = pd.read_csv(uploaded_file_material)
                         else:
-                            df_novos_materiais = pd.read_excel(uploaded_file)
+                            df_novos_materiais = pd.read_excel(uploaded_file_material)
                         
                         # Converte os nomes das colunas para maiúsculas e remove espaços
                         df_novos_materiais.columns = [col.upper().strip() for col in df_novos_materiais.columns]
@@ -1213,7 +1262,7 @@ else:
             df_performance_filtrado = pd.DataFrame()
         
         if df_performance_filtrado.empty:
-            st.info("Nenhum dado disponível para o período selecionado.")
+            st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
 
         # Recálculo das colunas de economia para o DataFrame filtrado
