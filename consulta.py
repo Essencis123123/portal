@@ -182,12 +182,14 @@ def carregar_dados_pedidos():
         
         df = pd.DataFrame(records, columns=headers)
 
-        # Trata colunas de data
+        # Trata colunas de data de forma mais robusta
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
-        
+                # Converte para o tipo de dado de data para evitar problemas
+                df[col] = df[col].dt.date
+
         # --- TRECHO CORRIGIDO PARA LIMPEZA DE DADOS NUMÉRICOS ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
@@ -200,7 +202,7 @@ def carregar_dados_pedidos():
             'STATUS_PEDIDO': 'PENDENTE',
             'ORDEM_COMPRA': '',
             'FORNECEDOR': '',
-            'PREVISAO_ENTREGA': pd.NaT,
+            'PREVISAO_ENTREGA': np.nan,  # Use nan para representar NaT em colunas de data
             'CODIGO_MATERIAL': ''
         }
         for col, default_val in cols_to_check.items():
@@ -209,10 +211,10 @@ def carregar_dados_pedidos():
 
         # Define o status do pedido com base na data de entrega
         df['STATUS_PEDIDO'] = df.apply(
-            lambda row: 'ENTREGUE' if pd.notna(row.get('DATA_ENTREGA')) and row.get('DATA_ENTREGA') != '' else 'PENDENTE', 
+            lambda row: 'ENTREGUE' if pd.notna(row.get('DATA_ENTREGA')) else 'PENDENTE', 
             axis=1
         )
-
+        
         # Calcula a coluna VALOR_TOTAL após a conversão numérica
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = (df['QUANTIDADE'] * df['VALOR_ITEM']).round(2)
@@ -266,8 +268,8 @@ with st.sidebar:
 
     # Garante que a coluna 'DATA' existe e não é nula antes de filtrar
     if 'DATA' in df_pedidos.columns and not df_pedidos['DATA'].isnull().all():
-        df_pedidos['MES'] = df_pedidos['DATA'].dt.month
-        df_pedidos['ANO'] = df_pedidos['DATA'].dt.year
+        df_pedidos['MES'] = pd.to_datetime(df_pedidos['DATA']).dt.month
+        df_pedidos['ANO'] = pd.to_datetime(df_pedidos['DATA']).dt.year
         meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
         anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
         meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
@@ -338,10 +340,10 @@ df_filtrado = df_pedidos.copy()
 
 # Aplica os filtros de meses e anos
 if 'DATA' in df_filtrado.columns and filtro_mes_dash:
-    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.month.isin(filtro_mes_dash)]
+    df_filtrado = df_filtrado[pd.to_datetime(df_filtrado['DATA']).dt.month.isin(filtro_mes_dash)]
 
 if 'DATA' in df_filtrado.columns and filtro_ano_dash:
-    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.year.isin(filtro_ano_dash)]
+    df_filtrado = df_filtrado[pd.to_datetime(df_filtrado['DATA']).dt.year.isin(filtro_ano_dash)]
 
 if filtro_solicitante != 'Todos':
     df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
@@ -397,7 +399,6 @@ st.subheader("Detalhes dos Pedidos")
 st.info("A tabela abaixo é apenas para visualização e não permite edição.")
 
 df_tabela = df_filtrado.copy()
-
 def formatar_status(status):
     if status == 'ENTREGUE':
         return '🟢 ENTREGUE'
@@ -421,7 +422,7 @@ st.dataframe(
         'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISAO_ENTREGA', 'DATA_ENTREGA'
     ],
     column_config={
-        "DATA": st.column_config.DateColumn("Data Requisição", format="%d/%m/%Y"),
+        "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY"),
         "REQUISICAO": "N° Requisição",
         "SOLICITANTE": "Solicitante",
         "DEPARTAMENTO": "Departamento",
@@ -432,8 +433,8 @@ st.dataframe(
         "STATUS": "Status",
         "ORDEM_COMPRA": "N° Ordem de Compra",
         "FORNECEDOR": "Fornecedor",
-        "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão Entrega", format="%d/%m/%Y"),
-        "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="%d/%m/%Y")
+        "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão Entrega", format="DD/MM/YYYY"),
+        "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY")
     }
 )
 
