@@ -334,6 +334,7 @@ else:
         """, unsafe_allow_html=True)
         
         with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
+            # O formulário é um contêiner, então podemos colocar a lógica dentro dele
             with st.form("formulario_nota", clear_on_submit=True):
                 col1, col2, col3 = st.columns(3)
                 
@@ -341,11 +342,7 @@ else:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
                     fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
-                    fornecedor_nf = st.selectbox(
-                        "Fornecedor da NF*",
-                        options=[''] + sorted(fornecedores_disponiveis),
-                        key='fornecedor_selecionado' # Adicione uma chave para o seletor
-                    )
+                    fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                     
                     nf_numero = st.text_input("Número da NF*")
                     
@@ -358,20 +355,21 @@ else:
                     ]
                     recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
                     
-                    # --- LÓGICA DE FILTRAGEM DE ORDEM DE COMPRA ---
+                    # Lógica de filtragem da Ordem de Compra
+                    ordens_compra_disponiveis = []
                     if fornecedor_nf:
                         pedidos_filtrados_por_fornecedor = st.session_state.df_pedidos[
-                            st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_nf
+                            (st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_nf) &
+                            (st.session_state.df_pedidos['STATUS_PEDIDO'] != 'ENTREGUE')
                         ]
-                        ordens_compra_disponiveis = pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'].dropna().unique().tolist()
-                        ordem_compra_nf = st.selectbox(
-                            "N° Ordem de Compra*",
-                            options=[''] + sorted(ordens_compra_disponiveis),
-                            help="Número da ordem de compra para vincular a nota"
-                        )
-                    else:
-                        ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Selecione um fornecedor para ver as opções.")
+                        ordens_compra_disponiveis = sorted(pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'].dropna().unique().tolist())
                     
+                    ordem_compra_nf = st.selectbox(
+                        "N° Ordem de Compra*",
+                        options=[''] + ordens_compra_disponiveis,
+                        help="Número da ordem de compra para vincular a nota"
+                    )
+
                     volume_nf = st.number_input("Volume*", min_value=1, value=1)
                     
                 with col3:
