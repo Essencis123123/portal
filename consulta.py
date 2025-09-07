@@ -189,10 +189,13 @@ def carregar_dados_pedidos():
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Converte para string para garantir o tratamento de caracteres
-                df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                series = df[col].astype(str)
+                # Remove o ponto apenas se ele for um separador de milhar (seguido por números e uma vírgula)
+                series = series.str.replace(r'\.(?=.*\d,)', '', regex=True)
+                # Substitui a vírgula por ponto decimal
+                series = series.str.replace(',', '.', regex=False)
                 # Converte para numérico e preenche NaNs com 0
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                df[col] = pd.to_numeric(series, errors='coerce').fillna(0)
 
         # Garante que colunas importantes existam
         if 'STATUS_PEDIDO' not in df.columns:
