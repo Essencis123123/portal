@@ -291,6 +291,7 @@ if 'logado' not in st.session_state or not st.session_state['logado']:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
+    # Garante que os DataFrames estejam carregados e na sessão
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
     if 'df_almoxarifado' not in st.session_state:
@@ -316,6 +317,11 @@ else:
     df_pedidos = st.session_state.df_pedidos
     df_almoxarifado = st.session_state.df_almoxarifado
     df_solicitantes = carregar_dados_solicitantes()
+    
+    # Adiciona variáveis de estado para controlar o fluxo do formulário
+    if 'formulario_enviado' not in st.session_state:
+        st.session_state['formulario_enviado'] = False
+        st.session_state['formulario_data'] = {}
 
     if menu_option == "📝 Registrar NF":
         st.markdown("""
@@ -385,75 +391,121 @@ else:
                             # Calcula o valor total da OC a partir do df_pedidos
                             valor_total_oc = df_pedidos[df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf]['VALOR_TOTAL'].sum()
                             
-                            # Inicializa o popup e exibe a comparação
-                            with st.popover("Confirmar Registro"):
-                                st.subheader("Resumo da Nota Fiscal")
-                                col_pop1, col_pop2 = st.columns(2)
-                                with col_pop1:
-                                    st.write(f"**Valor Total da OC:**")
-                                    st.write(f"**Valor Total da NF:**")
-                                with col_pop2:
-                                    st.write(f"R$ {valor_total_oc:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                                    st.write(f"R$ {valor_total_nf:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                                
-                                diferenca = abs(valor_total_oc - valor_total_nf)
-                                diferenca_texto = f"R$ {diferenca:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                                
-                                ciente = False
-                                if diferenca > 0:
-                                    st.warning(f"⚠️ A diferença entre a OC e a NF é de {diferenca_texto}.")
-                                    ciente = st.checkbox("Estou ciente da divergência de valores.")
-                                
-                                if st.button("Finalizar Registro"):
-                                    if diferenca == 0 or ciente:
-                                        df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
-                                        
-                                        if not df_update_pedidos.empty:
-                                            for original_index in df_update_pedidos.index:
-                                                st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                                                st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
-                                            
-                                            salvar_dados_pedidos(st.session_state.df_pedidos)
-                                        else:
-                                            st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada em dados_pedidos.csv. O status não foi atualizado.")
-                                            
-                                        novo_registro_nf = {
-                                            "DATA": pd.to_datetime(data_recebimento),
-                                            "RECEBEDOR": recebedor,
-                                            "FORNECEDOR": nome_final_fornecedor,
-                                            "NF": nf_numero,
-                                            "VOLUME": volume_nf,
-                                            "V. TOTAL NF": valor_total_nf,
-                                            "CONDICAO FRETE": condicao_frete_nf,
-                                            "VALOR FRETE": valor_frete_nf,
-                                            "OBSERVACAO": observacao,
-                                            "DOC NF": doc_nf_link,
-                                            "VENCIMENTO": pd.to_datetime(vencimento_nf),
-                                            "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                                            "CONDICAO_PROBLEMA": "N/A",
-                                            "REGISTRO_ADICIONAL": "",
-                                            "ORDEM_COMPRA": ordem_compra_nf
-                                        }
-                                        st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
-                                        
-                                        if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                                            st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
-                                        else:
-                                            st.error("Erro ao salvar os dados da nota fiscal.")
-                                        
-                                        st.balloons()
-                                        st.rerun()
-                                    else:
-                                        st.error("Por favor, confirme que está ciente da divergência para continuar.")
+                            # Armazena os dados do formulário e a divergência para a próxima etapa
+                            st.session_state['formulario_enviado'] = True
+                            st.session_state['formulario_data'] = {
+                                "data_recebimento": data_recebimento,
+                                "recebedor": recebedor,
+                                "nome_final_fornecedor": nome_final_fornecedor,
+                                "nf_numero": nf_numero,
+                                "volume_nf": volume_nf,
+                                "valor_total_nf": valor_total_nf,
+                                "condicao_frete_nf": condicao_frete_nf,
+                                "valor_frete_nf": valor_frete_nf,
+                                "observacao": observacao,
+                                "doc_nf_link": doc_nf_link,
+                                "vencimento_nf": vencimento_nf,
+                                "ordem_compra_nf": ordem_compra_nf,
+                                "valor_total_oc": valor_total_oc
+                            }
+                            st.rerun()
                                 
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
                             adicionar_log("Erro: Falha na conversão de valores numéricos do formulário.")
         
+        # Lógica de confirmação exibida após o primeiro envio do formulário
+        if st.session_state['formulario_enviado']:
+            form_data = st.session_state['formulario_data']
+            
+            valor_total_oc = form_data['valor_total_oc']
+            valor_total_nf = form_data['valor_total_nf']
+            
+            st.markdown("---")
+            st.subheader("Confirmação de Registro")
+            
+            col_pop1, col_pop2 = st.columns(2)
+            with col_pop1:
+                st.write(f"**Valor Total da OC:**")
+                st.write(f"**Valor Total da NF:**")
+            with col_pop2:
+                st.write(f"R$ {valor_total_oc:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.write(f"R$ {valor_total_nf:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            
+            diferenca = abs(valor_total_oc - valor_total_nf)
+            diferenca_texto = f"R$ {diferenca:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            
+            ciente = True
+            if diferenca > 0:
+                st.warning(f"⚠️ A diferença entre a OC e a NF é de {diferenca_texto}.")
+                ciente = st.checkbox("Estou ciente da divergência de valores.")
+            
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                if st.button("Finalizar Registro", use_container_width=True):
+                    if diferenca == 0 or ciente:
+                        # Pega os dados armazenados
+                        data_recebimento = form_data['data_recebimento']
+                        recebedor = form_data['recebedor']
+                        nome_final_fornecedor = form_data['nome_final_fornecedor']
+                        nf_numero = form_data['nf_numero']
+                        volume_nf = form_data['volume_nf']
+                        valor_total_nf = form_data['valor_total_nf']
+                        condicao_frete_nf = form_data['condicao_frete_nf']
+                        valor_frete_nf = form_data['valor_frete_nf']
+                        observacao = form_data['observacao']
+                        doc_nf_link = form_data['doc_nf_link']
+                        vencimento_nf = form_data['vencimento_nf']
+                        ordem_compra_nf = form_data['ordem_compra_nf']
+                        
+                        # Atualiza o status do pedido na base de dados de pedidos
+                        df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
+                        if not df_update_pedidos.empty:
+                            for original_index in df_update_pedidos.index:
+                                st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                                st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                            salvar_dados_pedidos(st.session_state.df_pedidos)
+                        else:
+                            st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada em dados_pedidos.csv. O status não foi atualizado.")
+                        
+                        # Cria e salva o novo registro de NF
+                        novo_registro_nf = {
+                            "DATA": pd.to_datetime(data_recebimento),
+                            "RECEBEDOR": recebedor,
+                            "FORNECEDOR": nome_final_fornecedor,
+                            "NF": nf_numero,
+                            "VOLUME": volume_nf,
+                            "V. TOTAL NF": valor_total_nf,
+                            "CONDICAO FRETE": condicao_frete_nf,
+                            "VALOR FRETE": valor_frete_nf,
+                            "OBSERVACAO": observacao,
+                            "DOC NF": doc_nf_link,
+                            "VENCIMENTO": pd.to_datetime(vencimento_nf),
+                            "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                            "CONDICAO_PROBLEMA": "N/A",
+                            "REGISTRO_ADICIONAL": "",
+                            "ORDEM_COMPRA": ordem_compra_nf
+                        }
+                        st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                        
+                        if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                            st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
+                        else:
+                            st.error("Erro ao salvar os dados da nota fiscal.")
+                        
+                        st.session_state['formulario_enviado'] = False
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("Por favor, confirme que está ciente da divergência para continuar.")
+            with col_b2:
+                if st.button("Voltar e Editar", use_container_width=True):
+                    st.session_state['formulario_enviado'] = False
+                    st.rerun()
+        
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
         if not st.session_state.df_almoxarifado.empty:
-            # Filtra apenas as notas fiscais com número preenchido
             df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].fillna('').astype(str).str.strip() != ''].tail(10)
             
             if not df_ultimas_nfs.empty:
@@ -626,7 +678,13 @@ else:
         with col1:
             st.info("**Informações do Sistema**")
             st.write(f"Total de notas cadastradas: **{len(df)}**")
-            st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
+            # Adiciona a exibição da última data de atualização do arquivo
+            if os.path.exists("dados_almoxarifado.csv"):
+                last_modified_timestamp = os.path.getmtime("dados_almoxarifado.csv")
+                last_modified_date = datetime.datetime.fromtimestamp(last_modified_timestamp)
+                st.write(f"Última atualização do arquivo: **{last_modified_date.strftime('%d/%m/%Y %H:%M')}**")
+            else:
+                 st.write(f"Última atualização do arquivo: **N/A**")
             
             if st.button("🔄 Recarregar Dados"):
                 st.session_state.df_pedidos = carregar_dados_pedidos()
