@@ -162,6 +162,7 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
+@st.cache_data(show_spinner=False)
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
@@ -243,6 +244,7 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
+@st.cache_data(show_spinner=False)
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
@@ -333,7 +335,6 @@ def salvar_dados_materiais(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados de materiais no Google Sheets: {e}")
 
-
 # --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
@@ -365,7 +366,6 @@ if 'logado' not in st.session_state or not st.session_state.logado:
 else:
     logo_img = load_logo(logo_url)
 
-    # Botão de recarga global
     with st.sidebar:
         st.write("---")
         if st.button("🔄 Recarregar Dados"):
