@@ -162,6 +162,7 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
+@st.cache_data(show_spinner="Carregando dados de pedidos...")
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
@@ -243,6 +244,7 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
+@st.cache_data(show_spinner="Carregando dados de solicitantes...")
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
@@ -364,13 +366,6 @@ if 'logado' not in st.session_state or not st.session_state.logado:
             fazer_login(email, senha)
 else:
     logo_img = load_logo(logo_url)
-
-    with st.sidebar:
-        st.write("---")
-        if st.button("🔄 Recarregar Dados"):
-            st.cache_data.clear()
-            st.rerun()
-        st.write("---")
 
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
@@ -619,8 +614,6 @@ else:
         st.header("📜 Histórico de Requisições e Pedidos")
         st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
         
-        col_filter_h1, col_filter_h2, col_filter_h3, col_filter_h4 = st.columns(4)
-        
         df_history = st.session_state.df_pedidos.copy()
         
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
@@ -640,34 +633,38 @@ else:
             
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             
+            col_filter_h1, col_filter_h2, col_filter_h3, col_filter_h4 = st.columns(4)
+            col_filter_h5, col_filter_h6 = st.columns(2)
+            
             with col_filter_h1:
                 mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
             with col_filter_h2:
                 ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
+            with col_filter_h3:
+                status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
+                status_selecionado_h = st.selectbox("Status", status_options)
+            with col_filter_h4:
+                solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
+                solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
+                
+            with col_filter_h5:
+                req_filter = st.text_input("N° Requisição")
+            with col_filter_h6:
+                oc_filter = st.text_input("N° Ordem de Compra")
             
             df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
         else:
             st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
             st.stop()
         
-        col_filter_s1, col_filter_s2 = st.columns(2)
-        with col_filter_s1:
-            status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
-            status_selecionado_h = st.selectbox("Status", status_options)
-
         if status_selecionado_h != 'Todos':
             df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
-
-        with col_filter_s2:
-            solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
-            solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
-        
-        req_filter = st.text_input("N° Requisição")
-
         if solicitante_selecionado_h != 'Todos':
             df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
         if req_filter:
             df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
+        if oc_filter:
+            df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
 
         if df_history.empty:
             st.warning("Nenhum registro encontrado com os filtros aplicados.")
