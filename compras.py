@@ -963,7 +963,7 @@ else:
             st.metric("Pedidos Pendentes", pedidos_pendentes)
         with col3:
             valor_total = df_filtrado_dash['VALOR_TOTAL'].sum()
-            st.metric("Valor Total dos Itens", f"R$ {valor_total:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.metric("Valor Total dos Itens", f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         with col4:
             media_atraso = df_filtrado_dash['DIAS_ATRASO'].mean() if not df_filtrado_dash.empty else 0
             st.metric("Média de Dias de Atraso", f"{media_atraso:.1f} dias")
