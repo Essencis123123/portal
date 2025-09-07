@@ -188,9 +188,7 @@ def carregar_dados_pedidos():
         gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         
-        # --- ALTERAÇÃO CRUCIAL AQUI ---
-        # Get all values from the worksheet with the UNFORMATTED_VALUE option
-        # This will return numbers as floats, not formatted strings
+        # Use UNFORMATTED_VALUE para obter números como floats
         data = spreadsheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
         
         # O cabeçalho é a primeira linha
@@ -209,10 +207,13 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # Converte colunas numéricas (elas já virão como float do Google Sheets)
+        # Converte colunas numéricas - tratamento correto para formato brasileiro
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns:
+                # Se for string, converte do formato brasileiro para float
+                if df[col].dtype == 'object':
+                    df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
@@ -266,15 +267,13 @@ def salvar_dados_pedidos(df):
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
         
-        # --- CORREÇÃO: Lógica para tratar os números corretamente antes de salvar ---
-        # Converte as colunas numéricas para string, removendo as casas decimais irrelevantes
-        # e garantindo o uso do ponto como separador decimal para a gravação
-        numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'VALOR_TOTAL']
+        # Converte valores numéricos para formato brasileiro
+        numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+# Na função salvar_dados_pedidos, substitua a conversão numérica por:
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
-                # Converte para string com 2 casas decimais e ponto como separador
                 df_to_save[col] = df_to_save[col].apply(
-                    lambda x: f"{x:.2f}" if pd.notna(x) else ''
+                    lambda x: formatar_numero_brasileiro(x, 4) if pd.notna(x) else ''
                 )
         
         # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
@@ -291,6 +290,12 @@ def salvar_dados_pedidos(df):
         
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
+
+def formatar_numero_brasileiro(valor, casas_decimais=4):
+    """Formata número no padrão brasileiro (vírgula como separador decimal)"""
+    if pd.isna(valor) or valor == 0:
+        return ''
+    return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
 
 @st.cache_data(show_spinner="Carregando dados de solicitantes...")
 def carregar_dados_solicitantes():
