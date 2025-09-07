@@ -12,6 +12,9 @@ from io import BytesIO
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import gspread
+from google.oauth2.service_account import Credentials
+import json
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
@@ -132,28 +135,52 @@ def load_logo(url):
     except:
         return None
 
-# Funções de carregamento e salvamento de dados para ambos os arquivos
+# Funções de carregamento e salvamento de dados para Google Sheets
 def carregar_dados_almoxarifado():
     try:
-        df = pd.read_csv("dados_almoxarifado.csv")
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(2)
         
-        # Converte colunas para os tipos corretos
-        dtype_dict = {
-            'FORNECEDOR': str, 'NF': str, 'RECEBEDOR': str, 'OBSERVACAO': str, 
-            'DOC NF': str, 'VENCIMENTO': pd.NaT, 'STATUS_FINANCEIRO': str, 
-            'CONDICAO_PROBLEMA': str, 'REGISTRO_ADICIONAL': str, 
-            'ORDEM_COMPRA': str, 'VALOR_FRETE': float, 'V. TOTAL NF': float,
-        }
-        for col in dtype_dict:
-            if col in df.columns:
-                df[col] = df[col].astype(dtype_dict.get(col, str))
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+
+        # SE O DATAFRAME ESTIVER VAZIO, GARANTA QUE AS COLUNAS ESSENCIAIS EXISTAM
+        if df.empty:
+            df = pd.DataFrame(columns=[
+                "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
+                "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+                "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
+                "ORDEM_COMPRA"
+            ])
 
         for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
+        for col in ['V. TOTAL NF', 'VALOR FRETE']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # GARANTA QUE AS NOVAS COLUNAS SEMPRE EXISTAM
+        if 'CONDICAO_PROBLEMA' not in df.columns:
+            df['CONDICAO_PROBLEMA'] = ''
+        if 'REGISTRO_ADICIONAL' not in df.columns:
+            df['REGISTRO_ADICIONAL'] = ''
+        if 'ORDEM_COMPRA' not in df.columns:
+            df['ORDEM_COMPRA'] = ''
+        if 'STATUS_FINANCEIRO' not in df.columns:
+            df['STATUS_FINANCEIRO'] = ''
+        if 'DOC NF' not in df.columns:
+            df['DOC NF'] = ''
+
         return df
-    except (FileNotFoundError, EmptyDataError):
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do almoxarifado: {e}")
+        # Retorne um DataFrame com as colunas em caso de erro
         return pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
@@ -163,102 +190,90 @@ def carregar_dados_almoxarifado():
 
 def salvar_dados_almoxarifado(df):
     try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(2)
+
         df_copy = df.copy()
         for col in ['DATA', 'VENCIMENTO']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
-        df_copy.to_csv("dados_almoxarifado.csv", index=False, encoding='utf-8')
+        
+        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         return True
     except Exception as e:
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
         return False
 
+# Removido o cache para garantir que os dados de pedidos sejam sempre os mais recentes
 def carregar_dados_pedidos():
+    """Carrega os dados de pedidos do Google Sheets."""
     try:
-        df = pd.read_csv("dados_pedidos.csv")
-        
-        dtype_dict = {'ORDEM_COMPRA': str}
-        for col in dtype_dict:
-            if col in df.columns:
-                df[col] = df[col].astype(dtype_dict[col])
-                
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(0)
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
+        if 'DOC NF' not in df.columns:
+            df['DOC NF'] = ''
+            
         return df
-    except (FileNotFoundError, EmptyDataError):
-        return pd.DataFrame(columns=[
-            "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
-            "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM",
-            "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO",
-            "DATA_ENTREGA"
-        ])
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de pedidos: {e}")
+        return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"])
 
 def salvar_dados_pedidos(df):
+    """Salva os dados de pedidos no Google Sheets."""
     try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(0)
+
         df_copy = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
-        df_copy.to_csv("dados_pedidos.csv", index=False, encoding='utf-8')
+        
+        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         return True
     except Exception as e:
         st.error(f"Erro ao salvar dados de pedidos: {e}")
         return False
 
-@st.cache_data
 def carregar_dados_solicitantes():
     try:
-        df = pd.read_csv("dados_solicitantes.csv", dtype={'NOME': str, 'DEPARTAMENTO': str, 'EMAIL': str, 'FILIAL': str})
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(1)
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
         return df
-    except (FileNotFoundError, EmptyDataError):
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de solicitantes: {e}")
         return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
-# --- Configurações e Funções de E-mail ---
+# Funções de E-mail
 status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
-logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-logo_img = load_logo(logo_url)
-
-if 'log_messages' not in st.session_state:
-    st.session_state['log_messages'] = []
-
-def adicionar_log(mensagem):
-    st.session_state['log_messages'].append(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {mensagem}")
-    print(st.session_state['log_messages'][-1])
-
-GMAIL_EMAIL = "suprimentosessencis@gmail.com"
-GMAIL_APP_PASSWORD = "wvap juiz axkf xqcw"
-
-def enviar_email_entrega(solicitante_nome, email_solicitante, numero_requisicao, material):
-    remetente = GMAIL_EMAIL
-    senha = GMAIL_APP_PASSWORD
-    destinatario = email_solicitante
-    adicionar_log(f"Tentando enviar e-mail para: {destinatario}...")
-    corpo_mensagem = f"""
-    Olá, {solicitante_nome}.
-    Gostaríamos de informar que o material **{material}** da requisição **{numero_requisicao}** se encontra disponível para retirada no almoxarifado.
-    Por favor, entre em contato com o setor responsavel para mais informações.
-    Atenciosamente, Equipe de Suprimentos
-    """
-    mensagem = MIMEMultipart()
-    mensagem['From'] = remetente
-    mensagem['To'] = destinatario
-    mensagem['Subject'] = f"Material Entregue - Requisição {numero_requisicao}"
-    mensagem.attach(MIMEText(corpo_mensagem, 'plain'))
-    try:
-        servidor_smtp = smtplib.SMTP('smtp.gmail.com', 587)
-        servidor_smtp.starttls()
-        servidor_smtp.login(remetente, senha)
-        texto = mensagem.as_string()
-        servidor_smtp.sendmail(remetente, destinatario, texto)
-        servidor_smtp.quit()
-        adicionar_log(f"E-mail de confirmação enviado para {destinatario}.")
-        return True
-    except Exception as e:
-        adicionar_log(f"Erro ao enviar e-mail: {e}.")
-        st.error(f"❌ Erro ao enviar e-mail: {e}. O problema pode ser na conexão ou credenciais do Gmail.")
-        return False
 
 # --- LÓGICA DE LOGIN ---
 USERS = {
@@ -288,12 +303,21 @@ if 'logado' not in st.session_state or not st.session_state['logado']:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    if 'df_pedidos' not in st.session_state:
-        st.session_state.df_pedidos = carregar_dados_pedidos()
-    if 'df_almoxarifado' not in st.session_state:
-        st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
-
+    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
     logo_img = load_logo(logo_url)
+    
+    # O carregamento de dados é feito na inicialização do script para evitar cache inconsistente
+    df_pedidos = carregar_dados_pedidos()
+    df_almoxarifado = carregar_dados_almoxarifado()
+
+    if 'df_pedidos' not in st.session_state:
+        st.session_state.df_pedidos = df_pedidos
+    if 'df_almoxarifado' not in st.session_state:
+        st.session_state.df_almoxarifado = df_almoxarifado
+    
+    # Carrega dados dos solicitantes de forma separada
+    df_solicitantes = carregar_dados_solicitantes()
+
     if logo_img:
         st.sidebar.image(logo_img, use_container_width=True)
     
@@ -310,10 +334,6 @@ else:
         st.session_state.pop('nome_colaborador', None)
         st.rerun()
     
-    df_pedidos = st.session_state.df_pedidos
-    df_almoxarifado = st.session_state.df_almoxarifado
-    df_solicitantes = carregar_dados_solicitantes()
-
     if menu_option == "📝 Registrar NF":
         st.markdown("""
             <div class='header-container'>
@@ -329,23 +349,19 @@ else:
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
-                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
                     fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
-                    
-                    if fornecedor_nf == '':
-                        fornecedor_manual = st.text_input("Novo Fornecedor (opcional)", placeholder="Digite o nome se não estiver na lista...")
-                    else:
-                        fornecedor_manual = ""
                     
                     nf_numero = st.text_input("Número da NF*")
                     
                 with col2:
-                    recebedor = st.selectbox("Recebedor*", [
+                    recebedor_options = [
                         "ARLEY GONCALVES DOS SANTOS", "EVIANE DAS GRACAS DE ASSIS",
                         "ANDRE CASTRO DE SOUZA", "ISABELA CAROLINA DE PAURA SOARES",
                         "EMERSON ALMEIDA DE ARAUJO", "GABRIEL PEREIRA MARTINS",
                         "OUTROS"
-                    ])
+                    ]
+                    recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
                     ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
                     volume_nf = st.number_input("Volume*", min_value=1, value=1)
                     
@@ -362,38 +378,41 @@ else:
                 enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
                 
                 if enviar:
-                    nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
                     campos_validos = all([
-                        nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
+                        fornecedor_nf.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
                         valor_total_nf.strip() not in ["", "0,00"]
                     ])
                     
                     if not campos_validos:
                         st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
                     else:
-                        st.session_state['log_messages'] = []
-                        adicionar_log("Formulário validado. Iniciando registro da nota fiscal.")
-                        
                         try:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
-                            
-                            if not df_update_pedidos.empty:
-                                for original_index in df_update_pedidos.index:
-                                    st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                                    st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                            # Adicionado a busca para garantir que a OC exista na planilha de pedidos
+                            if 'ORDEM_COMPRA' in st.session_state.df_pedidos.columns:
+                                # Encontra as linhas na planilha de pedidos com a OC informada
+                                pedidos_relacionados = st.session_state.df_pedidos[
+                                    st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                                ]
                                 
-                                salvar_dados_pedidos(st.session_state.df_pedidos)
-                            else:
-                                st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada em dados_pedidos.csv. O status não foi atualizado.")
+                                if not pedidos_relacionados.empty:
+                                    # Atualiza o status, a data de entrega e o doc da NF para todos os pedidos com essa OC
+                                    indices_a_atualizar = pedidos_relacionados.index
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = doc_nf_link
+
+                                    # Salva as alterações na planilha de pedidos
+                                    salvar_dados_pedidos(st.session_state.df_pedidos)
+                                else:
+                                    st.warning(f"ℹ️ A Ordem de Compra '{ordem_compra_nf}' não foi encontrada na planilha de pedidos. O status não foi atualizado.")
                             
-                            # Lógica para registrar a nota fiscal no arquivo do ALMOXARIFADO
                             novo_registro_nf = {
                                 "DATA": pd.to_datetime(data_recebimento),
                                 "RECEBEDOR": recebedor,
-                                "FORNECEDOR": nome_final_fornecedor,
+                                "FORNECEDOR": fornecedor_nf,
                                 "NF": nf_numero,
                                 "VOLUME": volume_nf,
                                 "V. TOTAL NF": valor_total_float,
@@ -410,16 +429,14 @@ else:
                             st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
                             
                             if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                                st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso no arquivo dados_almoxarifado.csv!")
+                                st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
                             else:
                                 st.error("Erro ao salvar os dados da nota fiscal.")
                         
                             st.balloons()
                             st.rerun()
-                            
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
-                            adicionar_log("Erro: Falha na conversão de valores numéricos do formulário.")
         
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
@@ -499,9 +516,6 @@ else:
         
         df_almox = st.session_state.df_almoxarifado.copy()
         
-        # O df_pedidos é necessário para obter a requisição e outros dados do comprador,
-        # mas como você quer apenas os dados do almoxarifado, vamos criar uma versão simplificada
-        # sem fazer a junção. No entanto, a coluna 'REQUISICAO' não estará disponível.
         df = df_almox.copy()
         
         if not df.empty:
@@ -511,7 +525,13 @@ else:
             with col1:
                 nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
                 ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
-                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + sorted(df['FORNECEDOR'].dropna().unique().tolist()))
+                
+                # CORREÇÃO APLICADA AQUI: Adiciona verificação para evitar o KeyError
+                if 'FORNECEDOR' in df.columns:
+                    fornecedores_unicos = sorted(df['FORNECEDOR'].dropna().unique().tolist())
+                else:
+                    fornecedores_unicos = []
+                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + fornecedores_unicos)
             
             with col2:
                 status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
@@ -543,15 +563,27 @@ else:
             if not df_consulta.empty:
                 df_exibir_consulta = df_consulta[[
                     'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
-                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR_FRETE'
+                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE'
                 ]].copy()
+                
+                # Função para adicionar bolinhas coloridas aos status
+                def colorir_status(status):
+                    cores = {
+                        "EM ANDAMENTO": "🟡",  # Amarelo
+                        "NF PROBLEMA": "🔴",   # Vermelho  
+                        "CAPTURADO": "🟠",      # Laranja
+                        "FINALIZADO": "🟢"      # Verde
+                    }
+                    return f"{cores.get(status, '⚪')} {status}"
+                
+                df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
                 
                 df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['VENCIMENTO'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
                 df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
-                df_exibir_consulta['VALOR_FRETE'] = df_exibir_consulta['VALOR_FRETE'].apply(
+                df_exibir_consulta['VALOR FRETE'] = df_exibir_consulta['VALOR FRETE'].apply(
                     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 )
                 
@@ -573,7 +605,8 @@ else:
                     label="📥 Download Resultados",
                     data=csv_consulta,
                     file_name="consulta_nfs.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    help="Clique para baixar os dados da tabela filtrada."
                 )
             else:
                 st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
