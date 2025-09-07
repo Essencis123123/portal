@@ -574,8 +574,8 @@ else:
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="%.2f"),
-                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="%.2f"),
+                    "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.4f"),
+                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.4f"),
                     "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
@@ -728,9 +728,9 @@ else:
                 "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
                 "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
-                "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
-                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
+                "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.4f"),
+                "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.4f", disabled=True),
+                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.4f"),
                 "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
@@ -1102,7 +1102,7 @@ else:
                     legend_y=-0.15,
                     legend_x=0.5
                 )
-                fig_abc.update_yaxes(title_text="Custo Total (R$)", secondary_y=False, tickformat=',.2f')
+                fig_abc.update_yaxes(title_text="Custo Total (R$)", secondary_y=False, tickformat=',.4f')
                 fig_abc.update_yaxes(title_text="Participação Acumulada", secondary_y=True, tickformat='.0%')
                 
                 st.plotly_chart(fig_abc, use_container_width=True)
@@ -1130,7 +1130,7 @@ else:
                     "CLASSE": st.column_config.TextColumn("Classe"),
                     "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                     "MATERIAL": st.column_config.TextColumn("Material"),
-                    "VALOR_TOTAL": st.column_config.NumberColumn("Custo Total (R$)", format="R$ %.2f"),
+                    "VALOR_TOTAL": st.column_config.NumberColumn("Custo Total (R$)", format="R$ %.4f"),
                     "PARTICIPACAO_ACUMULADA": st.column_config.NumberColumn("Part. Acumulada", format="%.2%")
                 },
                 hide_index=True,
@@ -1199,7 +1199,7 @@ else:
             st.markdown("Média de Economia (%)")
         with col3:
             total_economizado = df_negociados['ECONOMIA'].sum() if 'ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
-            st.markdown(f"### R$ {total_economizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown(f"### R$ {total_economizado:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
             st.markdown("Total Economizado")
             
         st.markdown("---")
