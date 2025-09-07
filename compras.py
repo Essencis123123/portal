@@ -304,9 +304,13 @@ def carregar_dados_materiais():
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(3)
         data = worksheet.get_all_records()
-        df = pd.DataFrame(data)
-        # Garante que os nomes das colunas estejam em maiúsculas para corresponder ao código
-        df.columns = [col.upper() for col in df.columns]
+        
+        if not data:
+            df = pd.DataFrame(columns=['CODIGO', 'DESCRICAO'])
+        else:
+            df = pd.DataFrame(data)
+            df.columns = [col.upper() for col in df.columns]
+        
         return df
     except Exception as e:
         st.warning(f"Aviso: Não foi possível carregar dados de materiais. Verifique a aba 'MATERIAIS' da planilha. {e}")
@@ -436,7 +440,6 @@ else:
             item_codigo = st.text_input("Código do Material", key="codigo_material_input")
         with col_item2:
             descricao_material = ""
-            # AQUI ESTÁ A CORREÇÃO
             if item_codigo and not st.session_state.df_materiais.empty:
                 material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
                 if not material_info.empty:
