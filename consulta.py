@@ -14,7 +14,6 @@ import numpy as np
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
 
-
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
@@ -186,7 +185,8 @@ def carregar_dados_pedidos():
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
                 # Remove separador de milhar (ponto) e substitui vírgula por ponto decimal
-                df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                # CORREÇÃO AQUI: Usa regex para tratar vírgula e ponto de forma segura
+                df[col] = df[col].astype(str).str.replace(r'[.,]', '', regex=True)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         # Garante que colunas importantes existam
