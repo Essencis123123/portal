@@ -255,12 +255,10 @@ def carregar_dados_pedidos():
         
         df = pd.DataFrame(records, columns=headers)
         
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df.columns:
-                # Lógica de parsing mais robusta para datas
-                df[col] = pd.to_datetime(df[col], format='%d/%m/%Y', errors='coerce')
-                if df[col].isnull().all():
-                     df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+                # Tentativa de parse robusto, priorizando o formato brasileiro
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # --- Tratamento de valores numéricos com a função robusta ---
         numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
@@ -284,7 +282,7 @@ def salvar_dados_pedidos(df):
         worksheet = spreadsheet.get_worksheet(0)
 
         df_copy = df.copy()
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         
