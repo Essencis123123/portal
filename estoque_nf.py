@@ -15,6 +15,7 @@ from email.mime.multipart import MIMEMultipart
 import gspread
 from google.oauth2.service_account import Credentials
 import json
+import re
 
 # Configuração da página com layout wide
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
@@ -194,11 +195,12 @@ def parse_brazil_number(value_str):
     
     cleaned_value = value_str.strip()
     
-    # Remove todos os pontos, tratando-os como separadores de milhar
-    cleaned_value = cleaned_value.replace('.', '')
-    
-    # Troca a vírgula pelo ponto decimal
-    cleaned_value = cleaned_value.replace(',', '.')
+    # Se o valor contém vírgula, assume que é o separador decimal.
+    # Remove todos os pontos e substitui a vírgula por ponto.
+    if ',' in cleaned_value:
+        cleaned_value = cleaned_value.replace('.', '')
+        cleaned_value = cleaned_value.replace(',', '.')
+    # Se não há vírgula, o ponto é o separador decimal. Não removemos.
     
     try:
         return float(cleaned_value)
