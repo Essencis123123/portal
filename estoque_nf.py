@@ -198,11 +198,14 @@ def parse_brazil_number(value_str):
     # Remove 'R$' e espaços.
     cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
     
-    # Remove separadores de milhar (pontos)
-    cleaned_value = cleaned_value.replace('.', '')
-    
-    # Substitui o separador decimal (vírgula) por ponto
-    cleaned_value = cleaned_value.replace(',', '.')
+    # Assumes the last comma or dot is the decimal separator.
+    if ',' in cleaned_value and cleaned_value.rfind(',') > cleaned_value.rfind('.'):
+        # Case: 1.234,56
+        cleaned_value = cleaned_value.replace('.', '')
+        cleaned_value = cleaned_value.replace(',', '.')
+    else:
+        # Case: 123.45 or 12345
+        cleaned_value = cleaned_value.replace(',', '')
     
     try:
         return float(cleaned_value)
@@ -217,19 +220,26 @@ def carregar_dados_almoxarifado():
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(2)
         
-        data = worksheet.get_all_records()
-        df = pd.DataFrame(data)
+        # Use UNFORMATTED_VALUE para obter os valores brutos
+        data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
+        
+        if not data or len(data) <= 1:
+             df = pd.DataFrame(columns=headers)
+        else:
+            headers = data[0]
+            records = data[1:]
+            df = pd.DataFrame(records, columns=headers)
 
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA"
         ]
-
+        
         if df.empty:
-            df = pd.DataFrame(columns=colunas_essenciais)
+             df = pd.DataFrame(columns=colunas_essenciais)
         else:
-            for col in colunas_essenciais:
+             for col in colunas_essenciais:
                 if col not in df.columns:
                     df[col] = ''
             
@@ -278,16 +288,28 @@ def carregar_dados_pedidos():
         gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
-        data = worksheet.get_all_records()
-        df = pd.DataFrame(data)
+        
+        # Use UNFORMATTED_VALUE para obter os valores brutos
+        data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
+        
+        if not data or len(data) <= 1:
+            st.warning("A planilha está vazia ou não contém dados.")
+            return pd.DataFrame()
+            
+        headers = data[0]
+        records = data[1:]
+        
+        df = pd.DataFrame(records, columns=headers)
         
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df.columns:
                 df[col] = df[col].apply(parse_date_from_editor)
         
         # --- Tratamento de valores numéricos com a função robusta ---
-        if 'VALOR_ITEM' in df.columns:
-            df['VALOR_ITEM'] = df['VALOR_ITEM'].apply(parse_brazil_number).fillna(0)
+        numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
+        for col in numeric_cols:
+             if col in df.columns:
+                 df[col] = df[col].apply(parse_brazil_number).fillna(0)
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
