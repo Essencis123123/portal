@@ -784,7 +784,7 @@ else:
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                 "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
                 "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
-                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.4f"),
+                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
                 "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
@@ -844,7 +844,7 @@ else:
         st.markdown("---")
         st.subheader("💰 Resumo do Custo Total")
         total_historico = df_history['VALOR_TOTAL'].sum()
-        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         
     elif menu == "👤 Cadastro ":
         st.markdown("""
@@ -1156,7 +1156,7 @@ else:
                     legend_y=-0.15,
                     legend_x=0.5
                 )
-                fig_abc.update_yaxes(title_text="Custo Total (R$)", secondary_y=False, tickformat=',.4f')
+                fig_abc.update_yaxes(title_text="Custo Total (R$)", secondary_y=False, tickformat=',.2f')
                 fig_abc.update_yaxes(title_text="Participação Acumulada", secondary_y=True, tickformat='.0%')
                 
                 st.plotly_chart(fig_abc, use_container_width=True)
@@ -1262,7 +1262,7 @@ else:
             st.metric("Média de Economia (%)", f"{media_economia:.2f}%")
         with col3:
             total_economizado = df_negociados['ECONOMIA'].sum() if 'ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
-            st.metric("Total Economizado", f"R$ {total_economizado:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.metric("Total Economizado", f"R$ {total_economizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             
         st.markdown("---")
 
