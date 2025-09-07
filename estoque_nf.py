@@ -195,11 +195,8 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
-                # Lógica de parsing mais robusta para datas
-                df[col] = pd.to_datetime(df[col], format='%d/%m/%Y', errors='coerce')
-                # Fallback para o caso de o formato ser diferente
-                if df[col].isnull().all():
-                     df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+                # Retorna à lógica de parsing que estava funcionando
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
@@ -257,7 +254,7 @@ def carregar_dados_pedidos():
         
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df.columns:
-                # Tentativa de parse robusto, priorizando o formato brasileiro
+                # Retorna à lógica de parsing que estava funcionando
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # --- Tratamento de valores numéricos com a função robusta ---
