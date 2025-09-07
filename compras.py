@@ -1314,14 +1314,6 @@ else:
             
         st.markdown("---")
 
-        csv_performance = df_negociados.to_csv(index=False, encoding='utf-8')
-        st.download_button(
-            label="📥 Download Dados de Negociação",
-            data=csv_performance,
-            file_name=f"performance_negociacao_{'_'.join([str(m) for m in mes_selecionado_p])}-{ano_selecionado_p}.csv",
-            mime="text/csv"
-        )
-
         st.subheader("Curva de Desempenho da Negociação (Média Mensal)")
         df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').astype(str)
         
