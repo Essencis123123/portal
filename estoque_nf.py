@@ -439,7 +439,7 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
         st.dataframe(
-            df_ultimas_nfs,
+            df_ultimas_nfs[[ 'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF', 'STATUS_FINANCEIRO', 'DOC NF']],
             use_container_width=True,
             column_config={
                 "DOC NF": st.column_config.LinkColumn(
@@ -592,9 +592,10 @@ def render_consultar_nfs_page():
         st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
         
         if not df_consulta.empty:
+            # --- ALTERAÇÃO AQUI: Puxando as mesmas colunas do último registro ---
             df_exibir_consulta = df_consulta[[
                 'DATA', 'FORNECEDOR', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
-                'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE'
+                'STATUS_FINANCEIRO', 'DOC NF'
             ]].copy()
             
             def colorir_status(status):
@@ -608,13 +609,11 @@ def render_consultar_nfs_page():
             
             df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
             df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
-            df_exibir_consulta['VENCIMENTO'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
             
             def formatar_moeda(valor):
                 return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             
             df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(formatar_moeda)
-            df_exibir_consulta['VALOR FRETE'] = df_exibir_consulta['VALOR FRETE'].apply(formatar_moeda)
             
             st.dataframe(
                 df_exibir_consulta,
