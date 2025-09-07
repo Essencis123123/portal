@@ -487,7 +487,7 @@ else:
                     novo_status_visual = row['STATUS_VISUAL']
                     novo_status_data = reverse_status_map.get(novo_status_visual)
                     
-                    if novo_status_data: # Certifique-se de que o status não é None
+                    if novo_status_data:
                         status_original = updated_df.loc[index, 'STATUS']
 
                         if novo_status_data == 'FINALIZADO' and status_original != 'FINALIZADO':
@@ -497,7 +497,7 @@ else:
                             updated_df.loc[index, 'REGISTRO_ENVIO'] = datetime.datetime.now()
                         
                         updated_df.loc[index, 'STATUS'] = novo_status_data
-                        updated_df.loc[index, 'CONDICAO_PROBLEMA'] = row['PROBLEMA_VISUAL'].replace('🔴 ', '')
+                        updated_df.loc[index, 'CONDICAO_PROBLEMA'] = str(row['PROBLEMA_VISUAL']).replace('🔴 ', '')
                         updated_df.loc[index, 'VALOR_JUROS'] = row['VALOR_JUROS']
                         updated_df.loc[index, 'VALOR_FRETE'] = row['VALOR_FRETE']
                         
