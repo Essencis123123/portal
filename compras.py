@@ -674,179 +674,189 @@ else:
             st.success("Dados atualizados com sucesso!")
             st.rerun()
 
-    elif menu == "📜 Histórico ":
-        st.markdown("""
-            <div class='header-container'>
-                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
-                <p>Gerencie e Edite os Registros Anteriores</p>
-            </div>
-        """, unsafe_allow_html=True)
-        st.header("📜 Histórico de Requisições e Pedidos")
-        st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
-        
-        df_history = st.session_state.df_pedidos.copy()
-        
-        df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
-        
-        # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
-        df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
+elif menu == "📜 Histórico ":
+    st.markdown("""
+        <div class='header-container'>
+            <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
+            <p>Gerencie e Edite os Registros Anteriores</p>
+        </div>
+    """, unsafe_allow_html=True)
+    st.header("📜 Histórico de Requisições e Pedidos")
+    st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
+    
+    df_history = st.session_state.df_pedidos.copy()
+    
+    df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+    
+    # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
+    df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
+    df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
 
-        df_almox = st.session_state.df_almoxarifado.copy()
-        if not df_almox.empty:
-            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
-            df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
-            df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+    df_almox = st.session_state.df_almoxarifado.copy()
+    if not df_almox.empty:
+        df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+        df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
+        df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
-        df_valid_dates = df_history.dropna(subset=['DATA'])
+    df_valid_dates = df_history.dropna(subset=['DATA'])
+    
+    if not df_valid_dates.empty:
+        meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
+        anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
         
-        if not df_valid_dates.empty:
-            meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
-            anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
-            
-            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-            
-            col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
-            col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
+        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+        
+        col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
+        col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
 
-            with col_filter_row1_1:
-                mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
-            with col_filter_row1_2:
-                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
-            with col_filter_row1_3:
-                status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
-                status_selecionado_h = st.selectbox("Status", status_options)
-            with col_filter_row1_4:
-                solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
-                solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
-                
-            with col_filter_row2_1:
-                req_filter = st.text_input("N° Requisição")
-            with col_filter_row2_2:
-                oc_filter = st.text_input("N° Ordem de Compra")
-            with col_filter_row2_3:
-                cod_material_filter = st.text_input("Código Material")
+        with col_filter_row1_1:
+            mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
+        with col_filter_row1_2:
+            ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
+        with col_filter_row1_3:
+            status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
+            status_selecionado_h = st.selectbox("Status", status_options)
+        with col_filter_row1_4:
+            solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
+            solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
             
-            df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
+        with col_filter_row2_1:
+            req_filter = st.text_input("N° Requisição")
+        with col_filter_row2_2:
+            oc_filter = st.text_input("N° Ordem de Compra")
+        with col_filter_row2_3:
+            cod_material_filter = st.text_input("Código Material")
+        
+        df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
+    else:
+        st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
+        st.stop()
+    
+    if status_selecionado_h != 'Todos':
+        df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
+    if solicitante_selecionado_h != 'Todos':
+        df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
+    if req_filter:
+        df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
+    if oc_filter:
+        df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
+    if cod_material_filter:
+        df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
+
+    if df_history.empty:
+        st.warning("Nenhum registro encontrado com os filtros aplicados.")
+        st.stop()
+    
+    df_display = df_history.copy()
+
+    def formatar_status_display(status):
+        if status == 'ENTREGUE':
+            return '🟢 ENTREGUE'
+        elif status == 'PENDENTE':
+            return '🟡 PENDENTE'
         else:
-            st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
-            st.stop()
+            return status
+    
+    df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
+    
+    data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
+    for col in data_cols_history:
+        if col in df_display.columns:
+            df_display[col] = df_display[col].apply(
+                lambda x: x.date() if pd.notna(x) else None
+            )
+
+    # CORREÇÃO: Formata os valores para exibição com 2 casas decimais
+    for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
+        if col in df_display.columns:
+            df_display[col] = df_display[col].apply(
+                lambda x: f"{float(x):.2f}" if pd.notna(x) and x != '' else ''
+            )
+
+    edited_history_df = st.data_editor(
+        df_display,
+        use_container_width=True,
+        hide_index=False,
+        key='history_editor',
+        column_config={
+            "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
+            "REQUISICAO": st.column_config.TextColumn("N° Requisição", disabled=True),
+            "DATA": st.column_config.DateColumn("Data Requisição", disabled=True),
+            "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+            "DEPARTAMENTO": "Departamento",
+            "FILIAL": "Filial",
+            "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material", disabled=True),
+            "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
+            "UN": st.column_config.TextColumn("UN", disabled=True),
+            "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
+            "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
+            "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
+            "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
+            "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
+            "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
+            "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
+            "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
+            "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
+            "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
+            "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
+            "DIAS_ATRASO": "Dias Atraso",
+            "DOC NF": st.column_config.LinkColumn(
+                "Anexo NF",
+                help="Clique para visualizar o anexo",
+                display_text="📥 Anexo"
+            )
+        },
+        column_order=[
+            "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+            "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
+            "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
+        ]
+    )
+
+    if not edited_history_df.equals(df_display):
+        st.info("Salvando alterações...")
         
-        if status_selecionado_h != 'Todos':
-            df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
-        if solicitante_selecionado_h != 'Todos':
-            df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
-        if req_filter:
-            df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
-        if oc_filter:
-            df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
-        if cod_material_filter:
-            df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
+        edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
+            '🟢 ENTREGUE': 'ENTREGUE',
+            '🟡 PENDENTE': 'PENDENTE',
+            'EM ANDAMENTO': 'EM ANDAMENTO',
+            '': ''
+        }).fillna(edited_history_df['STATUS_PEDIDO'])
 
-        if df_history.empty:
-            st.warning("Nenhum registro encontrado com os filtros aplicados.")
-            st.stop()
+        # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
+        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+            edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
         
-        df_display = df_history.copy()
-
-        def formatar_status_display(status):
-            if status == 'ENTREGUE':
-                return '🟢 ENTREGUE'
-            elif status == 'PENDENTE':
-                return '🟡 PENDENTE'
-            else:
-                return status
+        edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
+        edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
+        edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
+        edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
         
-        df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
+        def calcular_dias_atraso(row):
+            if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
+                if row['DATA_ENTREGA'] > row['PREVISAO_ENTREGA']:
+                    return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days
+            return 0
+
+        edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
+
+        for col in edited_history_df.columns:
+            if col in st.session_state.df_pedidos.columns:
+                st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
         
-        data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
-        for col in data_cols_history:
-            if col in df_display.columns:
-                df_display[col] = df_display[col].apply(
-                    lambda x: x.date() if pd.notna(x) else None
-                )
+        if 'DIAS_EMISSAO' not in edited_history_df.columns and 'DIAS_EMISSAO' in st.session_state.df_pedidos.columns:
+            pass
+        
+        salvar_dados_pedidos(st.session_state.df_pedidos)
+        st.success("Histórico atualizado com sucesso!")
+        st.rerun()
 
-        edited_history_df = st.data_editor(
-            df_display,
-            use_container_width=True,
-            hide_index=False,
-            key='history_editor',
-            column_config={
-                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
-                "REQUISICAO": st.column_config.TextColumn("N° Requisição", disabled=True),
-                "DATA": st.column_config.DateColumn("Data Requisição", disabled=True),
-                "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
-                "DEPARTAMENTO": "Departamento",
-                "FILIAL": "Filial",
-                "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material", disabled=True),
-                "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
-                "UN": st.column_config.TextColumn("UN", disabled=True),
-                "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
-                "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
-                "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
-                "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
-                "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
-                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
-                "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
-                "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
-                "DIAS_ATRASO": "Dias Atraso",
-                "DOC NF": st.column_config.LinkColumn(
-                    "Anexo NF",
-                    help="Clique para visualizar o anexo",
-                    display_text="📥 Anexo"
-                )
-            },
-            column_order=[
-                "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
-                "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
-            ]
-        )
+    st.markdown("---")
+    st.subheader("💰 Resumo do Custo Total")
+    total_historico = df_history['VALOR_TOTAL'].sum()
+    st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-        if not edited_history_df.equals(df_display):
-            st.info("Salvando alterações...")
-            
-            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
-                '🟢 ENTREGUE': 'ENTREGUE',
-                '🟡 PENDENTE': 'PENDENTE',
-                'EM ANDAMENTO': 'EM ANDAMENTO',
-                '': ''
-            }).fillna(edited_history_df['STATUS_PEDIDO'])
 
-            # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
-            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-                edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0)
-            
-            edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
-            edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
-            edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
-            edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
-            
-            def calcular_dias_atraso(row):
-                if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
-                    if row['DATA_ENTREGA'] > row['PREVISAO_ENTREGA']:
-                        return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days
-                return 0
-
-            edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
-
-            for col in edited_history_df.columns:
-                if col in st.session_state.df_pedidos.columns:
-                    st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
-            
-            if 'DIAS_EMISSAO' not in edited_history_df.columns and 'DIAS_EMISSAO' in st.session_state.df_pedidos.columns:
-                pass
-            
-            salvar_dados_pedidos(st.session_state.df_pedidos)
-            st.success("Histórico atualizado com sucesso!")
-            st.rerun()
-
-        st.markdown("---")
-        st.subheader("💰 Resumo do Custo Total")
-        total_historico = df_history['VALOR_TOTAL'].sum()
-        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         
     elif menu == "👤 Cadastro ":
         st.markdown("""
