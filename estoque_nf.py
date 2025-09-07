@@ -13,14 +13,18 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import gspread
+from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
 import re
 
-# Configuração da página com layout wide
+# ==============================================================================
+# CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
+# ==============================================================================
+# Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
-# --- CSS Personalizado para o Tema Essencis ---
+# CSS personalizado para o tema Essencis
 st.markdown(
     """
     <style>
@@ -126,7 +130,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Funções de Carregamento e Salvamento de Dados ---
+# ==============================================================================
+# FUNÇÕES DE UTILIDADE E CONEXÃO
+# ==============================================================================
+@st.cache_data(show_spinner=False)
 def load_logo(url):
     """Carrega a imagem do logo a partir de uma URL e a armazena em cache."""
     try:
@@ -137,6 +144,7 @@ def load_logo(url):
         st.error(f"Erro ao carregar o logo: {e}")
         return None
 
+@st.cache_resource(show_spinner=False)
 def get_gspread_client():
     """Retorna o cliente gspread autorizado."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -164,6 +172,10 @@ def parse_brazil_number(value_str):
         return float(cleaned_value)
     except (ValueError, TypeError):
         return pd.NaT
+
+def _to_datetime(series, dayfirst=True):
+    """Converte uma Series para datetime, retornando NaT para erros."""
+    return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
@@ -195,7 +207,7 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+                df[col] = _to_datetime(df[col], dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
@@ -223,9 +235,7 @@ def salvar_dados_almoxarifado(df):
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         
-        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
-        worksheet.clear()
-        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
     except Exception as e:
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
@@ -239,7 +249,6 @@ def carregar_dados_pedidos():
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
         
-        # Use UNFORMATTED_VALUE para obter os valores brutos
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
         if not data or len(data) <= 1:
@@ -253,14 +262,12 @@ def carregar_dados_pedidos():
         
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df.columns:
-                # Retorna à lógica de parsing que estava funcionando
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+                df[col] = _to_datetime(df[col], dayfirst=True)
         
-        # --- Tratamento de valores numéricos com a função robusta ---
         numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
         for col in numeric_cols:
-             if col in df.columns:
-                 df[col] = df[col].apply(parse_brazil_number).fillna(0)
+            if col in df.columns:
+                df[col] = df[col].apply(parse_brazil_number).fillna(0)
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
@@ -282,9 +289,7 @@ def salvar_dados_pedidos(df):
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         
-        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
-        worksheet.clear()
-        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
     except Exception as e:
         st.error(f"Erro ao salvar dados de pedidos: {e}")
@@ -325,7 +330,9 @@ def fazer_login(email, senha):
     else:
         st.error("E-mail ou senha incorretos.")
 
-# --- INTERFACE PRINCIPAL ---
+# ==============================================================================
+# INTERFACE PRINCIPAL
+# ==============================================================================
 def render_login_page():
     """Exibe a página de login."""
     st.title("🏭 Login do Almoxarifado")
@@ -337,11 +344,9 @@ def render_login_page():
 
 def render_main_app():
     """Exibe a interface principal da aplicação após o login."""
-    # Carrega a logo e dados
     logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
     logo_img = load_logo(logo_url)
     
-    # Carregamento de dados com cache e tratamento de estado de sessão
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
     if 'df_almoxarifado' not in st.session_state:
@@ -350,21 +355,21 @@ def render_main_app():
     df_solicitantes = carregar_dados_solicitantes()
 
     # Sidebar
-    if logo_img:
-        st.sidebar.image(logo_img, use_container_width=True)
-    
-    st.sidebar.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
-    st.sidebar.title("Menu de Navegação")
-    menu_option = st.sidebar.radio(
-        "Selecione a opção:",
-        ["📝 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"],
-        index=0
-    )
-    st.sidebar.divider()
-    if st.sidebar.button("Logout"):
-        st.session_state['logado'] = False
-        st.session_state.pop('nome_colaborador', None)
-        st.rerun()
+    with st.sidebar:
+        if logo_img:
+            st.image(logo_img, use_container_width=True)
+        
+        st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
+        st.title("Menu de Navegação")
+        menu_option = st.radio(
+            "Selecione a opção:",
+            ["📝 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"],
+            index=0
+        )
+        st.divider()
+        if st.button("Logout"):
+            st.session_state.clear()
+            st.rerun()
     
     # Renderiza a página selecionada
     if menu_option == "📝 Registrar NF":
@@ -389,7 +394,6 @@ def render_registrar_nf_page():
     
     with col1:
         fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
-        # O seletor de fornecedor está fora do formulário para habilitar o filtro dinâmico
         fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
         nf_numero = st.text_input("Número da NF*")
 
@@ -408,7 +412,6 @@ def render_registrar_nf_page():
             with col1_form:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
-                # Exibe o fornecedor selecionado do widget fora do formulário
                 st.write(f"**Fornecedor Selecionado:** `{fornecedor_selecionado}`")
                 st.write(f"**Número da NF:** `{nf_numero}`")
                 
@@ -459,16 +462,12 @@ def render_registrar_nf_page():
                         
                         valor_oc_total = 0.0
                         if not pedidos_relacionados.empty:
-                            try:
-                                # O valor_oc_total já está numérico após a correção na função de carregamento
-                                valor_oc_total = pedidos_relacionados['VALOR_ITEM'].sum()
-                            except ValueError:
-                                st.warning("Não foi possível calcular o valor da OC. Verifique o formato dos dados.")
+                            valor_oc_total = pedidos_relacionados['VALOR_ITEM'].sum()
                         
                         divergencia = valor_total_float - valor_oc_total
                         
                         st.session_state['novo_registro_nf'] = {
-                            "DATA": pd.to_datetime(data_recebimento),
+                            "DATA": data_recebimento,
                             "RECEBEDOR": recebedor,
                             "FORNECEDOR_NF": fornecedor_selecionado, 
                             "NF": nf_numero,
@@ -478,7 +477,7 @@ def render_registrar_nf_page():
                             "VALOR FRETE": valor_frete_float,
                             "OBSERVACAO": observacao,
                             "DOC NF": doc_nf_link,
-                            "VENCIMENTO": pd.to_datetime(vencimento_nf),
+                            "VENCIMENTO": vencimento_nf,
                             "STATUS_FINANCEIRO": "EM ANDAMENTO",
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
@@ -503,12 +502,11 @@ def render_registrar_nf_page():
     st.markdown("---")
     st.subheader("Últimas Notas Registradas")
     if not st.session_state.df_almoxarifado.empty:
-        df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
+        df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
-        # Converte as datas para o formato de exibição
-        df_ultimas_nfs_display = df_ultimas_nfs.copy()
+        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
+        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
         
-        # Mapeia os nomes das colunas para os nomes de exibição
         col_map = {
             'DATA': 'Data',
             'FORNECEDOR_NF': 'Fornecedor',
@@ -519,7 +517,7 @@ def render_registrar_nf_page():
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF'
         }
-        df_ultimas_nfs_display = df_ultimas_nfs_display.rename(columns=col_map)
+        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map)
         
         def colorir_status_display(status):
             cores = {
@@ -574,7 +572,6 @@ def salvar_nota_fiscal(novo_registro_nf):
 def handle_divergence_popup():
     """Exibe e gerencia o pop-up de divergência de valores."""
     with st.form("popup_divergencia"):
-        # Assegura que os valores numéricos sejam formatados corretamente para o pop-up
         valor_oc_formatado = f"R$ {st.session_state['valor_oc_total']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         valor_nf_formatado = f"R$ {st.session_state['novo_registro_nf']['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         divergencia_formatada = f"R$ {st.session_state['divergencia_oc']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -777,8 +774,10 @@ def render_configuracoes_page():
             mime="text/csv",
             help="Clique para baixar uma cópia de segurança dos dados."
         )
-
-# --- Execução da Aplicação ---
+    
+# ==============================================================================
+# EXECUÇÃO PRINCIPAL
+# ==============================================================================
 if 'logado' not in st.session_state or not st.session_state['logado']:
     render_login_page()
 else:
