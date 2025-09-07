@@ -186,7 +186,6 @@ def carregar_dados_pedidos():
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # Recalcula a coluna VALOR_TOTAL se existir
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
              df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
         
@@ -454,19 +453,23 @@ else:
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
         if not st.session_state.df_almoxarifado.empty:
-            df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
+            # Filtra apenas as notas fiscais com número preenchido
+            df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].fillna('').astype(str).str.strip() != ''].tail(10)
             
-            st.dataframe(
-                df_ultimas_nfs,
-                use_container_width=True,
-                column_config={
-                    "DOC NF": st.column_config.LinkColumn(
-                        "DOC NF",
-                        help="Clique para abrir a nota fiscal.",
-                        display_text="📥 Abrir NF"
-                    )
-                }
-            )
+            if not df_ultimas_nfs.empty:
+                st.dataframe(
+                    df_ultimas_nfs,
+                    use_container_width=True,
+                    column_config={
+                        "DOC NF": st.column_config.LinkColumn(
+                            "DOC NF",
+                            help="Clique para abrir a nota fiscal.",
+                            display_text="📥 Abrir NF"
+                        )
+                    }
+                )
+            else:
+                st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
         else:
             st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
 
@@ -529,9 +532,6 @@ else:
         
         df_almox = st.session_state.df_almoxarifado.copy()
         
-        # O df_pedidos é necessário para obter a requisição e outros dados do comprador,
-        # mas como você quer apenas os dados do almoxarifado, vamos criar uma versão simplificada
-        # sem fazer a junção. No entanto, a coluna 'REQUISICAO' não estará disponível.
         df = df_almox.copy()
         
         if not df.empty:
