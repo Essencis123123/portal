@@ -302,7 +302,6 @@ def carregar_dados_materiais():
     try:
         gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        # Use o índice correto da planilha. O quarto (índice 3) para a aba 'MATERIAIS'.
         worksheet = spreadsheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -437,6 +436,7 @@ else:
             item_codigo = st.text_input("Código do Material", key="codigo_material_input")
         with col_item2:
             descricao_material = ""
+            # AQUI ESTÁ A CORREÇÃO
             if item_codigo and not st.session_state.df_materiais.empty:
                 material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
                 if not material_info.empty:
