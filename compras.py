@@ -176,12 +176,10 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # --- MODIFICAÇÃO: Converte 'VALOR_ITEM' para numérico
         for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # --- NOVO: Adiciona a coluna de valor total
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
 
@@ -191,12 +189,10 @@ def carregar_dados_pedidos():
         if 'PREVISAO_ENTREGA' not in df.columns:
             df['PREVISAO_ENTREGA'] = pd.NaT
 
-        # Define o status do pedido com base na data de entrega
         df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
             lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
         )
         
-        # Garante que as novas colunas existam
         if 'UN' not in df.columns:
             df['UN'] = ''
         if 'CODIGO_MATERIAL' not in df.columns:
@@ -225,20 +221,17 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df.copy()
         
-        # CORREÇÃO: Preenche valores NaN em colunas numéricas com 0
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].fillna(0)
         
-        # Converte as colunas de data para o formato de string
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
         
-        # Preenche quaisquer NaNs restantes em todo o DataFrame com uma string vazia
         df_to_save = df_to_save.fillna('')
         
         data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
@@ -423,7 +416,6 @@ else:
         st.markdown("---")
         st.subheader("Itens da Requisição")
         
-        # Usando st.data_editor para permitir a edição e exclusão de linhas
         if not st.session_state.itens_requisicao_temp.empty:
             st.session_state.itens_requisicao_temp = st.data_editor(
                 st.session_state.itens_requisicao_temp,
@@ -437,7 +429,7 @@ else:
                 }
             )
 
-        col_item1, col_item2, col_item3 = st.columns([1, 2, 1])
+        col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         with col_item1:
             item_codigo = st.text_input("Código do Material", key="codigo_material_input")
         with col_item2:
@@ -447,10 +439,10 @@ else:
                 if not material_info.empty:
                     descricao_material = material_info.iloc[0]['DESCRICAO']
             item_material = st.text_input("Descrição do Material", value=descricao_material, disabled=True, key="material_input")
-            unidade_medida = st.selectbox("Unidade de Medida", ["UN", "KG", "L", "M", "M2", "M3", "PÇ"], key="unidade_medida_input")
         with col_item3:
+            unidade_medida = st.selectbox("Unidade de Medida", ["UN", "KG", "L", "M", "M2", "M3", "PÇ"], key="unidade_medida_input")
+        with col_item4:
             item_quantidade = st.number_input("Quantidade", min_value=1, value=1, key="quantidade_input")
-            st.markdown("##")
             if st.button("➕ Adicionar Item"):
                 if item_codigo and item_material and item_quantidade > 0 and unidade_medida:
                     novo_item = pd.DataFrame([{"CODIGO_MATERIAL": item_codigo, "MATERIAL": item_material, "UN": unidade_medida, "QUANTIDADE": item_quantidade}])
