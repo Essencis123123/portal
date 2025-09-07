@@ -1,18 +1,23 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import requests
-from PIL import Image
-from io import BytesIO
-import gspread
-from google.oauth2.service_account import Credentials
-import json
+import os
+import time
 import plotly.express as px
 from pandas.errors import EmptyDataError
 import numpy as np
+import requests
+from PIL import Image
+from io import BytesIO
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import gspread
+from google.oauth2.service_account import Credentials
+import json
 
-# Configuração da página com layout wide e ícone
-st.set_page_config(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
+# Configuração da página com layout wide
+st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
@@ -31,6 +36,8 @@ st.markdown(
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
     .stDownloadButton button p {
         color: white !important;
     }
@@ -118,343 +125,519 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Carregar a imagem do logo a partir da URL (com cache)
-@st.cache_data(show_spinner=False)
+# Carregar a imagem do logo a partir da URL
+@st.cache_data
 def load_logo(url):
     try:
         response = requests.get(url)
         img = Image.open(BytesIO(response.content))
         return img
-    except Exception:
+    except:
         return None
 
-logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-logo_img = load_logo(logo_url)
-
-# --- Funções de Conexão e Carregamento de Dados ---
-@st.cache_resource(show_spinner=False)
-def get_gspread_client():
-    """
-    Conecta com o Google Sheets usando os secrets do Streamlit.
-    Esta função foi aprimorada para lidar tanto com strings JSON quanto com objetos AttrDict.
-    """
-    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    
-    credentials_info = st.secrets["gcp_service_account"]
-    
-    # Verifica se as credenciais são uma string e tenta convertê-las para JSON
-    if isinstance(credentials_info, str):
-        try:
-            credentials_info = json.loads(credentials_info)
-        except json.JSONDecodeError as e:
-            st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
-            return None
-    
-    creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-    client = gspread.authorize(creds)
-    return client
-
-@st.cache_data(ttl=600)  # Cache de 10 minutos
-def carregar_dados_pedidos():
-    """Carrega os dados de pedidos do Google Sheets."""
+# Funções de carregamento e salvamento de dados para Google Sheets
+def carregar_dados_almoxarifado():
     try:
-        gc = get_gspread_client()
-        
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
-        worksheet = spreadsheet.get_worksheet(0)
+        worksheet = spreadsheet.get_worksheet(2)
         
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # Adiciona a nova coluna à lista de colunas de data
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
-            if col in df.columns and not df[col].empty:
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
-        
-        for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
-            if col in df.columns and not df[col].empty:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
-        if 'STATUS_PEDIDO' not in df.columns:
-            df['STATUS_PEDIDO'] = ''
-        if 'ORDEM_COMPRA' not in df.columns:
-            df['ORDEM_COMPRA'] = ''
-        if 'FORNECEDOR' not in df.columns:
-            df['FORNECEDOR'] = ''
-        if 'PREVISAO_ENTREGA' not in df.columns:
-            df['PREVISAO_ENTREGA'] = pd.NaT
-        if 'CODIGO_MATERIAL' not in df.columns:
-            df['CODIGO_MATERIAL'] = ''
+        # Atualizado: A coluna de referência agora é FORNECEDOR_NF
+        colunas_obrigatorias_almoxarifado = [
+            "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
+            "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
+            "ORDEM_COMPRA", "REGISTRO_ENVIO"
+        ]
 
-        # Define o status do pedido com base na data de entrega
-        df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
-            lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
-        )
+        for col in colunas_obrigatorias_almoxarifado:
+            if col not in df.columns:
+                df[col] = pd.NA if df.empty else ''
 
-        # --- NOVO: Calcula a coluna VALOR_TOTAL ---
-        if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
-            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
-        
+        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce', dayfirst=True)
+        df['VENCIMENTO'] = pd.to_datetime(df['VENCIMENTO'], errors='coerce', dayfirst=True)
+        df['REGISTRO_ENVIO'] = pd.to_datetime(df['REGISTRO_ENVIO'], errors='coerce', dayfirst=True)
+        df['V. TOTAL NF'] = pd.to_numeric(df['V. TOTAL NF'], errors='coerce').fillna(0)
+        df['VALOR FRETE'] = pd.to_numeric(df['VALOR FRETE'], errors='coerce').fillna(0)
+        df['VOLUME'] = pd.to_numeric(df['VOLUME'], errors='coerce').fillna(0).astype(int)
+
         return df
     except Exception as e:
-        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
-        st.info("Verifique suas credenciais e a planilha.")
-        return pd.DataFrame(columns=[
-            "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "CODIGO_MATERIAL", "MATERIAL",
-            "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM", "FORNECEDOR", "PREVISAO_ENTREGA"
-        ])
+        st.error(f"Erro ao carregar dados do almoxarifado: {e}")
+        return pd.DataFrame(columns=colunas_obrigatorias_almoxarifado)
 
+def salvar_dados_almoxarifado(df):
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(2)
 
-# --- LAYOUT E FILTROS DO SIDEBAR ---
-with st.sidebar:
-    if logo_img:
-        st.image(logo_img, use_container_width=True)
-    
-    st.title("🔎 Painel de Consulta")
-    st.divider()
-    
-    df_pedidos = carregar_dados_pedidos()
-    
-    # Adicionando um botão de recarregar dados
-    if st.button("🔄 Recarregar Dados", use_container_width=True):
-        st.cache_data.clear()
+        df_copy = df.copy()
+        for col in ['DATA', 'VENCIMENTO']:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        
+        if 'REGISTRO_ENVIO' in df_copy.columns:
+            df_copy['REGISTRO_ENVIO'] = df_copy['REGISTRO_ENVIO'].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
+        
+        data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados do almoxarifado: {e}")
+        return False
+
+# Removido o cache para garantir que os dados de pedidos sejam sempre os mais recentes
+def carregar_dados_pedidos():
+    """Carrega os dados de pedidos do Google Sheets."""
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(0)
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+        
+        colunas_obrigatorias_pedidos = ["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"]
+        for col in colunas_obrigatorias_pedidos:
+            if col not in df.columns:
+                df[col] = pd.NA if df.empty else ''
+
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+            
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de pedidos: {e}")
+        return pd.DataFrame(columns=colunas_obrigatorias_pedidos)
+
+def carregar_dados_solicitantes():
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        worksheet = spreadsheet.get_worksheet(1)
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de solicitantes: {e}")
+        return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
+
+# Funções de E-mail
+status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
+
+# --- LÓGICA DE LOGIN ---
+USERS = {
+    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
+    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
+    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
+    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
+    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"},
+    "wrezende@essencis.com.br": {"password": "Essencis01", "name": "WELLINGTON CASSIO DE REZENDE"}
+}
+
+def fazer_login(email, senha):
+    if email in USERS and USERS[email]["password"] == senha:
+        st.session_state['logado'] = True
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
         st.rerun()
-
-    st.divider()
-
-    st.subheader("Filtros de Período")
-    if 'DATA' in df_pedidos.columns and not df_pedidos['DATA'].isnull().all():
-        # Filtros de data por multiselect
-        df_pedidos['MES'] = df_pedidos['DATA'].dt.month
-        df_pedidos['ANO'] = df_pedidos['DATA'].dt.year
-        meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
-        anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
-        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-        
-        filtro_mes_dash = st.multiselect(
-            "Selecione os Meses:", 
-            options=['Todos'] + meses_disponiveis, 
-            format_func=lambda x: meses_nomes.get(x, x),
-            default=['Todos']
-        )
-        filtro_ano_dash = st.multiselect(
-            "Selecione os Anos:", 
-            options=['Todos'] + anos_disponiveis,
-            default=['Todos']
-        )
     else:
-        filtro_mes_dash = ['Todos']
-        filtro_ano_dash = ['Todos']
-        st.info("Nenhum dado com data disponível para filtrar.")
+        st.error("E-mail ou senha incorretos.")
 
-    st.subheader("Filtros de Dados")
+# --- INTERFACE PRINCIPAL ---
+if 'logado' not in st.session_state or not st.session_state['logado']:
+    st.title("🏭 Login do Almoxarifado")
+    with st.form("login_form"):
+        email = st.text_input("E-mail")
+        senha = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar"):
+            fazer_login(email, senha)
+else:
+    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
+    logo_img = load_logo(logo_url)
     
-    filtro_solicitante = ['Todos']
-    if 'SOLICITANTE' in df_pedidos.columns and not df_pedidos.empty:
-        solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
-        filtro_solicitante = st.multiselect(
-            "Filtrar por Solicitante:",
-            options=['Todos'] + solicitantes_disponiveis,
-            default=['Todos']
-        )
-    
-    filtro_departamento = ['Todos']
-    if 'DEPARTAMENTO' in df_pedidos.columns and not df_pedidos.empty:
-        departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
-        filtro_departamento = st.multiselect(
-            "Filtrar por Departamento:",
-            options=['Todos'] + departamentos_disponiveis,
-            default=['Todos']
-        )
+    # O carregamento de dados é feito na inicialização do script para evitar cache inconsistente
+    df_pedidos = carregar_dados_pedidos()
+    df_almoxarifado = carregar_dados_almoxarifado()
 
-    filtro_status = ['Todos']
-    if 'STATUS_PEDIDO' in df_pedidos.columns and not df_pedidos.empty:
-        status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
-        filtro_status = st.multiselect(
-            "Filtrar por Status:",
-            options=['Todos'] + sorted(status_disponiveis),
-            default=['Todos']
-        )
+    if 'df_pedidos' not in st.session_state:
+        st.session_state.df_pedidos = df_pedidos
+    if 'df_almoxarifado' not in st.session_state:
+        st.session_state.df_almoxarifado = df_almoxarifado
     
-    # NOVO FILTRO: Material
-    filtro_material = ['Todos']
-    if 'MATERIAL' in df_pedidos.columns and not df_pedidos.empty:
-        materiais_disponiveis = sorted(df_pedidos['MATERIAL'].dropna().unique().tolist())
-        filtro_material = st.multiselect(
-            "Filtrar por Material:",
-            options=['Todos'] + materiais_disponiveis,
-            default=['Todos']
-        )
+    # Carrega dados dos solicitantes de forma separada
+    df_solicitantes = carregar_dados_solicitantes()
+
+    if logo_img:
+        st.sidebar.image(logo_img, use_container_width=True)
+    
+    st.sidebar.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
+    st.sidebar.title("Menu de Navegação")
+    menu_option = st.sidebar.radio(
+        "Selecione a opção:",
+        ["📝 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"],
+        index=0
+    )
+    st.sidebar.divider()
+    if st.sidebar.button("Logout"):
+        st.session_state['logado'] = False
+        st.session_state.pop('nome_colaborador', None)
+        st.rerun()
+    
+    if menu_option == "📝 Registrar NF":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>🏭 REGISTRAR NOTA FISCAL</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            </div>
+        """, unsafe_allow_html=True)
         
-    # NOVO FILTRO: Código do Material
-    filtro_codigo_material = ['Todos']
-    if 'CODIGO_MATERIAL' in df_pedidos.columns and not df_pedidos.empty:
-        codigos_disponiveis = sorted(df_pedidos['CODIGO_MATERIAL'].dropna().unique().tolist())
-        filtro_codigo_material = st.multiselect(
-            "Filtrar por Código do Material:",
-            options=['Todos'] + codigos_disponiveis,
-            default=['Todos']
-        )
+        # NOVO: Exibe a data e hora atual
+        st.info(f"📅 Data e Hora Atual: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}**")
+
+        with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
+            with st.form("formulario_nota", clear_on_submit=True):
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
+                    
+                    # Atualizado: Usando a coluna 'FORNECEDOR' da planilha de pedidos para o selectbox
+                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
+                    fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                    
+                    nf_numero = st.text_input("Número da NF*")
+                    
+                with col2:
+                    recebedor_options = [
+                        "ARLEY GONCALVES DOS SANTOS", "EVIANE DAS GRACAS DE ASSIS",
+                        "ANDRE CASTRO DE SOUZA", "ISABELA CAROLINA DE PAURA SOARES",
+                        "EMERSON ALMEIDA DE ARAUJO", "GABRIEL PEREIRA MARTINS",
+                        "OUTROS"
+                    ]
+                    recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
+                    ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
+                    volume_nf = st.number_input("Volume*", min_value=1, value=1)
+                    
+                with col3:
+                    valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
+                    condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
+                    valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
+                
+                doc_nf_link = st.text_input("Link da Nota Fiscal (URL)", placeholder="Cole o link de acesso aqui...")
+                
+                observacao = st.text_area("Observações", placeholder="Informações adicionais...")
+                vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30))
+                
+                enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
+                
+                if enviar:
+                    campos_validos = all([
+                        fornecedor_nf.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
+                        valor_total_nf.strip() not in ["", "0,00"]
+                    ])
+                    
+                    if not campos_validos:
+                        st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
+                    else:
+                        try:
+                            valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
+                            valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
+                            
+                            if 'ORDEM_COMPRA' in st.session_state.df_pedidos.columns:
+                                pedidos_relacionados = st.session_state.df_pedidos[
+                                    st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                                ]
+                                
+                                if not pedidos_relacionados.empty:
+                                    indices_a_atualizar = pedidos_relacionados.index
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = doc_nf_link
+
+                                    salvar_dados_pedidos(st.session_state.df_pedidos)
+                                else:
+                                    st.warning(f"ℹ️ A Ordem de Compra '{ordem_compra_nf}' não foi encontrada na planilha de pedidos. O status não foi atualizado.")
+                            
+                            novo_registro_nf = {
+                                "DATA": pd.to_datetime(data_recebimento),
+                                "RECEBEDOR": recebedor,
+                                "FORNECEDOR_NF": fornecedor_nf, # Alterado aqui
+                                "NF": nf_numero,
+                                "VOLUME": volume_nf,
+                                "V. TOTAL NF": valor_total_float,
+                                "CONDICAO FRETE": condicao_frete_nf,
+                                "VALOR FRETE": valor_frete_float,
+                                "OBSERVACAO": observacao,
+                                "DOC NF": doc_nf_link,
+                                "VENCIMENTO": pd.to_datetime(vencimento_nf),
+                                "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                                "CONDICAO_PROBLEMA": "N/A",
+                                "REGISTRO_ADICIONAL": "",
+                                "ORDEM_COMPRA": ordem_compra_nf,
+                                "REGISTRO_ENVIO": datetime.datetime.now()
+                            }
+                            st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                            
+                            if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                                st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
+                            else:
+                                st.error("Erro ao salvar os dados da nota fiscal.")
+                        
+                            st.balloons()
+                            st.rerun()
+                        except ValueError:
+                            st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
+        
+        st.markdown("---")
+        st.subheader("Últimas Notas Registradas")
+        if not st.session_state.df_almoxarifado.empty:
+            df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
+            
+            # NOVO: Formata as colunas de data para exibição
+            df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
+            df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+            df_ultimas_nfs['REGISTRO_ENVIO'] = df_ultimas_nfs['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S')
+
+            st.dataframe(
+                df_ultimas_nfs,
+                use_container_width=True,
+                column_config={
+                    "DOC NF": st.column_config.LinkColumn(
+                        "DOC NF",
+                        help="Clique para abrir a nota fiscal.",
+                        display_text="📥 Abrir NF"
+                    )
+                }
+            )
+        else:
+            st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
 
 
-# Exibe o cabeçalho temático principal
-st.markdown("""
-    <div class='header-container'>
-        <h1>🔎 PAINEL DE CONSULTA DE REQUISIÇÕES</h1>
-        <p>Visualize e analise o histórico completo de pedidos de compra</p>
-    </div>
-""", unsafe_allow_html=True)
+    elif menu_option == "📊 Dashboard":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📊 DASHBOARD ALMOXARIFADO</h1>
+                <p>Análise estratégica dos custos por departamento</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # NOVO: Exibe a data e hora atual no dashboard
+        st.info(f"📅 Data e Hora Atual: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}**")
+        
+        df = st.session_state.df_almoxarifado
+        if not df.empty:
+            df_almoxarifado_filtrado = df[df['NF'].astype(str) != '']
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            total_nfs = len(df_almoxarifado_filtrado)
+            em_andamento = len(df_almoxarifado_filtrado[df_almoxarifado_filtrado['STATUS_FINANCEIRO'] == 'EM ANDAMENTO'])
+            com_problema = len(df_almoxarifado_filtrado[df_almoxarifado_filtrado['STATUS_FINANCEIRO'] == 'NF PROBLEMA'])
+            finalizadas = len(df_almoxarifado_filtrado[df_almoxarifado_filtrado['STATUS_FINANCEIRO'] == 'FINALIZADO'])
+            
+            with col1: st.metric("📦 Total de NFs", total_nfs)
+            with col2: st.metric("🔄 Em Andamento", em_andamento)
+            with col3: st.metric("⚠️ Com Problema", com_problema)
+            with col4: st.metric("✅ Finalizadas", finalizadas)
+            
+            st.subheader("📈 Análise do Status Financeiro")
+            
+            col_g1, col_g2 = st.columns(2)
+            
+            with col_g1:
+                status_count = df_almoxarifado_filtrado['STATUS_FINANCEIRO'].value_counts().reset_index()
+                status_count.columns = ['Status', 'Quantidade']
+                if not status_count.empty:
+                    fig_pizza = px.pie(status_count, values='Quantidade', names='Status', title='Distribuição dos Status Financeiros')
+                    st.plotly_chart(fig_pizza, use_container_width=True)
+            
+            with col_g2:
+                problemas_df = df_almoxarifado_filtrado[df_almoxarifado_filtrado['STATUS_FINANCEIRO'] == 'NF PROBLEMA']
+                if not problemas_df.empty:
+                    # Atualizado: Top 10 fornecedores com problemas, usando a nova coluna
+                    top_problemas = problemas_df['FORNECEDOR_NF'].value_counts().head(10).reset_index()
+                    top_problemas.columns = ['Fornecedor', 'Notas com Problema']
+                    fig_barras = px.bar(top_problemas, x='Notas com Problema', y='Fornecedor', orientation='h', title='Top 10 Fornecedores com Problemas')
+                    st.plotly_chart(fig_barras, use_container_width=True)
+                else:
+                    st.info("✅ Nenhuma nota com problemas no momento")
+            
+        else:
+            st.write("Nenhum dado disponível.")
 
+    elif menu_option == "🔍 Consultar NFs":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>🔍 CONSULTAR NOTAS FISCAIS</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        df_almox = st.session_state.df_almoxarifado.copy()
+        
+        df = df_almox.copy()
+        
+        if not df.empty:
+            st.subheader("🔎 Consulta Avançada")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
+                ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
+                
+                # Atualizado: O filtro de fornecedor agora usa a coluna 'FORNECEDOR_NF'
+                if 'FORNECEDOR_NF' in df.columns:
+                    fornecedores_unicos = sorted(df['FORNECEDOR_NF'].dropna().unique().tolist())
+                else:
+                    fornecedores_unicos = []
+                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + fornecedores_unicos)
+            
+            with col2:
+                status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
+                
+                if not df['DATA'].isnull().all():
+                    data_minima = df['DATA'].min().date() if pd.notna(df['DATA'].min()) else datetime.date.today()
+                    data_maxima = df['DATA'].max().date() if pd.notna(df['DATA'].max()) else datetime.date.today()
+                else:
+                    data_minima = datetime.date.today()
+                    data_maxima = datetime.date.today()
 
-# Verifica se o DataFrame não está vazio antes de continuar
-if df_pedidos.empty:
-    st.info("Nenhum pedido registrado no sistema.")
-    st.stop()
+                data_inicio_consulta = st.date_input("Data Início", value=data_minima, min_value=data_minima, max_value=data_maxima)
+                data_fim_consulta = st.date_input("Data Fim", value=data_maxima, min_value=data_minima, max_value=data_maxima)
 
-# --- Aplicação dos Filtros na Tabela Principal ---
-df_filtrado = df_pedidos.copy()
+            df_consulta = df.copy()
+            
+            if nf_consulta: df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False)]
+            if ordem_compra_consulta: df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False)]
+            # Atualizado: O filtro de consulta usa a coluna 'FORNECEDOR_NF'
+            if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
+            if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
+            
+            df_consulta = df_consulta[
+                (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
+                (df_consulta['DATA'].dt.date <= data_fim_consulta)
+            ]
+            
+            st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
+            
+            if not df_consulta.empty:
+                # Alterado: Adicionando 'REGISTRO_ENVIO' na lista de colunas para exibição
+                df_exibir_consulta = df_consulta[[
+                    'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
+                    'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE', 'REGISTRO_ENVIO'
+                ]].copy()
+                
+                # Função para adicionar bolinhas coloridas aos status
+                def colorir_status(status):
+                    cores = {
+                        "EM ANDAMENTO": "🟡",
+                        "NF PROBLEMA": "🔴",
+                        "CAPTURADO": "🟠",
+                        "FINALIZADO": "🟢"
+                    }
+                    return f"{cores.get(status, '⚪')} {status}"
+                
+                df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
+                
+                # ALTERADO: Formatação apenas da data para as colunas DATA e VENCIMENTO
+                df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
+                df_exibir_consulta['VENCIMENTO'] = df_exibir_consulta['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+                
+                # MANTIDO: Formatação completa de data e hora para a coluna REGISTRO_ENVIO
+                df_exibir_consulta['REGISTRO_ENVIO'] = df_exibir_consulta['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S')
 
-# Aplica os filtros de meses e anos
-if 'Todos' not in filtro_mes_dash:
-    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.month.isin(filtro_mes_dash)]
+                df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
+                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
+                df_exibir_consulta['VALOR FRETE'] = df_exibir_consulta['VALOR FRETE'].apply(
+                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
+                
+                st.dataframe(
+                    df_exibir_consulta,
+                    use_container_width=True,
+                    height=400,
+                    column_config={
+                        "DOC NF": st.column_config.LinkColumn(
+                            "DOC NF",
+                            help="Clique para abrir a nota fiscal.",
+                            display_text="📥 Abrir NF"
+                        )
+                    }
+                )
+                
+                csv_consulta = df_exibir_consulta.to_csv(index=False, encoding='utf-8')
+                st.download_button(
+                    label="📥 Download Resultados",
+                    data=csv_consulta,
+                    file_name="consulta_nfs.csv",
+                    mime="text/csv",
+                    help="Clique para baixar os dados da tabela filtrada."
+                )
+            else:
+                st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
+        else:
+            st.info("📝 Nenhum dado disponível para consulta.")
 
-if 'Todos' not in filtro_ano_dash:
-    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.year.isin(filtro_ano_dash)]
+    elif menu_option == "⚙️ Configurações":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>⚙️ CONFIGURAÇÕES DO SISTEMA</h1>
+                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        df = st.session_state.df_almoxarifado
+        
+        st.subheader("⚙️ Configurações Gerais")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.info("**Informações do Sistema**")
+            st.write(f"Total de notas cadastradas: **{len(df)}**")
+            st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
+            
+            if st.button("🔄 Recarregar Dados"):
+                st.session_state.df_pedidos = carregar_dados_pedidos()
+                st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
+                st.success("Dados recarregados com sucesso!")
+                st.rerun()
+        
+        with col2:
+            st.info("**Manutenção**")
+            st.write("Versão: 1.0")
+            
+            csv_backup = df.to_csv(index=False, encoding='utf-8')
+            st.download_button(
+                label="💾 Fazer Backup",
+                data=csv_backup,
+                file_name=f"backup_almoxarifado_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                help="Clique para baixar uma cópia de segurança dos dados."
+            )
 
-if 'Todos' not in filtro_solicitante:
-    df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'].isin(filtro_solicitante)]
-
-if 'Todos' not in filtro_departamento:
-    df_filtrado = df_filtrado[df_filtrado['DEPARTAMENTO'].isin(filtro_departamento)]
-
-if 'Todos' not in filtro_status:
-    df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'].isin(filtro_status)]
-    
-# Aplica o novo filtro de material
-if 'Todos' not in filtro_material:
-    df_filtrado = df_filtrado[df_filtrado['MATERIAL'].isin(filtro_material)]
-
-# Aplica o novo filtro de código de material
-if 'Todos' not in filtro_codigo_material:
-    df_filtrado = df_filtrado[df_filtrado['CODIGO_MATERIAL'].isin(filtro_codigo_material)]
-
-
-if df_filtrado.empty:
-    st.warning("Nenhum pedido encontrado com os filtros aplicados.")
-    st.stop()
-
-
-# --- Análise e Métricas ---
-st.subheader("Visão Geral do Período")
-# --- NOVO: Adicionando o autosoma em um card
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    total_pedidos = len(df_filtrado)
-    st.metric("Total de Pedidos", total_pedidos)
-with col2:
-    pedidos_pendentes = len(df_filtrado[df_filtrado['STATUS_PEDIDO'] == 'PENDENTE'])
-    st.metric("Pedidos Pendentes", pedidos_pendentes)
-with col3:
-    pedidos_entregues = len(df_filtrado[df_filtrado['STATUS_PEDIDO'] == 'ENTREGUE'])
-    st.metric("Pedidos Entregues", pedidos_entregues)
-with col4:
-    # Calcula e exibe o autosoma do valor total
-    valor_total_soma = df_filtrado['VALOR_TOTAL'].sum()
-    st.metric("Valor Total dos Pedidos", f"R$ {valor_total_soma:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-
-
-st.markdown("---")
-
-# --- Gráfico de Análise Visual ---
-st.subheader("Distribuição do Status dos Pedidos")
-status_counts = df_filtrado['STATUS_PEDIDO'].value_counts().reset_index()
-status_counts.columns = ['Status', 'Quantidade']
-fig_status = px.pie(
-    status_counts,
-    values='Quantidade',
-    names='Status',
-    title='Distribuição do Status dos Pedidos',
-    color_discrete_map={'PENDENTE': '#ffcc00', 'ENTREGUE': '#009933', 'EM ANDAMENTO': '#3366ff'}
-)
-st.plotly_chart(fig_status, use_container_width=True)
-
-st.markdown("---")
-
-# --- Tabela de Visualização Detalhada ---
-st.subheader("Detalhes dos Pedidos")
-st.info("A tabela abaixo é apenas para visualização e não permite edição.")
-
-df_tabela = df_filtrado.copy()
-
-def formatar_status(status):
-    if status == 'ENTREGUE':
-        return '🟢 ENTREGUE'
-    elif status == 'PENDENTE':
-        return '⚪ PENDENTE'
-    else:
-        return '🟡 EM ANDAMENTO'
-
-df_tabela['STATUS'] = df_tabela['STATUS_PEDIDO'].apply(formatar_status)
-
-if 'DATA' in df_tabela.columns:
-    df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
-else:
-    df_tabela['DATA REQUISIÇÃO'] = 'N/A'
-
-if 'DATA_ENTREGA' in df_tabela.columns:
-    df_tabela['DATA ENTREGA'] = df_tabela['DATA_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
-else:
-    df_tabela['DATA ENTREGA'] = 'N/A'
-
-if 'PREVISAO_ENTREGA' in df_tabela.columns:
-    df_tabela['PREVISÃO ENTREGA'] = df_tabela['PREVISAO_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
-else:
-    df_tabela['PREVISÃO ENTREGA'] = 'N/A'
-    
-# Formata as colunas de valor para o display
-# Mantive a formatação, mas as colunas não serão exibidas na tabela
-df_tabela['VALOR_TOTAL'] = df_tabela['VALOR_TOTAL'].astype(str).str.replace('.', ',', regex=False)
-
-st.dataframe(
-    df_tabela[[
-        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
-        'QUANTIDADE', 'VALOR_TOTAL', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
-    ]],
-    use_container_width=True,
-    hide_index=True,
-    column_order=[
-        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
-        'QUANTIDADE', 'VALOR_TOTAL', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
-    ],
-    column_config={
-        "DATA REQUISIÇÃO": st.column_config.DateColumn("Data Requisição"),
-        "REQUISICAO": "N° Requisição",
-        "SOLICITANTE": "Solicitante",
-        "DEPARTAMENTO": "Departamento",
-        "CODIGO_MATERIAL": "Cód. Material",
-        "MATERIAL": "Material",
-        "QUANTIDADE": "Quantidade",
-        "VALOR_TOTAL": "Valor Total",
-        "STATUS": "Status",
-        "ORDEM_COMPRA": "N° Ordem de Compra",
-        "FORNECEDOR": "Fornecedor",
-        "PREVISÃO ENTREGA": st.column_config.DateColumn("Previsão Entrega"),
-        "DATA ENTREGA": st.column_config.DateColumn("Data Entrega")
-    }
-)
-
-# --- NOVO: Adiciona a autosoma do valor total abaixo da tabela ---
-if not df_filtrado.empty:
-    valor_total_soma = df_filtrado['VALOR_TOTAL'].sum()
-    st.markdown(f"<div style='text-align: right; font-size: 20px; font-weight: bold; padding-top: 15px;'>Valor Total dos Itens Filtrados: R$ {valor_total_soma:,.2f}</div>".replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
-
-# Botão de download para o CSV
-csv_pedidos = df_filtrado.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="📥 Exportar Tabela para CSV",
-    data=csv_pedidos,
-    file_name=f"pedidos_consulta_{datetime.date.today()}.csv",
-    mime="text/csv",
-    help="Clique para baixar os dados da tabela filtrada."
-)
+        st.subheader("📋 Log de Atividades")
+        if 'log_messages' in st.session_state:
+            log_text = "\n".join(st.session_state['log_messages'])
+            st.text_area("Log de Atividades", value=log_text, height=300, disabled=True)
+        else:
+            st.info("Nenhum log disponível.")
