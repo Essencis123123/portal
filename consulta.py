@@ -172,6 +172,11 @@ def carregar_dados_pedidos():
         worksheet = spreadsheet.get_worksheet(0)
         
         data = worksheet.get_all_records()
+
+        if not data:
+            st.warning("A planilha está vazia ou não contém dados.")
+            return pd.DataFrame()
+            
         df = pd.DataFrame(data)
 
         # Trata colunas de data
@@ -180,17 +185,15 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # --- TRECHO FINAL CORRIGIDO PARA LIMPEZA DE DADOS ---
+        # --- TRECHO CORRIGIDO PARA LIMPEZA DE DADOS NUMÉRICOS ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Usa uma função lambda para converter cada valor individualmente
-                df[col] = df[col].apply(
-                    lambda x: pd.to_numeric(str(x).replace('.', '').replace(',', '.'), errors='coerce')
-                ).fillna(0)
-        
-        # --- A DIVISÃO POR 2 FOI REMOVIDA DAQUI ---
-        
+                # Converte para string para garantir o tratamento de caracteres
+                df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                # Converte para numérico e preenche NaNs com 0
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
         # Garante que colunas importantes existam
         if 'STATUS_PEDIDO' not in df.columns:
             df['STATUS_PEDIDO'] = ''
@@ -418,7 +421,7 @@ else:
     df_tabela['PREVISÃO ENTREGA'] = 'N/A'
     
 # Converte o VALOR_TOTAL para string apenas para exibição
-df_tabela['VALOR_TOTAL_str'] = df_tabela['VALOR_TOTAL'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+df_tabela['VALOR_TOTAL_str'] = df_tabela['VALOR_TOTAL'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
 st.dataframe(
     df_tabela[[
