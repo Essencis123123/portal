@@ -645,18 +645,80 @@ else:
             st.success("Dados atualizados com sucesso!")
             st.rerun()
 
-if not df_valid_dates.empty:
-        # Bloco de código para quando o DataFrame não está vazio.
-        # Todos os seus filtros de mês, ano, status, etc., devem estar aqui.
-        meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
-        anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
+    elif menu == "📜 Histórico ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
+                <p>Gerencie e Edite os Registros Anteriores</p>
+            </div>
+        """, unsafe_allow_html=True)
+        st.header("📜 Histórico de Requisições e Pedidos")
+        st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
         
-        # ... o resto do seu código de filtragem ...
-    else:
-        # Bloco de código para quando o DataFrame está vazio.
-        # Esta linha deve estar alinhada com o 'if' acima.
-        st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
-        st.stop()
+        df_history = st.session_state.df_pedidos.copy()
+        
+        df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+        
+        # Recalcula o VALOR_TOTAL com os valores limpos
+        df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
+        df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
+    
+        df_almox = st.session_state.df_almoxarifado.copy()
+        if not df_almox.empty:
+            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
+            df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+    
+        df_valid_dates = df_history.dropna(subset=['DATA'])
+        
+        if not df_valid_dates.empty:
+            meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
+            anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
+            
+            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+            
+            col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
+            col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
+
+            with col_filter_row1_1:
+                mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
+            with col_filter_row1_2:
+                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
+            with col_filter_row1_3:
+                status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
+                status_selecionado_h = st.selectbox("Status", status_options)
+            with col_filter_row1_4:
+                solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
+                solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
+                
+            with col_filter_row2_1:
+                req_filter = st.text_input("N° Requisição")
+            with col_filter_row2_2:
+                oc_filter = st.text_input("N° Ordem de Compra")
+            with col_filter_row2_3:
+                cod_material_filter = st.text_input("Código Material")
+            
+            df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
+        else:
+            st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
+            st.stop()
+        
+        if status_selecionado_h != 'Todos':
+            df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
+        if solicitante_selecionado_h != 'Todos':
+            df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
+        if req_filter:
+            df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
+        if oc_filter:
+            df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
+        if cod_material_filter:
+            df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
+
+        if df_history.empty:
+            st.warning("Nenhum registro encontrado com os filtros aplicados.")
+            st.stop()
+        
+        df_display = df_history.copy()
 
         def formatar_status_display(status):
             if status == 'ENTREGUE':
@@ -675,7 +737,7 @@ if not df_valid_dates.empty:
                     lambda x: x.date() if pd.notna(x) else None
                 )
 
-        # CORREÇÃO: Formata os valores para exibição com 2 casas decimais
+        # Formata os valores para exibição com 2 casas decimais
         for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
             if col in df_display.columns:
                 df_display[col] = df_display[col].apply(
@@ -732,7 +794,7 @@ if not df_valid_dates.empty:
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
 
-            # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
+            # Trata os dados numéricos do editor antes de salvar
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                 edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
             
@@ -911,7 +973,7 @@ if not df_valid_dates.empty:
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
         
-        # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
+        # Recalcula o VALOR_TOTAL com os valores limpos
         df_filtrado_dash['VALOR_TOTAL'] = df_filtrado_dash['QUANTIDADE'] * df_filtrado_dash['VALOR_ITEM']
         
         st.subheader("Visão Geral")
