@@ -177,8 +177,10 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
+        # --- CORREÇÃO AQUI: Substitui vírgula por ponto antes de converter para numérico ---
         for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
             if col in df.columns and not df[col].empty:
+                df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
@@ -236,7 +238,7 @@ def salvar_dados_pedidos(df):
 
         # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
         if 'VALOR_TOTAL' in df_to_save.columns:
-             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
+            df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
         # Substitui NaN por string vazia para evitar problemas na gravação
         df_to_save = df_to_save.fillna('')
@@ -1027,9 +1029,80 @@ else:
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
             st.info("Não há pedidos entregues no período para criar o ranking.")
+        
+        # --- Curva ABC ---
+        st.subheader("Análise de Materiais - Curva ABC")
+        
+        df_abc = df_filtrado_dash.copy()
+
+        # Remove linhas sem valor total ou material
+        df_abc = df_abc[df_abc['VALOR_TOTAL'] > 0]
+        if df_abc.empty:
+            st.info("Nenhum dado com custo total para gerar a Curva ABC.")
+            st.stop()
+        
+        # Agrupa os dados por material e calcula o custo total de cada um
+        custo_por_material = df_abc.groupby(['CODIGO_MATERIAL', 'MATERIAL'])['VALOR_TOTAL'].sum().reset_index()
+        custo_por_material.sort_values(by='VALOR_TOTAL', ascending=False, inplace=True)
+        custo_por_material.reset_index(drop=True, inplace=True)
+
+        # Calcula a participação percentual e a participação acumulada
+        custo_total_geral = custo_por_material['VALOR_TOTAL'].sum()
+        custo_por_material['PARTICIPACAO'] = (custo_por_material['VALOR_TOTAL'] / custo_total_geral)
+        custo_por_material['PARTICIPACAO_ACUMULADA'] = custo_por_material['PARTICIPACAO'].cumsum()
+
+        # Classifica os materiais em A, B e C
+        def classificar_abc(row):
+            if row['PARTICIPACAO_ACUMULADA'] <= 0.8:
+                return 'A'
+            elif row['PARTICIPACAO_ACUMULADA'] <= 0.95:
+                return 'B'
+            else:
+                return 'C'
+
+        custo_por_material['CLASSE'] = custo_por_material.apply(classificar_abc, axis=1)
+
+        # Cria o gráfico da Curva ABC
+        fig_abc = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # Adiciona o gráfico de barras para o custo total
+        fig_abc.add_trace(
+            go.Bar(
+                x=custo_por_material['CODIGO_MATERIAL'] + ' - ' + custo_por_material['MATERIAL'],
+                y=custo_por_material['VALOR_TOTAL'],
+                name='Custo Total (R$)',
+                marker_color='#1C4D86',
+            ),
+            secondary_y=False,
+        )
+
+        # Adiciona o gráfico de linha para a participação acumulada
+        fig_abc.add_trace(
+            go.Scatter(
+                x=custo_por_material['CODIGO_MATERIAL'] + ' - ' + custo_por_material['MATERIAL'],
+                y=custo_por_material['PARTICIPACAO_ACUMULADA'],
+                name='Participação Acumulada',
+                mode='lines+markers',
+                line=dict(color='red', width=2),
+            ),
+            secondary_y=True,
+        )
+
+        # Atualiza o layout do gráfico
+        fig_abc.update_layout(
+            title_text="Curva ABC do Custo dos Materiais",
+            xaxis_title="Material",
+            legend_orientation="h",
+            legend_y=-0.15,
+            legend_x=0.5
+        )
+        fig_abc.update_yaxes(title_text="Custo Total (R$)", secondary_y=False, tickformat=',.2f')
+        fig_abc.update_yaxes(title_text="Participação Acumulada (%)", secondary_y=True, tickformat='.0%')
+        
+        st.plotly_chart(fig_abc, use_container_width=True)
 
         st.markdown("---")
-        st.header("Análise Detalhada por Departamento")
+        st.subheader("Análise Detalhada por Departamento")
         
         custo_por_departamento_tipo = df_filtrado_dash.groupby(['DEPARTAMENTO', 'TIPO_PEDIDO'])['VALOR_TOTAL'].sum().reset_index()
         fig_custo_tipo = px.bar(
