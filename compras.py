@@ -162,7 +162,6 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
-@st.cache_data(show_spinner=False)
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
@@ -244,7 +243,6 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
-@st.cache_data(show_spinner=False)
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
@@ -334,6 +332,7 @@ def salvar_dados_materiais(df):
         st.success("Material cadastrado na planilha com sucesso!")
     except Exception as e:
         st.error(f"Erro ao salvar dados de materiais no Google Sheets: {e}")
+
 
 # --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
 USERS = {
@@ -817,21 +816,65 @@ else:
         with col_material:
             st.subheader("➕ Cadastro de Material")
             st.info("Cadastre os materiais para que eles sejam preenchidos automaticamente na requisição.")
-            with st.form("form_material"):
-                codigo = st.text_input("Código do Material")
-                descricao = st.text_input("Descrição do Material")
+            
+            col_manual, col_upload = st.columns(2)
+            with col_manual:
+                with st.form("form_material_individual"):
+                    codigo = st.text_input("Código do Material")
+                    descricao = st.text_input("Descrição do Material")
+                    
+                    if st.form_submit_button("Cadastrar Material"):
+                        if codigo and descricao:
+                            novo_material = pd.DataFrame([{"CODIGO": codigo.upper(), "DESCRICAO": descricao.upper()}])
+                            st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, novo_material], ignore_index=True)
+                            salvar_dados_materiais(st.session_state.df_materiais)
+                            st.success(f"Material '{descricao}' (Cód: {codigo}) cadastrado com sucesso!")
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.error("Por favor, preencha o código e a descrição do material.")
+            
+            with col_upload:
+                st.subheader("⬆️ Cadastro em Lote")
+                st.info("Envie um arquivo .csv ou .xlsx com as colunas `CODIGO` e `DESCRICAO` para cadastrar vários materiais de uma vez.")
+                uploaded_file = st.file_uploader("Escolha um arquivo para upload", type=["csv", "xlsx"])
                 
-                if st.form_submit_button("Cadastrar Material"):
-                    if codigo and descricao:
-                        novo_material = pd.DataFrame([{"CODIGO": codigo, "DESCRICAO": descricao}])
-                        st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, novo_material], ignore_index=True)
-                        salvar_dados_materiais(st.session_state.df_materiais)
-                        st.success(f"Material '{descricao}' (Cód: {codigo}) cadastrado com sucesso!")
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error("Por favor, preencha o código e a descrição do material.")
+                if uploaded_file:
+                    try:
+                        if uploaded_file.name.endswith('.csv'):
+                            df_novos_materiais = pd.read_csv(uploaded_file)
+                        else:
+                            df_novos_materiais = pd.read_excel(uploaded_file)
+                        
+                        # Converte os nomes das colunas para maiúsculas e remove espaços
+                        df_novos_materiais.columns = [col.upper().strip() for col in df_novos_materiais.columns]
 
+                        # Verifica se as colunas necessárias existem
+                        if 'CODIGO' not in df_novos_materiais.columns or 'DESCRICAO' not in df_novos_materiais.columns:
+                            st.error("O arquivo deve conter as colunas 'CODIGO' e 'DESCRICAO'.")
+                        else:
+                            # Preenche valores vazios para evitar o erro de JSON
+                            df_novos_materiais = df_novos_materiais.fillna('')
+                            
+                            # Converte as colunas para maiúsculas antes de concatenar
+                            df_novos_materiais['CODIGO'] = df_novos_materiais['CODIGO'].astype(str).str.upper()
+                            df_novos_materiais['DESCRICAO'] = df_novos_materiais['DESCRICAO'].astype(str).str.upper()
+
+                            # Adiciona os novos materiais ao DataFrame principal
+                            st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, df_novos_materiais], ignore_index=True)
+
+                            # Remove duplicados
+                            st.session_state.df_materiais.drop_duplicates(subset=['CODIGO'], inplace=True, ignore_index=True)
+                            
+                            salvar_dados_materiais(st.session_state.df_materiais)
+                            st.success(f"Cadastro em lote concluído! Foram adicionados {len(df_novos_materiais)} novos materiais.")
+                            st.balloons()
+                            time.sleep(3)
+                            st.rerun()
+                    
+                    except Exception as e:
+                        st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
+        
     elif menu == "📊 Dashboards ":
         st.markdown("""
             <div class='header-container'>
