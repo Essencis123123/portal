@@ -185,16 +185,29 @@ def carregar_dados_pedidos():
         # --- TRECHO CORRIGIDO E SIMPLIFICADO ---
        # --- TRECHO COMPLETAMENTE REFEITO ---
         # --- TRECHO FINAL CORRIGIDO PARA LIMPEZA DE DADOS ---
-        numeric_cols = ['QUANTIDATE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        # --- TRECHO COMPLETAMENTE CORRIGIDO ---
+        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Primeiro, remove qualquer caractere que NÃO seja um dígito (0-9) ou uma vírgula.
-                # Isso limpa moedas, espaços e outros símbolos.
-                df[col] = df[col].astype(str).str.replace(r'[^\d,]', '', regex=True)  # ⚠️ PROBLEMA AQUI!
-                # Em seguida, troca a vírgula (agora a única que sobrou) por um ponto.
+                # Converte para string
+                df[col] = df[col].astype(str)
+                
+                # Remove apenas símbolos de moeda e espaços, mas MANTÉM pontos e vírgulas
+                df[col] = df[col].str.replace(r'[R$\s]', '', regex=True)
+                
+                # Processamento para formato brasileiro: 8.600,00
+                # Primeiro remove pontos (que são separadores de milhar)
+                df[col] = df[col].str.replace('.', '', regex=False)
+                
+                # Depois troca vírgula por ponto (para o padrão float internacional)
                 df[col] = df[col].str.replace(',', '.', regex=False)
-                # Converte para um tipo numérico (float)
+                
+                # Converte para numérico
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                
+                # DEBUG: Verifique se está correto
+                print(f"Coluna {col} - Primeiros valores:")
+                print(df[col].head(3).tolist())
         # --- FIM DO TRECHO ---
         
         # Garante que colunas importantes existam
