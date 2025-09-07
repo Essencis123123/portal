@@ -222,25 +222,30 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df.copy()
         
-        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
-        for col in numeric_cols:
-            if col in df_to_save.columns:
-                df_to_save[col] = df_to_save[col].fillna(0)
-        
+        # Converte as colunas de data para o formato string, se existirem
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
         
+        # Converte as colunas numéricas para o tipo float, se existirem
+        for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'VALOR_TOTAL']:
+            if col in df_to_save.columns:
+                df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0)
+
+        # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
+        if 'VALOR_TOTAL' in df_to_save.columns:
+             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
+
+        # Substitui NaN por string vazia para evitar problemas na gravação
         df_to_save = df_to_save.fillna('')
         
-        data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
-        
-        worksheet.clear()
-        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
         st.success("Dados salvos na planilha com sucesso!")
+        st.cache_data.clear()
+        
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
@@ -1126,8 +1131,8 @@ else:
         # Recálculo das colunas de economia para o DataFrame filtrado
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
         df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                0)
+                                                   ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                   0)
 
         csv_performance = df_negociados.to_csv(index=False, encoding='utf-8')
         st.download_button(
