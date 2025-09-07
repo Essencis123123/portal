@@ -490,7 +490,7 @@ def render_registrar_nf_page():
                             "OBSERVACAO": observacao,
                             "DOC NF": doc_nf_link,
                             "VENCIMENTO": vencimento_nf,
-                            "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                            "STATUS_FINANCEIRO": "CAPTURADO", # Status inicial CAPTURADO
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
@@ -571,8 +571,11 @@ def render_registrar_nf_page():
 
 def salvar_nota_fiscal(novo_registro_nf):
     """Função para salvar a nota fiscal e atualizar os pedidos relacionados."""
+    
+    # Adiciona o registro à planilha do almoxarifado
     st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
     
+    # Localiza e atualiza o status do pedido na planilha de pedidos
     pedidos_relacionados = st.session_state.df_pedidos[
         st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == novo_registro_nf['ORDEM_COMPRA'].strip().upper()
     ]
@@ -581,6 +584,7 @@ def salvar_nota_fiscal(novo_registro_nf):
     st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(novo_registro_nf['DATA'])
     st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = novo_registro_nf['DOC NF']
     
+    # Salva as alterações em ambas as planilhas
     salvar_dados_pedidos(st.session_state.df_pedidos)
     
     if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
