@@ -195,7 +195,6 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
-                # Retorna à lógica de parsing que estava funcionando
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
