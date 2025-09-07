@@ -414,7 +414,7 @@ else:
         st.divider()
         menu = st.radio(
             "📌 Navegação",
-            ["📝 Requisição", "✍️ Pedidos (OC)", "📜 Histórico ", "👤 Cadastro ", "📊 Dashboards ", "📊 Performance "]
+            ["📝 Requisição", "✍️ Pedidos (OC)", "📜 Histórico ", "👤 Cadastro", "📊 Dashboards ", "📊 Performance "]
         )
         st.divider()
         if st.sidebar.button("Logout"):
@@ -661,7 +661,7 @@ else:
         
         # CORREÇÃO: Recalcula o VALOR_TOTAL com
     
-    # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
+        # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
         df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
     
@@ -701,138 +701,137 @@ else:
             cod_material_filter = st.text_input("Código Material")
         
         df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
-    else:
-        st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
-        st.stop()
-    
-    if status_selecionado_h != 'Todos':
-        df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
-    if solicitante_selecionado_h != 'Todos':
-        df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
-    if req_filter:
-        df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
-    if oc_filter:
-        df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
-    if cod_material_filter:
-        df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
-
-    if df_history.empty:
-        st.warning("Nenhum registro encontrado com os filtros aplicados.")
-        st.stop()
-    
-    df_display = df_history.copy()
-
-    def formatar_status_display(status):
-        if status == 'ENTREGUE':
-            return '🟢 ENTREGUE'
-        elif status == 'PENDENTE':
-            return '🟡 PENDENTE'
         else:
-            return status
-    
-    df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
-    
-    data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
-    for col in data_cols_history:
-        if col in df_display.columns:
-            df_display[col] = df_display[col].apply(
-                lambda x: x.date() if pd.notna(x) else None
-            )
-
-    # CORREÇÃO: Formata os valores para exibição com 2 casas decimais
-    for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
-        if col in df_display.columns:
-            df_display[col] = df_display[col].apply(
-                lambda x: f"{float(x):.2f}" if pd.notna(x) and x != '' else ''
-            )
-
-    edited_history_df = st.data_editor(
-        df_display,
-        use_container_width=True,
-        hide_index=False,
-        key='history_editor',
-        column_config={
-            "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
-            "REQUISICAO": st.column_config.TextColumn("N° Requisição", disabled=True),
-            "DATA": st.column_config.DateColumn("Data Requisição", disabled=True),
-            "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
-            "DEPARTAMENTO": "Departamento",
-            "FILIAL": "Filial",
-            "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material", disabled=True),
-            "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
-            "UN": st.column_config.TextColumn("UN", disabled=True),
-            "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
-            "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
-            "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
-            "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-            "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
-            "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
-            "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-            "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
-            "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
-            "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-            "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
-            "DIAS_ATRASO": "Dias Atraso",
-            "DOC NF": st.column_config.LinkColumn(
-                "Anexo NF",
-                help="Clique para visualizar o anexo",
-                display_text="📥 Anexo"
-            )
-        },
-        column_order=[
-            "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
-            "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-            "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
-        ]
-    )
-
-    if not edited_history_df.equals(df_display):
-        st.info("Salvando alterações...")
+            st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
+            st.stop()
         
-        edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
-            '🟢 ENTREGUE': 'ENTREGUE',
-            '🟡 PENDENTE': 'PENDENTE',
-            'EM ANDAMENTO': 'EM ANDAMENTO',
-            '': ''
-        }).fillna(edited_history_df['STATUS_PEDIDO'])
+        if status_selecionado_h != 'Todos':
+            df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
+        if solicitante_selecionado_h != 'Todos':
+            df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
+        if req_filter:
+            df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
+        if oc_filter:
+            df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
+        if cod_material_filter:
+            df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
 
-        # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
-        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-            edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
+        if df_history.empty:
+            st.warning("Nenhum registro encontrado com os filtros aplicados.")
+            st.stop()
         
-        edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
-        edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
-        edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
-        edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
-        
-        def calcular_dias_atraso(row):
-            if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
-                if row['DATA_ENTREGA'] > row['PREVISAO_ENTREGA']:
-                    return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days
-            return 0
+        df_display = df_history.copy()
 
-        edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
-
-        for col in edited_history_df.columns:
-            if col in st.session_state.df_pedidos.columns:
-                st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
+        def formatar_status_display(status):
+            if status == 'ENTREGUE':
+                return '🟢 ENTREGUE'
+            elif status == 'PENDENTE':
+                return '🟡 PENDENTE'
+            else:
+                return status
         
-        if 'DIAS_EMISSAO' not in edited_history_df.columns and 'DIAS_EMISSAO' in st.session_state.df_pedidos.columns:
-            pass
+        df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
-        salvar_dados_pedidos(st.session_state.df_pedidos)
-        st.success("Histórico atualizado com sucesso!")
-        st.rerun()
+        data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
+        for col in data_cols_history:
+            if col in df_display.columns:
+                df_display[col] = df_display[col].apply(
+                    lambda x: x.date() if pd.notna(x) else None
+                )
 
-    st.markdown("---")
-    st.subheader("💰 Resumo do Custo Total")
-    total_historico = df_history['VALOR_TOTAL'].sum()
-    st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        # CORREÇÃO: Formata os valores para exibição com 2 casas decimais
+        for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
+            if col in df_display.columns:
+                df_display[col] = df_display[col].apply(
+                    lambda x: f"{float(x):.2f}" if pd.notna(x) and x != '' else ''
+                )
+
+        edited_history_df = st.data_editor(
+            df_display,
+            use_container_width=True,
+            hide_index=False,
+            key='history_editor',
+            column_config={
+                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
+                "REQUISICAO": st.column_config.TextColumn("N° Requisição", disabled=True),
+                "DATA": st.column_config.DateColumn("Data Requisição", disabled=True),
+                "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+                "DEPARTAMENTO": "Departamento",
+                "FILIAL": "Filial",
+                "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material", disabled=True),
+                "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
+                "UN": st.column_config.TextColumn("UN", disabled=True),
+                "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
+                "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
+                "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
+                "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
+                "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
+                "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
+                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
+                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
+                "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
+                "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
+                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
+                "DIAS_ATRASO": "Dias Atraso",
+                "DOC NF": st.column_config.LinkColumn(
+                    "Anexo NF",
+                    help="Clique para visualizar o anexo",
+                    display_text="📥 Anexo"
+                )
+            },
+            column_order=[
+                "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+                "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
+                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
+            ]
+        )
+
+        if not edited_history_df.equals(df_display):
+            st.info("Salvando alterações...")
+            
+            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
+                '🟢 ENTREGUE': 'ENTREGUE',
+                '🟡 PENDENTE': 'PENDENTE',
+                'EM ANDAMENTO': 'EM ANDAMENTO',
+                '': ''
+            }).fillna(edited_history_df['STATUS_PEDIDO'])
+
+            # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
+            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
+            
+            edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
+            edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
+            edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
+            edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
+            
+            def calcular_dias_atraso(row):
+                if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
+                    if row['DATA_ENTREGA'] > row['PREVISAO_ENTREGA']:
+                        return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days
+                return 0
+
+            edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
+
+            for col in edited_history_df.columns:
+                if col in st.session_state.df_pedidos.columns:
+                    st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
+            
+            if 'DIAS_EMISSAO' not in edited_history_df.columns and 'DIAS_EMISSAO' in st.session_state.df_pedidos.columns:
+                pass
+            
+            salvar_dados_pedidos(st.session_state.df_pedidos)
+            st.success("Histórico atualizado com sucesso!")
+            st.rerun()
+
+        st.markdown("---")
+        st.subheader("💰 Resumo do Custo Total")
+        total_historico = df_history['VALOR_TOTAL'].sum()
+        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
 
         
     elif menu == "👤 Cadastro":
-
         st.markdown("""
             <div class='header-container'>
                 <h1>👤 CADASTRO</h1>
@@ -1233,9 +1232,9 @@ else:
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
         df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                    ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                    0)
-                                                    
+                                                 ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                 0)
+                                                 
         df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
         st.subheader("Visão Geral da Performance")
