@@ -365,6 +365,14 @@ if 'logado' not in st.session_state or not st.session_state.logado:
 else:
     logo_img = load_logo(logo_url)
 
+    # Botão de recarga global
+    with st.sidebar:
+        st.write("---")
+        if st.button("🔄 Recarregar Dados"):
+            st.cache_data.clear()
+            st.rerun()
+        st.write("---")
+
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
     if 'df_solicitantes' not in st.session_state:
