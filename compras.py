@@ -14,6 +14,7 @@ import gspread
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
+import re
 
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
@@ -177,10 +178,17 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
+        # --- CORREÇÃO: Lógica para tratar os números corretamente ---
+        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # CORREÇÃO: Remove pontos e substitui vírgulas por ponto para lidar com formato brasileiro
-                df[col] = pd.to_numeric(df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False), errors='coerce').fillna(0)
+                series = df[col].astype(str)
+                # Remove o ponto apenas se for um separador de milhar (seguido por números e uma vírgula)
+                series = series.str.replace(r'\.(?=.*\d,)', '', regex=True)
+                # Substitui a vírgula por ponto decimal
+                series = series.str.replace(',', '.', regex=False)
+                # Converte para numérico e preenche NaNs com 0
+                df[col] = pd.to_numeric(series, errors='coerce').fillna(0)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = df['QUANTIDADE'].astype(float) * df['VALOR_ITEM'].astype(float)
@@ -223,18 +231,18 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df.copy()
         
-        # Converte as colunas de data para o formato string, se existirem
+        # Converte as colunas de data para o formato string
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
         
-        # Converte as colunas numéricas para o tipo float, se existirem
+        # Converte as colunas numéricas para string com formato de vírgula para decimal
         for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'VALOR_TOTAL']:
             if col in df_to_save.columns:
-                df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0)
-
+                df_to_save[col] = df_to_save[col].apply(lambda x: f"{x:,.2f}".replace('.', 'X').replace(',', '.').replace('X', ',') if pd.notna(x) else '')
+        
         # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
@@ -587,7 +595,11 @@ else:
         if submitted:
             st.info("Detectando alterações...")
             
+            # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                # Converte para string, remove pontos de milhar e substitui vírgula por ponto
+                edited_df[col_val] = edited_df[col_val].astype(str).str.replace(r'\.(?=.*\d,)', '', regex=True).str.replace(',', '.', regex=False)
+                # Converte para numérico
                 edited_df[col_val] = pd.to_numeric(edited_df[col_val], errors='coerce').fillna(0)
 
             edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
@@ -633,6 +645,8 @@ else:
         df_history = st.session_state.df_pedidos.copy()
         
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+        
+        # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
 
         df_almox = st.session_state.df_almoxarifado.copy()
@@ -759,6 +773,7 @@ else:
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
 
+            # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                 edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0)
             
@@ -935,24 +950,23 @@ else:
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
         
+        # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
+        df_filtrado_dash['VALOR_TOTAL'] = df_filtrado_dash['QUANTIDADE'] * df_filtrado_dash['VALOR_ITEM']
+        
         st.subheader("Visão Geral")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             total_pedidos = len(df_filtrado_dash)
-            st.markdown(f"### {total_pedidos}")
-            st.markdown("Total de Pedidos")
+            st.metric("Total de Pedidos", total_pedidos)
         with col2:
             pedidos_pendentes = len(df_filtrado_dash[df_filtrado_dash['STATUS_PEDIDO'] == 'PENDENTE'])
-            st.markdown(f"### {pedidos_pendentes}")
-            st.markdown("Pedidos Pendentes")
+            st.metric("Pedidos Pendentes", pedidos_pendentes)
         with col3:
             valor_total = df_filtrado_dash['VALOR_TOTAL'].sum()
-            st.markdown(f"### R$ {valor_total:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            st.markdown("Valor Total dos Itens")
+            st.metric("Valor Total dos Itens", f"R$ {valor_total:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
         with col4:
             media_atraso = df_filtrado_dash['DIAS_ATRASO'].mean() if not df_filtrado_dash.empty else 0
-            st.markdown(f"### {media_atraso:.1f}")
-            st.markdown("Média de Dias de Atraso")
+            st.metric("Média de Dias de Atraso", f"{media_atraso:.1f} dias")
 
         st.subheader("Análise de Pedidos com Atraso de Entrega")
         pedidos_atrasados = df_filtrado_dash[df_filtrado_dash['DIAS_ATRASO'] > 0]
@@ -1179,40 +1193,38 @@ else:
             st.info("Nenhum dado disponível para o período selecionado.")
             st.stop()
 
-        df_negociados = df_performance_filtrado[
-            (df_performance_filtrado['VALOR_RENEGOCIADO'] > 0) & 
-            (df_performance_filtrado['VALOR_ITEM'] > 0) &
-            (df_performance_filtrado['VALOR_ITEM'] != df_performance_filtrado['VALOR_RENEGOCIADO'])
+        # Recálculo das colunas de economia para o DataFrame filtrado
+        df_negociados = df_performance_filtrado.copy()
+        df_negociados = df_negociados[
+            (df_negociados['VALOR_RENEGOCIADO'] > 0) & 
+            (df_negociados['VALOR_ITEM'] > 0) &
+            (df_negociados['VALOR_ITEM'] != df_negociados['VALOR_RENEGOCIADO'])
         ].copy()
         
+        if df_negociados.empty:
+            st.info("Nenhum pedido com negociação registrada no período para as análises abaixo.")
+            st.stop()
+            
+        df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
+        df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
+                                                    ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                    0)
+                                                    
         df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
         st.subheader("Visão Geral da Performance")
         col1, col2, col3 = st.columns(3)
         with col1:
             total_pedidos_local = len(df_performance_local)
-            st.markdown(f"### {total_pedidos_local}")
-            st.markdown("Total de Pedidos Locais")
+            st.metric("Total de Pedidos Locais", total_pedidos_local)
         with col2:
             media_economia = df_negociados['PERC_ECONOMIA'].mean() if 'PERC_ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
-            st.markdown(f"### {media_economia:.2f}%")
-            st.markdown("Média de Economia (%)")
+            st.metric("Média de Economia (%)", f"{media_economia:.2f}%")
         with col3:
             total_economizado = df_negociados['ECONOMIA'].sum() if 'ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
-            st.markdown(f"### R$ {total_economizado:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            st.markdown("Total Economizado")
+            st.metric("Total Economizado", f"R$ {total_economizado:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
             
         st.markdown("---")
-
-        if df_negociados.empty:
-            st.info("Nenhum pedido com negociação registrada no período para as análises abaixo.")
-            st.stop()
-        
-        # Recálculo das colunas de economia para o DataFrame filtrado
-        df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
-        df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                    ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                    0)
 
         csv_performance = df_negociados.to_csv(index=False, encoding='utf-8')
         st.download_button(
