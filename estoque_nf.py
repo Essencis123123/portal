@@ -341,7 +341,11 @@ else:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
                     fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
-                    fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                    fornecedor_nf = st.selectbox(
+                        "Fornecedor da NF*",
+                        options=[''] + sorted(fornecedores_disponiveis),
+                        key='fornecedor_selecionado' # Adicione uma chave para o seletor
+                    )
                     
                     nf_numero = st.text_input("Número da NF*")
                     
@@ -353,7 +357,21 @@ else:
                         "OUTROS"
                     ]
                     recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
-                    ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
+                    
+                    # --- LÓGICA DE FILTRAGEM DE ORDEM DE COMPRA ---
+                    if fornecedor_nf:
+                        pedidos_filtrados_por_fornecedor = st.session_state.df_pedidos[
+                            st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_nf
+                        ]
+                        ordens_compra_disponiveis = pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'].dropna().unique().tolist()
+                        ordem_compra_nf = st.selectbox(
+                            "N° Ordem de Compra*",
+                            options=[''] + sorted(ordens_compra_disponiveis),
+                            help="Número da ordem de compra para vincular a nota"
+                        )
+                    else:
+                        ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Selecione um fornecedor para ver as opções.")
+                    
                     volume_nf = st.number_input("Volume*", min_value=1, value=1)
                     
                 with col3:
