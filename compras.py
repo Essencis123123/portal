@@ -195,6 +195,10 @@ def carregar_dados_pedidos():
         df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
             lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
         )
+        
+        # Garante que a coluna 'UN' exista
+        if 'UN' not in df.columns:
+            df['UN'] = ''
 
         return df
     except Exception as e:
@@ -205,7 +209,7 @@ def carregar_dados_pedidos():
 def criar_dataframe_pedidos_vazio():
     """Cria um DataFrame de pedidos vazio com a estrutura correta."""
     return pd.DataFrame(columns=[
-        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO",
+        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
         "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
         "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL"
     ])
@@ -334,7 +338,8 @@ else:
     if 'df_solicitantes' not in st.session_state:
         st.session_state.df_solicitantes = carregar_dados_solicitantes()
     if 'itens_requisicao_temp' not in st.session_state:
-        st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["MATERIAL", "QUANTIDADE"])
+        # Adicionando a coluna 'UN' ao DataFrame temporário
+        st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["MATERIAL", "UN", "QUANTIDADE"])
     if 'df_almoxarifado' not in st.session_state:
         st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
 
@@ -396,6 +401,7 @@ else:
                 num_rows='dynamic',
                 column_config={
                     "MATERIAL": "Material",
+                    "UN": "Unidade de Medida",
                     "QUANTIDADE": st.column_config.NumberColumn("Quantidade", min_value=1)
                 }
             )
@@ -403,19 +409,20 @@ else:
         col_item1, col_item2, col_item3 = st.columns([3, 1, 1])
         with col_item1:
             item_material = st.text_input("Material", key="material_input")
+            unidade_medida = st.selectbox("Unidade de Medida", ["UN", "KG", "L", "M", "M2", "M3", "PÇ"], key="unidade_medida_input")
         with col_item2:
             item_quantidade = st.number_input("Quantidade", min_value=1, value=1, key="quantidade_input")
         with col_item3:
             st.markdown("##")
             if st.button("➕ Adicionar Item"):
-                if item_material and item_quantidade > 0:
-                    novo_item = pd.DataFrame([{"MATERIAL": item_material, "QUANTIDADE": item_quantidade}])
+                if item_material and item_quantidade > 0 and unidade_medida:
+                    novo_item = pd.DataFrame([{"MATERIAL": item_material, "UN": unidade_medida, "QUANTIDADE": item_quantidade}])
                     st.session_state.itens_requisicao_temp = pd.concat([st.session_state.itens_requisicao_temp, novo_item], ignore_index=True)
                     st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
                     # Limpa os campos de entrada após adicionar o item
                     st.rerun()
                 else:
-                    st.error("Por favor, preencha o material e a quantidade.")
+                    st.error("Por favor, preencha o material, a unidade de medida e a quantidade.")
         
         st.write("---")
         
@@ -429,6 +436,7 @@ else:
                         "DEPARTAMENTO": departamento_selecionado,
                         "FILIAL": filial_selecionada,
                         "MATERIAL": item_row["MATERIAL"],
+                        "UN": item_row["UN"],
                         "QUANTIDADE": item_row["QUANTIDADE"],
                         "TIPO_PEDIDO": tipo_pedido,
                         "REQUISICAO": requisicao,
@@ -441,7 +449,7 @@ else:
                 
                 st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, pd.DataFrame(linhas_a_adicionar)], ignore_index=True)
                 salvar_dados_pedidos(st.session_state.df_pedidos)
-                st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["MATERIAL", "QUANTIDADE"])
+                st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["MATERIAL", "UN", "QUANTIDADE"])
                 st.success("Requisição registrada com sucesso! Vá para 'Atualizar Pedidos' para completar as informações.")
                 st.balloons()
             else:
@@ -489,16 +497,12 @@ else:
                 )
         
         cols_para_editar = [
-            "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "QUANTIDADE",
+            "REQUISICAO", "DATA", "SOLICITANTE", "MATERIAL", "UN", "QUANTIDADE",
             "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
             "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
         ]
         
         df_editavel = pedidos_pendentes_oc[cols_para_editar].copy()
-
-        # Converte as colunas de valor para string para evitar o erro de compatibilidade
-        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-            df_editavel[col_val] = df_editavel[col_val].astype(str)
         
         with st.form(key="form_atualizar_pedidos"):
             edited_df = st.data_editor(
@@ -508,14 +512,15 @@ else:
                 column_order=cols_para_editar,
                 column_config={
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                    "DATA": st.column_config.TextColumn("Data da Requisição", disabled=True),
-                    "SOLICITANTE": "Solicitante",
-                    "MATERIAL": "Material",
+                    "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
+                    "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+                    "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
+                    "UN": st.column_config.TextColumn("UN", disabled=True),
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    "VALOR_ITEM": st.column_config.TextColumn("Valor Unitário"),
-                    "VALOR_RENEGOCIADO": st.column_config.TextColumn("Valor Renegociado"),
+                    "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="%.2f"),
+                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="%.2f"),
                     "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
@@ -529,7 +534,6 @@ else:
             
             # Converte as colunas de valor de volta para numérico antes de salvar
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-                edited_df[col_val] = edited_df[col_val].astype(str).str.replace(',', '.', regex=False)
                 edited_df[col_val] = pd.to_numeric(edited_df[col_val], errors='coerce').fillna(0)
 
             edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
@@ -637,11 +641,6 @@ else:
         
         df_display = df_history.copy()
 
-        # Adiciona a conversão de valor para string para o data_editor
-        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
-            if col_val in df_display.columns:
-                df_display[col_val] = df_display[col_val].astype(str).str.replace('.', ',', regex=False)
-
         def formatar_status_display(status):
             if status == 'ENTREGUE':
                 return '🟢 ENTREGUE'
@@ -667,19 +666,20 @@ else:
             key='history_editor',
             column_config={
                 "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
-                "DATA": st.column_config.DateColumn("Data Requisição"),
-                "SOLICITANTE": "Solicitante",
+                "REQUISICAO": st.column_config.TextColumn("N° Requisição", disabled=True),
+                "DATA": st.column_config.DateColumn("Data Requisição", disabled=True),
+                "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                 "DEPARTAMENTO": "Departamento",
                 "FILIAL": "Filial",
-                "MATERIAL": "Material",
-                "QUANTIDADE": "Quantidade",
+                "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
+                "UN": st.column_config.TextColumn("UN", disabled=True),
+                "QUANTIDADE": st.column_config.NumberColumn("Quantidade", disabled=True),
                 "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
-                "REQUISICAO": "N° Requisição",
                 "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                "VALOR_ITEM": st.column_config.TextColumn("Valor Unitário"),
-                "VALOR_TOTAL": st.column_config.TextColumn("Valor Total", disabled=True),
-                "VALOR_RENEGOCIADO": st.column_config.TextColumn("Valor Renegociado"),
+                "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="%.2f"),
+                "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="%.2f", disabled=True),
+                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="%.2f"),
                 "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
@@ -692,7 +692,7 @@ else:
                 )
             },
             column_order=[
-                "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE",
+                "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE",
                 "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
                 "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
             ]
@@ -709,7 +709,6 @@ else:
             }).fillna(edited_history_df['STATUS_PEDIDO'])
 
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-                edited_history_df[col_val] = edited_history_df[col_val].astype(str).str.replace(',', '.', regex=False)
                 edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0)
             
             edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
