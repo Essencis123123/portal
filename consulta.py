@@ -183,32 +183,53 @@ def carregar_dados_pedidos():
         # --- TRECHO FINAL CORRIGIDO PARA LIMPEZA DE DADOS ---
 # --- TRECHO CORRIGIDO PARA LIMPEZA DE DADOS NUMÉRICOS ---
         # --- TRECHO CORRIGIDO E SIMPLIFICADO ---
+       # --- TRECHO COMPLETAMENTE REFEITO ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Converte para string primeiro
+                # DEBUG: Mostrar valores ANTES de qualquer processamento
+                print(f"=== COLUNA {col} ===")
+                print("Valores ORIGINAIS:")
+                print(df[col].head(10).tolist())
+                
+                # Passo 1: Converter para string
                 df[col] = df[col].astype(str)
                 
-                # DEBUG: Mostra como estão os valores antes do tratamento
-                print(f"Valores originais da coluna {col}:")
-                print(df[col].head())
-                
-                # Remove TODOS os caracteres não numéricos EXCETO vírgula e ponto
+                # Passo 2: Limpar caracteres indesejados (mantém apenas números, vírgula e ponto)
                 df[col] = df[col].str.replace(r'[^\d,\.]', '', regex=True)
                 
-                # Para valores no formato brasileiro (1.234,56) - ponto é milhar, vírgula é decimal
-                # Primeiro remove todos os pontos (que são separadores de milhar)
-                df[col] = df[col].str.replace('.', '', regex=False)
+                # Passo 3: Processamento ESPECÍFICO para formato brasileiro
+                for i in range(len(df[col])):
+                    valor_str = df[col].iloc[i]
+                    
+                    if pd.isna(valor_str) or valor_str == '':
+                        df[col].iloc[i] = 0
+                        continue
+                        
+                    # Se tem vírgula, é formato brasileiro (1.234,56)
+                    if ',' in valor_str:
+                        # Remove todos os pontos (separadores de milhar)
+                        valor_limpo = valor_str.replace('.', '')
+                        # Substitui vírgula por ponto (decimal internacional)
+                        valor_limpo = valor_limpo.replace(',', '.')
+                        df[col].iloc[i] = valor_limpo
+                    else:
+                        # Se não tem vírgula, remove pontos (podem ser milhares ou decimais)
+                        valor_limpo = valor_str.replace('.', '')
+                        df[col].iloc[i] = valor_limpo
                 
-                # Depois substitui vírgula por ponto (para o padrão float internacional)
-                df[col] = df[col].str.replace(',', '.', regex=False)
+                # DEBUG: Mostrar valores APÓS limpeza de strings
+                print("Valores após limpeza string:")
+                print(df[col].head(10).tolist())
                 
-                # Converte para numérico
+                # Passo 4: Converter para numérico
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                 
-                # DEBUG: Mostra como ficaram os valores após tratamento
-                print(f"Valores processados da coluna {col}:")
-                print(df[col].head())
+                # DEBUG: Mostrar valores FINAIS
+                print("Valores FINAIS (numéricos):")
+                print(df[col].head(10).tolist())
+                print("====================\n")
         # --- FIM DO TRECHO ---
         
         # Garante que colunas importantes existam
