@@ -177,9 +177,9 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # --- CORREÇÃO AQUI: Substitui vírgula por ponto antes de converter para numérico ---
         for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
             if col in df.columns and not df[col].empty:
+                # CORREÇÃO: Substitui vírgula por ponto antes de converter para numérico
                 df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
@@ -1088,6 +1088,10 @@ else:
             secondary_y=True,
         )
 
+        # Adiciona as linhas de referência para as classes A e B
+        fig_abc.add_hline(y=0.8, line_dash="dash", line_color="green", annotation_text="80% (Classe A)", annotation_position="bottom right")
+        fig_abc.add_hline(y=0.95, line_dash="dash", line_color="orange", annotation_text="95% (Classe B)", annotation_position="bottom right")
+
         # Atualiza o layout do gráfico
         fig_abc.update_layout(
             title_text="Curva ABC do Custo dos Materiais",
@@ -1097,7 +1101,7 @@ else:
             legend_x=0.5
         )
         fig_abc.update_yaxes(title_text="Custo Total (R$)", secondary_y=False, tickformat=',.2f')
-        fig_abc.update_yaxes(title_text="Participação Acumulada (%)", secondary_y=True, tickformat='.0%')
+        fig_abc.update_yaxes(title_text="Participação Acumulada", secondary_y=True, tickformat='.0%')
         
         st.plotly_chart(fig_abc, use_container_width=True)
 
