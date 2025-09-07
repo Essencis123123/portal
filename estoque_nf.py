@@ -347,7 +347,6 @@ def render_registrar_nf_page():
             with col1:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
-                # CORRIGIDO: Puxando fornecedores da aba de pedidos, coluna FORNECEDOR.
                 fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
                 fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                 
@@ -361,7 +360,23 @@ def render_registrar_nf_page():
                     "OUTROS"
                 ]
                 recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
-                ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
+
+                # Lógica para filtrar as Ordens de Compra com base no fornecedor selecionado
+                if fornecedor_nf and fornecedor_nf != '':
+                    ordens_disponiveis = st.session_state.df_pedidos[
+                        (st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_nf) &
+                        (st.session_state.df_pedidos['STATUS_PEDIDO'].isin(['APROVADO', 'ENTREGUE']))
+                    ]['ORDEM_COMPRA'].dropna().unique().tolist()
+                else:
+                    ordens_disponiveis = st.session_state.df_pedidos['ORDEM_COMPRA'].dropna().unique().tolist()
+                
+                # O campo "N° Ordem de Compra*" agora é um selectbox
+                ordem_compra_nf = st.selectbox(
+                    "N° Ordem de Compra*",
+                    options=[''] + sorted(ordens_disponiveis),
+                    help="Selecione o número da ordem de compra para vincular a nota."
+                )
+                
                 volume_nf = st.number_input("Volume*", min_value=1, value=1)
                 
             with col3:
