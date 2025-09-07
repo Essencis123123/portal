@@ -322,203 +322,104 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        # Cria um espaço reservado para a janela pop-up
-        popup_placeholder = st.empty()
-
-        if 'show_confirm_popup' in st.session_state and st.session_state['show_confirm_popup']:
-            # Lógica para exibir a janela de confirmação
-            with popup_placeholder.container():
-                st.info("⚠️ Divergência de Valores Detectada!")
+        with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
+            with st.form("formulario_nota", clear_on_submit=True):
+                col1, col2, col3 = st.columns(3)
                 
-                # Use os dados temporários armazenados
-                temp_data = st.session_state['temp_form_data']
-                oc_valor = temp_data['valor_oc']
-                nf_valor = temp_data['valor_nf']
+                with col1:
+                    data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
+                    
+                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+                    fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                    
+                    if fornecedor_nf == '':
+                        fornecedor_manual = st.text_input("Novo Fornecedor (opcional)", placeholder="Digite o nome se não estiver na lista...")
+                    else:
+                        fornecedor_manual = ""
+                    
+                    nf_numero = st.text_input("Número da NF*")
+                    
+                with col2:
+                    recebedor = st.selectbox("Recebedor*", [
+                        "ARLEY GONCALVES DOS SANTOS", "EVIANE DAS GRACAS DE ASSIS",
+                        "ANDRE CASTRO DE SOUZA", "ISABELA CAROLINA DE PAURA SOARES",
+                        "EMERSON ALMEIDA DE ARAUJO", "GABRIEL PEREIRA MARTINS",
+                        "OUTROS"
+                    ])
+                    ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
+                    volume_nf = st.number_input("Volume*", min_value=1, value=1)
+                    
+                with col3:
+                    valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
+                    condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
+                    valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
                 
-                st.warning(f"O valor total da Ordem de Compra (OC) é de R$ **{oc_valor:,.2f}**.")
-                st.warning(f"O valor total da Nota Fiscal (NF) digitado é de R$ **{nf_valor:,.2f}**.")
+                doc_nf_link = st.text_input("Link da Nota Fiscal (URL)", placeholder="Cole o link de acesso aqui...")
                 
-                st.write(f"Existe uma diferença de R$ **{abs(oc_valor - nf_valor):,.2f}**.")
+                observacao = st.text_area("Observações", placeholder="Informações adicionais...")
+                vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30))
                 
-                if st.button("✅ Estou Ciente e Desejo Salvar"):
-                    # Salvar os dados se o usuário confirmar
-                    try:
-                        novo_registro_nf = temp_data['novo_registro_nf']
-                        st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
+                
+                if enviar:
+                    nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
+                    campos_validos = all([
+                        nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
+                        valor_total_nf.strip() not in ["", "0,00"]
+                    ])
+                    
+                    if not campos_validos:
+                        st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
+                    else:
+                        st.session_state['log_messages'] = []
+                        adicionar_log("Formulário validado. Iniciando registro da nota fiscal.")
                         
-                        if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                            st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso!")
+                        try:
+                            valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
+                            valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
+                            
+                            df_update_pedidos = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
+                            
+                            if not df_update_pedidos.empty:
+                                for original_index in df_update_pedidos.index:
+                                    st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                                    st.session_state.df_pedidos.loc[original_index, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                                
+                                salvar_dados_pedidos(st.session_state.df_pedidos)
+                            else:
+                                st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada em dados_pedidos.csv. O status não foi atualizado.")
+                            
+                            # Lógica para registrar a nota fiscal no arquivo do ALMOXARIFADO
+                            novo_registro_nf = {
+                                "DATA": pd.to_datetime(data_recebimento),
+                                "RECEBEDOR": recebedor,
+                                "FORNECEDOR": nome_final_fornecedor,
+                                "NF": nf_numero,
+                                "VOLUME": volume_nf,
+                                "V. TOTAL NF": valor_total_float,
+                                "CONDICAO FRETE": condicao_frete_nf,
+                                "VALOR FRETE": valor_frete_float,
+                                "OBSERVACAO": observacao,
+                                "DOC NF": doc_nf_link,
+                                "VENCIMENTO": pd.to_datetime(vencimento_nf),
+                                "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                                "CONDICAO_PROBLEMA": "N/A",
+                                "REGISTRO_ADICIONAL": "",
+                                "ORDEM_COMPRA": ordem_compra_nf
+                            }
+                            st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                            
+                            if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                                st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso no arquivo dados_almoxarifado.csv!")
+                            else:
+                                st.error("Erro ao salvar os dados da nota fiscal.")
+                        
                             st.balloons()
-                        else:
-                            st.error("Erro ao salvar os dados da nota fiscal.")
+                            st.rerun()
                             
-                        # Limpa o estado da sessão para fechar o pop-up
-                        del st.session_state['show_confirm_popup']
-                        del st.session_state['temp_form_data']
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"❌ Erro ao salvar após confirmação: {e}")
-                
-                if st.button("Cancelar"):
-                    # Limpa o estado da sessão e fecha o pop-up
-                    del st.session_state['show_confirm_popup']
-                    del st.session_state['temp_form_data']
-                    st.info("Registro cancelado.")
-                    st.rerun()
-
-        else: # Exibir o formulário principal
-            with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
-                with st.form("formulario_nota", clear_on_submit=True):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
-                        
-                        fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
-                        fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
-                        
-                        if fornecedor_nf == '':
-                            fornecedor_manual = st.text_input("Novo Fornecedor (opcional)", placeholder="Digite o nome se não estiver na lista...")
-                        else:
-                            fornecedor_manual = ""
-                        
-                        nf_numero = st.text_input("Número da NF*")
-                        
-                    with col2:
-                        recebedor = st.selectbox("Recebedor*", [
-                            "ARLEY GONCALVES DOS SANTOS", "EVIANE DAS GRACAS DE ASSIS",
-                            "ANDRE CASTRO DE SOUZA", "ISABELA CAROLINA DE PAURA SOARES",
-                            "EMERSON ALMEIDA DE ARAUJO", "GABRIEL PEREIRA MARTINS",
-                            "OUTROS"
-                        ])
-                        ordem_compra_nf = st.text_input("N° Ordem de Compra*", help="Número da ordem de compra para vincular a nota")
-                        volume_nf = st.number_input("Volume*", min_value=1, value=1)
-                        
-                    with col3:
-                        valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
-                        condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
-                        valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
-                    
-                    doc_nf_link = st.text_input("Link da Nota Fiscal (URL)", placeholder="Cole o link de acesso aqui...")
-                    
-                    observacao = st.text_area("Observações", placeholder="Informações adicionais...")
-                    vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30))
-                    
-                    enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
-                    
-                    if enviar:
-                        nome_final_fornecedor = fornecedor_manual if fornecedor_manual else fornecedor_nf
-                        campos_validos = all([
-                            nome_final_fornecedor.strip(), nf_numero.strip(), ordem_compra_nf.strip(),
-                            valor_total_nf.strip() not in ["", "0,00"]
-                        ])
-                        
-                        if not campos_validos:
-                            st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
-                        else:
-                            st.session_state['log_messages'] = []
-                            adicionar_log("Formulário validado. Iniciando registro da nota fiscal.")
-                            
-                            try:
-                                # Converte os valores para float
-                                valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
-                                valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
-                                
-                                # Busca o valor da OC em df_pedidos
-                                df_oc = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf]
-                                
-                                # Verifica se a OC foi encontrada e calcula o valor total
-                                if not df_oc.empty:
-                                    valor_total_oc = df_oc['VALOR_ITEM'].sum()
-                                    
-                                    # Lógica para checar divergência
-                                    if not np.isclose(valor_total_oc, valor_total_float):
-                                        st.session_state['show_confirm_popup'] = True
-                                        st.session_state['temp_form_data'] = {
-                                            'valor_oc': valor_total_oc,
-                                            'valor_nf': valor_total_float,
-                                            'novo_registro_nf': {
-                                                "DATA": pd.to_datetime(data_recebimento),
-                                                "RECEBEDOR": recebedor,
-                                                "FORNECEDOR": nome_final_fornecedor,
-                                                "NF": nf_numero,
-                                                "VOLUME": volume_nf,
-                                                "V. TOTAL NF": valor_total_float,
-                                                "CONDICAO FRETE": condicao_frete_nf,
-                                                "VALOR FRETE": valor_frete_float,
-                                                "OBSERVACAO": observacao,
-                                                "DOC NF": doc_nf_link,
-                                                "VENCIMENTO": pd.to_datetime(vencimento_nf),
-                                                "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                                                "CONDICAO_PROBLEMA": "N/A",
-                                                "REGISTRO_ADICIONAL": "",
-                                                "ORDEM_COMPRA": ordem_compra_nf
-                                            },
-                                        }
-                                        st.rerun() # Reinicia para exibir o pop-up
-                                    else:
-                                        # Se não houver divergência, salva diretamente
-                                        novo_registro_nf = {
-                                            "DATA": pd.to_datetime(data_recebimento),
-                                            "RECEBEDOR": recebedor,
-                                            "FORNECEDOR": nome_final_fornecedor,
-                                            "NF": nf_numero,
-                                            "VOLUME": volume_nf,
-                                            "V. TOTAL NF": valor_total_float,
-                                            "CONDICAO FRETE": condicao_frete_nf,
-                                            "VALOR FRETE": valor_frete_float,
-                                            "OBSERVACAO": observacao,
-                                            "DOC NF": doc_nf_link,
-                                            "VENCIMENTO": pd.to_datetime(vencimento_nf),
-                                            "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                                            "CONDICAO_PROBLEMA": "N/A",
-                                            "REGISTRO_ADICIONAL": "",
-                                            "ORDEM_COMPRA": ordem_compra_nf
-                                        }
-                                        st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
-                                        
-                                        if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                                            st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
-                                            st.balloons()
-                                            st.rerun()
-                                        else:
-                                            st.error("Erro ao salvar os dados da nota fiscal.")
-                                            
-                                else:
-                                    st.warning(f"ℹ️ A OC '{ordem_compra_nf}' não foi encontrada. O registro da NF será salvo sem a comparação de valor.")
-                                    
-                                    # Lógica para registrar a nota fiscal no arquivo do ALMOXARIFADO
-                                    novo_registro_nf = {
-                                        "DATA": pd.to_datetime(data_recebimento),
-                                        "RECEBEDOR": recebedor,
-                                        "FORNECEDOR": nome_final_fornecedor,
-                                        "NF": nf_numero,
-                                        "VOLUME": volume_nf,
-                                        "V. TOTAL NF": valor_total_float,
-                                        "CONDICAO FRETE": condicao_frete_nf,
-                                        "VALOR FRETE": valor_frete_float,
-                                        "OBSERVACAO": observacao,
-                                        "DOC NF": doc_nf_link,
-                                        "VENCIMENTO": pd.to_datetime(vencimento_nf),
-                                        "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                                        "CONDICAO_PROBLEMA": "N/A",
-                                        "REGISTRO_ADICIONAL": "",
-                                        "ORDEM_COMPRA": ordem_compra_nf
-                                    }
-                                    st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
-                                    
-                                    if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                                        st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso no arquivo dados_almoxarifado.csv!")
-                                    else:
-                                        st.error("Erro ao salvar os dados da nota fiscal.")
-
-                                st.balloons()
-                                st.rerun()
-                                
-                            except ValueError:
-                                st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
-                                adicionar_log("Erro: Falha na conversão de valores numéricos do formulário.")
+                        except ValueError:
+                            st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
+                            adicionar_log("Erro: Falha na conversão de valores numéricos do formulário.")
         
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
