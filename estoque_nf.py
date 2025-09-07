@@ -504,8 +504,16 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
-        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
-        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+        # Correção aplicada: verificação de tipo de dado antes da formatação
+        if not df_ultimas_nfs.empty and pd.api.types.is_datetime64_any_dtype(df_ultimas_nfs['DATA']):
+            df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
+        else:
+            df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].astype(str)
+        
+        if not df_ultimas_nfs.empty and pd.api.types.is_datetime64_any_dtype(df_ultimas_nfs['VENCIMENTO']):
+            df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+        else:
+            df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].astype(str)
         
         col_map = {
             'DATA': 'Data',
@@ -679,10 +687,12 @@ def render_consultar_nfs_page():
         if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
         if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
         
-        df_consulta = df_consulta[
-            (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
-            (df_consulta['DATA'].dt.date <= data_fim_consulta)
-        ]
+        # Correção aplicada: verificação de tipo de dado antes da filtragem por data
+        if not df_consulta.empty and pd.api.types.is_datetime64_any_dtype(df_consulta['DATA']):
+            df_consulta = df_consulta[
+                (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
+                (df_consulta['DATA'].dt.date <= data_fim_consulta)
+            ]
         
         st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
         
@@ -757,6 +767,8 @@ def render_configuracoes_page():
         st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
         
         if st.button("🔄 Recarregar Dados"):
+            # Limpa o cache de dados e recarrega tudo
+            st.cache_data.clear()
             st.session_state.df_pedidos = carregar_dados_pedidos()
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
             st.success("Dados recarregados com sucesso!")
