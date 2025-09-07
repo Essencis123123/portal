@@ -1056,16 +1056,14 @@ else:
     elif menu == "📊 Performance ":
         st.markdown("""
             <div class='header-container'>
-                <h1>📊 PERFORMANCE DE NEGOCIAÇÃO LOCAL</h1>
-                <p>Análise de Economia em Pedidos Locais</p>
+                <h1>📊 PERFORMANCE DE NEGOCIAÇÃO</h1>
+                <p>Análise de Economia em Pedidos</p>
             </div>
         """, unsafe_allow_html=True)
-        st.header("📊 Análise de Performance de Negociações Locais")
+        st.header("📊 Análise de Performance de Negociações")
 
         df_performance = st.session_state.df_pedidos.copy()
-        df_performance_local = df_performance.copy()
-        
-        df_performance_local['DATA'] = pd.to_datetime(df_performance_local['DATA'], errors='coerce', dayfirst=True)
+        df_performance['DATA'] = pd.to_datetime(df_performance['DATA'], errors='coerce', dayfirst=True)
         
         st.markdown("---")
         st.subheader("Filtros de Período")
@@ -1074,7 +1072,7 @@ else:
         mes_selecionado_p = []
         ano_selecionado_p = None
         
-        df_valid_dates_p = df_performance_local.dropna(subset=['DATA'])
+        df_valid_dates_p = df_performance.dropna(subset=['DATA'])
         if not df_valid_dates_p.empty:
             meses_disponiveis_p = df_valid_dates_p['DATA'].dt.month.unique()
             anos_disponiveis_p = df_valid_dates_p['DATA'].dt.year.unique()
@@ -1084,30 +1082,26 @@ else:
             with col_filtro_p2:
                 ano_selecionado_p = st.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
-            st.info("Nenhum pedido local com data válida para análise.")
+            st.info("Nenhum pedido com data válida para análise.")
             st.stop()
         
         if mes_selecionado_p and ano_selecionado_p:
-            df_performance_local = df_performance_local[(df_performance_local['DATA'].dt.month.isin(mes_selecionado_p)) & (df_performance_local['DATA'].dt.year == ano_selecionado_p)]
+            df_performance_filtrado = df_performance[(df_performance['DATA'].dt.month.isin(mes_selecionado_p)) & (df_performance['DATA'].dt.year == ano_selecionado_p)]
         else:
-            df_performance_local = pd.DataFrame()
+            df_performance_filtrado = pd.DataFrame()
         
-        if df_performance_local.empty:
-            st.info("Nenhum pedido local com valores de negociação preenchidos para análise.")
+        if df_performance_filtrado.empty:
+            st.info("Nenhum dado disponível para o período selecionado.")
             st.stop()
-        
-        df_performance_local = df_performance_local[df_performance_local['VALOR_ITEM'].notna() & df_performance_local['VALOR_RENEGOCIADO'].notna()]
-        df_performance_local = df_performance_local[df_performance_local['VALOR_ITEM'] > 0]
 
-        if df_performance_local.empty:
-            st.info("Nenhum pedido local com valores de negociação preenchidos para análise.")
-            st.stop()
+        df_negociados = df_performance_filtrado[
+            (df_performance_filtrado['VALOR_RENEGOCIADO'] > 0) & 
+            (df_performance_filtrado['VALOR_ITEM'] > 0) &
+            (df_performance_filtrado['VALOR_ITEM'] != df_performance_filtrado['VALOR_RENEGOCIADO'])
+        ].copy()
         
-        df_performance_local['ECONOMIA'] = (df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_ITEM']) - (df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_RENEGOCIADO'])
-        df_performance_local['PERC_ECONOMIA'] = np.where((df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_ITEM']) > 0, 
-                                                         ((df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_ITEM']) - (df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_RENEGOCIADO'])) / (df_performance_local['QUANTIDADE'] * df_performance_local['VALOR_ITEM']) * 100, 
-                                                         0)
-
+        df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
+        
         st.subheader("Visão Geral da Performance")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1115,28 +1109,38 @@ else:
             st.markdown(f"### {total_pedidos_local}")
             st.markdown("Total de Pedidos Locais")
         with col2:
-            media_economia = df_performance_local['PERC_ECONOMIA'].mean()
+            media_economia = df_negociados['PERC_ECONOMIA'].mean() if 'PERC_ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
             st.markdown(f"### {media_economia:.2f}%")
             st.markdown("Média de Economia (%)")
         with col3:
-            total_economizado = df_performance_local['ECONOMIA'].sum()
+            total_economizado = df_negociados['ECONOMIA'].sum() if 'ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
             st.markdown(f"### R$ {total_economizado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             st.markdown("Total Economizado")
-
+            
         st.markdown("---")
+
+        if df_negociados.empty:
+            st.info("Nenhum pedido com negociação registrada no período para as análises abaixo.")
+            st.stop()
         
-        csv_performance = df_performance_local.to_csv(index=False, encoding='utf-8')
+        # Recálculo das colunas de economia para o DataFrame filtrado
+        df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
+        df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
+                                                ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                0)
+
+        csv_performance = df_negociados.to_csv(index=False, encoding='utf-8')
         st.download_button(
-            label="📥 Download Dados da Performance",
+            label="📥 Download Dados de Negociação",
             data=csv_performance,
-            file_name=f"performance_local_{'_'.join([str(m) for m in mes_selecionado_p])}-{ano_selecionado_p}.csv",
+            file_name=f"performance_negociacao_{'_'.join([str(m) for m in mes_selecionado_p])}-{ano_selecionado_p}.csv",
             mime="text/csv"
         )
 
         st.subheader("Curva de Desempenho da Negociação (Média Mensal)")
-        df_performance_local['MES_APROVACAO'] = df_performance_local['DATA_APROVACAO'].dt.to_period('M').astype(str)
+        df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').astype(str)
         
-        curva_mensal = df_performance_local.groupby('MES_APROVACAO')['PERC_ECONOMIA'].mean().reset_index()
+        curva_mensal = df_negociados.groupby('MES_APROVACAO')['PERC_ECONOMIA'].mean().reset_index()
         
         if not curva_mensal.empty:
             fig_curva = px.line(
@@ -1149,23 +1153,23 @@ else:
             )
             st.plotly_chart(fig_curva, use_container_width=True)
         else:
-            st.info("Dados de negociação local insuficientes para gerar a curva de desempenho.")
+            st.info("Dados de negociação insuficientes para gerar a curva de desempenho.")
         
         st.markdown("---")
 
-        st.subheader("Principais Solicitantes de Pedidos Locais")
-        ranking_solicitantes = df_performance_local['SOLICITANTE'].value_counts().reset_index()
-        ranking_solicitantes.columns = ['Solicitante', 'Total de Pedidos Locais']
+        st.subheader("Principais Solicitantes de Pedidos com Negociação")
+        ranking_solicitantes = df_negociados['SOLICITANTE'].value_counts().reset_index()
+        ranking_solicitantes.columns = ['Solicitante', 'Total de Pedidos com Negociação']
         
         if not ranking_solicitantes.empty:
             fig_ranking = px.bar(
-                ranking_solicitantes.nlargest(10, 'Total de Pedidos Locais'),
-                x='Total de Pedidos Locais',
+                ranking_solicitantes.nlargest(10, 'Total de Pedidos com Negociação'),
+                x='Total de Pedidos com Negociação',
                 y='Solicitante',
                 orientation='h',
-                title='Top 10 Solicitantes de Compras Locais',
-                labels={'Total de Pedidos Locais': 'Número de Pedidos', 'Solicitante': 'Solicitante'}
+                title='Top 10 Solicitantes de Pedidos com Negociação',
+                labels={'Total de Pedidos com Negociação': 'Número de Pedidos', 'Solicitante': 'Solicitante'}
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
-            st.info("Dados de solicitantes locais insuficientes para gerar o ranking.")
+            st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
