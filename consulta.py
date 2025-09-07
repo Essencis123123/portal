@@ -231,20 +231,18 @@ with st.sidebar:
         meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
                        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
-        filtro_mes_dash = st.multiselect(
-            "Selecione os Meses:", 
+        filtro_mes_dash = st.selectbox(
+            "Selecione o Mês:", 
             options=['Todos'] + meses_disponiveis, 
-            format_func=lambda x: meses_nomes.get(x, x),
-            default=['Todos']
+            format_func=lambda x: meses_nomes.get(x, x)
         )
-        filtro_ano_dash = st.multiselect(
-            "Selecione os Anos:", 
-            options=['Todos'] + anos_disponiveis,
-            default=['Todos']
+        filtro_ano_dash = st.selectbox(
+            "Selecione o Ano:", 
+            options=['Todos'] + anos_disponiveis
         )
     else:
-        filtro_mes_dash = ['Todos']
-        filtro_ano_dash = ['Todos']
+        filtro_mes_dash = 'Todos'
+        filtro_ano_dash = 'Todos'
         st.info("Nenhum dado com data disponível para filtrar.")
 
 
@@ -270,65 +268,61 @@ st.subheader("Filtros de Dados")
 col_filters1, col_filters2, col_filters3, col_filters4 = st.columns(4)
 
 with col_filters1:
-    filtro_solicitante = ['Todos']
+    filtro_solicitante = 'Todos'
     if 'SOLICITANTE' in df_pedidos.columns and not df_pedidos.empty:
         solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
-        filtro_solicitante = st.multiselect(
+        filtro_solicitante = st.selectbox(
             "Solicitante:",
-            options=['Todos'] + solicitantes_disponiveis,
-            default=['Todos']
+            options=['Todos'] + solicitantes_disponiveis
         )
 
 with col_filters2:
-    filtro_departamento = ['Todos']
+    filtro_departamento = 'Todos'
     if 'DEPARTAMENTO' in df_pedidos.columns and not df_pedidos.empty:
         departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
-        filtro_departamento = st.multiselect(
+        filtro_departamento = st.selectbox(
             "Departamento:",
-            options=['Todos'] + departamentos_disponiveis,
-            default=['Todos']
+            options=['Todos'] + departamentos_disponiveis
         )
 
 with col_filters3:
-    filtro_status = ['Todos']
+    filtro_status = 'Todos'
     if 'STATUS_PEDIDO' in df_pedidos.columns and not df_pedidos.empty:
         status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
-        filtro_status = st.multiselect(
+        filtro_status = st.selectbox(
             "Status:",
-            options=['Todos'] + sorted(status_disponiveis),
-            default=['Todos']
+            options=['Todos'] + sorted(status_disponiveis)
         )
 with col_filters4:
-    filtro_material_cod = ['Todos']
+    filtro_material_cod = 'Todos'
     if 'CODIGO_MATERIAL' in df_pedidos.columns and not df_pedidos.empty:
         cod_materiais_disponiveis = sorted(df_pedidos['CODIGO_MATERIAL'].dropna().unique().tolist())
-        filtro_material_cod = st.multiselect(
+        filtro_material_cod = st.selectbox(
             "Cód. Material:",
-            options=['Todos'] + cod_materiais_disponiveis,
-            default=['Todos']
+            options=['Todos'] + cod_materiais_disponiveis
         )
 
 # --- Aplicação dos Filtros na Tabela Principal ---
 df_filtrado = df_pedidos.copy()
 
 # Aplica os filtros de meses e anos
-if 'Todos' not in filtro_mes_dash:
-    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.month.isin(filtro_mes_dash)]
+if filtro_mes_dash != 'Todos':
+    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.month == filtro_mes_dash]
 
-if 'Todos' not in filtro_ano_dash:
-    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.year.isin(filtro_ano_dash)]
+if filtro_ano_dash != 'Todos':
+    df_filtrado = df_filtrado[df_filtrado['DATA'].dt.year == filtro_ano_dash]
 
-if 'Todos' not in filtro_solicitante:
-    df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'].isin(filtro_solicitante)]
+if filtro_solicitante != 'Todos':
+    df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
 
-if 'Todos' not in filtro_departamento:
-    df_filtrado = df_filtrado[df_filtrado['DEPARTAMENTO'].isin(filtro_departamento)]
+if filtro_departamento != 'Todos':
+    df_filtrado = df_filtrado[df_filtrado['DEPARTAMENTO'] == filtro_departamento]
 
-if 'Todos' not in filtro_status:
-    df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'].isin(filtro_status)]
+if filtro_status != 'Todos':
+    df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'] == filtro_status]
     
-if 'Todos' not in filtro_material_cod:
-    df_filtrado = df_filtrado[df_filtrado['CODIGO_MATERIAL'].isin(filtro_material_cod)]
+if filtro_material_cod != 'Todos':
+    df_filtrado = df_filtrado[df_filtrado['CODIGO_MATERIAL'] == filtro_material_cod]
 
 
 if df_filtrado.empty:
