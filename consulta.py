@@ -11,6 +11,10 @@ import plotly.express as px
 from pandas.errors import EmptyDataError
 import numpy as np
 
+# Comando para limpar o cache de dados do Streamlit - Apenas para diagnóstico!
+# Remova esta linha na versão final do seu app para melhor desempenho
+st.cache_data.clear()
+
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
 
@@ -181,17 +185,16 @@ def carregar_dados_pedidos():
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # --- TRECHO FINAL CORRIGIDO PARA LIMPEZA DE DADOS ---
-# --- TRECHO CORRIGIDO - VOLTANDO AO PROCESSAMENTO SIMPLES ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # VOLTE PARA ESTA LINHA SIMPLES (do código antigo)
+                # Primeiro, remove qualquer caractere que NÃO seja um dígito (0-9) ou uma vírgula.
+                # Isso limpa moedas, espaços e outros símbolos.
+                df[col] = df[col].astype(str).str.replace(r'[^\d,]', '', regex=True)
+                # Em seguida, troca a vírgula (agora a única que sobrou) por um ponto.
+                df[col] = df[col].str.replace(',', '.', regex=False)
+                # Converte para um tipo numérico (float)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                
-                # DEBUG: Verifique se está correto
-                if col == 'VALOR_ITEM':
-                    print(f"Coluna {col} - Primeiros valores:")
-                    print(df[col].head(3).tolist())
         # --- FIM DO TRECHO ---
         
         # Garante que colunas importantes existam
