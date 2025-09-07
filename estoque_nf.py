@@ -475,8 +475,8 @@ def render_registrar_nf_page():
                     st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
                 else:
                     try:
-                        valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
-                        valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
+                        valor_total_float = parse_brazil_number(valor_total_nf)
+                        valor_frete_float = parse_brazil_number(valor_frete_nf)
                         
                         pedidos_relacionados = st.session_state.df_pedidos[
                             st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
@@ -532,18 +532,44 @@ def render_registrar_nf_page():
         
         # Converte as datas para o formato de exibição
         df_ultimas_nfs_display = df_ultimas_nfs.copy()
-        df_ultimas_nfs_display['DATA'] = df_ultimas_nfs_display['DATA'].apply(formatar_data_brasil_hifen)
-
+        
+        # Mapeia os nomes das colunas para os nomes de exibição
+        col_map = {
+            'DATA': 'Data',
+            'FORNECEDOR_NF': 'Fornecedor',
+            'NF': 'Número NF',
+            'ORDEM_COMPRA': 'Ordem de Compra',
+            'VOLUME': 'Volume',
+            'V. TOTAL NF': 'Valor Total NF',
+            'STATUS_FINANCEIRO': 'Status Financeiro',
+            'DOC NF': 'Anexo NF'
+        }
+        df_ultimas_nfs_display = df_ultimas_nfs_display.rename(columns=col_map)
+        
+        def colorir_status_display(status):
+            cores = {
+                "EM ANDAMENTO": "🟡",
+                "NF PROBLEMA": "🔴",
+                "CAPTURADO": "🟠",
+                "FINALIZADO": "🟢"
+            }
+            return f"{cores.get(status, '⚪')} {status}"
+        
+        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
+        
         st.dataframe(
-            df_ultimas_nfs_display[[ 'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF', 'STATUS_FINANCEIRO', 'DOC NF']],
+            df_ultimas_nfs_display,
             use_container_width=True,
             column_config={
-                "DOC NF": st.column_config.LinkColumn(
-                    "DOC NF",
+                "Data": st.column_config.DateColumn("Data", format="DD-MM-YYYY"),
+                "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
+                "Anexo NF": st.column_config.LinkColumn(
+                    "Anexo NF",
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
                 )
-            }
+            },
+            hide_index=True
         )
     else:
         st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
@@ -573,6 +599,7 @@ def salvar_nota_fiscal(novo_registro_nf):
 def handle_divergence_popup():
     """Exibe e gerencia o pop-up de divergência de valores."""
     with st.form("popup_divergencia"):
+        # Assegura que os valores numéricos sejam formatados corretamente para o pop-up
         valor_oc_formatado = f"R$ {st.session_state['valor_oc_total']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         valor_nf_formatado = f"R$ {st.session_state['novo_registro_nf']['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         divergencia_formatada = f"R$ {st.session_state['divergencia_oc']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -703,26 +730,26 @@ def render_consultar_nfs_page():
                 return f"{cores.get(status, '⚪')} {status}"
             
             df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
-            df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].apply(formatar_data_brasil_hifen)
-            
-            def formatar_moeda(valor):
-                return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            
-            df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(formatar_moeda)
             
             st.dataframe(
                 df_exibir_consulta,
                 use_container_width=True,
                 height=400,
                 column_config={
+                    "DATA": st.column_config.DateColumn("Data", format="DD-MM-YYYY"),
+                    "FORNECEDOR_NF": "Fornecedor",
+                    "NF": "N° NF",
+                    "ORDEM_COMPRA": "N° Ordem de Compra",
+                    "VOLUME": "Volume",
+                    "V. TOTAL NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
+                    "STATUS_FINANCEIRO": "Status Financeiro",
                     "DOC NF": st.column_config.LinkColumn(
-                        "DOC NF",
+                        "Anexo NF",
                         help="Clique para abrir a nota fiscal.",
                         display_text="📥 Abrir NF"
-                    ),
-                    "FORNECEDOR_NF": "FORNECEDOR",
-                    "DATA": st.column_config.DateColumn("Data", format="DD-MM-YYYY")
-                }
+                    )
+                },
+                hide_index=True
             )
             
             csv_consulta = df_exibir_consulta.to_csv(index=False, encoding='utf-8')
