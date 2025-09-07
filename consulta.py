@@ -181,15 +181,41 @@ def carregar_dados_pedidos():
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # --- TRECHO FINAL CORRIGIDO PARA LIMPEZA DE DADOS ---
+# --- TRECHO CORRIGIDO PARA LIMPEZA DE DADOS NUMÉRICOS ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Primeiro, remove qualquer caractere que NÃO seja um dígito (0-9) ou uma vírgula.
-                # Isso limpa moedas, espaços e outros símbolos.
-                df[col] = df[col].astype(str).str.replace(r'[^\d,]', '', regex=True)
-                # Em seguida, troca a vírgula (agora a única que sobrou) por um ponto.
-                df[col] = df[col].str.replace(',', '.', regex=False)
-                # Converte para um tipo numérico (float)
+                # Converte para string
+                df[col] = df[col].astype(str)
+                
+                # Remove qualquer caractere que não seja dígito, ponto ou vírgula
+                df[col] = df[col].str.replace(r'[^\d,\.]', '', regex=True)
+                
+                # Identifica o formato: se tem vírgula como decimal ou milhar
+                # Se tiver ponto como milhar e vírgula como decimal (formato brasileiro: 8.600,00)
+                mask_br_format = df[col].str.contains(r'\.\d{3},\d{2}$', regex=True)
+                
+                # Formato brasileiro: remove pontos e troca vírgula por ponto
+                df.loc[mask_br_format, col] = (
+                    df.loc[mask_br_format, col]
+                    .str.replace('.', '', regex=False)  # Remove pontos de milhar
+                    .str.replace(',', '.', regex=False)  # Troca vírgula decimal por ponto
+                )
+                
+                # Formato com apenas vírgula como decimal (1.500,00 sem ponto de milhar)
+                mask_comma_decimal = (
+                    df[col].str.contains(r',\d{1,2}$', regex=True) & 
+                    ~mask_br_format
+                )
+                df.loc[mask_comma_decimal, col] = (
+                    df.loc[mask_comma_decimal, col]
+                    .str.replace(',', '.', regex=False)
+                )
+                
+                # Remove qualquer vírgula restante (que seria de milhar)
+                df[col] = df[col].str.replace(',', '', regex=False)
+                
+                # Converte para numérico
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         # --- FIM DO TRECHO ---
         
