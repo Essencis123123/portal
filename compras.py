@@ -179,8 +179,8 @@ def carregar_dados_pedidos():
         
         for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
             if col in df.columns and not df[col].empty:
-                df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                # CORREÇÃO: Remove pontos e substitui vírgulas por ponto para lidar com formato brasileiro
+                df[col] = pd.to_numeric(df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False), errors='coerce').fillna(0)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = df['QUANTIDADE'].astype(float) * df['VALOR_ITEM'].astype(float)
@@ -789,7 +789,7 @@ else:
         st.markdown("---")
         st.subheader("💰 Resumo do Custo Total")
         total_historico = df_history['VALOR_TOTAL'].sum()
-        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
         
     elif menu == "👤 Cadastro ":
         st.markdown("""
@@ -947,7 +947,7 @@ else:
             st.markdown("Pedidos Pendentes")
         with col3:
             valor_total = df_filtrado_dash['VALOR_TOTAL'].sum()
-            st.markdown(f"### R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.markdown(f"### R$ {valor_total:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."))
             st.markdown("Valor Total dos Itens")
         with col4:
             media_atraso = df_filtrado_dash['DIAS_ATRASO'].mean() if not df_filtrado_dash.empty else 0
