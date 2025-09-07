@@ -142,6 +142,48 @@ def get_gspread_client():
     credentials_info = st.secrets["gcp_service_account"]
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     return gspread.authorize(credentials)
+    
+# Funções auxiliares para formatação e parsing de datas
+def parse_date_from_editor(date_value):
+    """Converte valores do editor para datetime (suporte a hífen, barra e ISO)"""
+    if date_value is None or pd.isna(date_value) or date_value == '':
+        return pd.NaT
+    
+    # Se já for datetime, retorna como está
+    if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
+        return date_value
+    
+    # Se for string, tenta parse nos formatos esperados
+    if isinstance(date_value, str):
+        try:
+            # Tenta formato DD-MM-YYYY (com hífen)
+            return datetime.datetime.strptime(date_value, '%d-%m-%Y')
+        except ValueError:
+            try:
+                # Tenta formato DD/MM/YYYY (com barra)
+                return datetime.datetime.strptime(date_value, '%d/%m/%Y')
+            except ValueError:
+                try:
+                    # Tenta formato YYYY-MM-DD (padrão ISO)
+                    return datetime.datetime.strptime(date_value, '%Y-%m-%d')
+                except ValueError:
+                    # Tenta parse automático
+                    return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+    
+    return pd.to_datetime(date_value, errors='coerce')
+
+def formatar_data_brasil_hifen(data):
+    """Formata datetime para exibição no formato DD-MM-YYYY"""
+    if pd.isna(data) or data is None:
+        return ""
+    try:
+        # Se for datetime, formata para DD-MM-YYYY
+        if isinstance(data, (pd.Timestamp, datetime.datetime, datetime.date)):
+            return data.strftime('%d-%m-%Y')
+        else:
+            return str(data)
+    except:
+        return str(data)
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
@@ -169,7 +211,7 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+                df[col] = df[col].apply(parse_date_from_editor)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
@@ -195,7 +237,7 @@ def salvar_dados_almoxarifado(df):
         df_copy = df.copy()
         for col in ['DATA', 'VENCIMENTO']:
             if col in df_copy.columns:
-                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+                df_copy[col] = df_copy[col].apply(lambda x: formatar_data_brasil_hifen(x) if pd.notna(x) else '')
         
         data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
         worksheet.clear()
@@ -214,9 +256,10 @@ def carregar_dados_pedidos():
         worksheet = spreadsheet.get_worksheet(0)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
+        
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+                df[col] = df[col].apply(parse_date_from_editor)
         
         # --- CORREÇÃO AQUI: Tratamento de valores numéricos com vírgula ---
         if 'VALOR_ITEM' in df.columns:
@@ -249,7 +292,7 @@ def salvar_dados_pedidos(df):
         df_copy = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df_copy.columns:
-                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+                df_copy[col] = df_copy[col].apply(lambda x: formatar_data_brasil_hifen(x) if pd.notna(x) else '')
         
         data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
         worksheet.clear()
@@ -473,8 +516,13 @@ def render_registrar_nf_page():
     st.subheader("Últimas Notas Registradas")
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
+        
+        # Converte as datas para o formato de exibição
+        df_ultimas_nfs_display = df_ultimas_nfs.copy()
+        df_ultimas_nfs_display['DATA'] = df_ultimas_nfs_display['DATA'].apply(formatar_data_brasil_hifen)
+
         st.dataframe(
-            df_ultimas_nfs[[ 'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF', 'STATUS_FINANCEIRO', 'DOC NF']],
+            df_ultimas_nfs_display[[ 'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF', 'STATUS_FINANCEIRO', 'DOC NF']],
             use_container_width=True,
             column_config={
                 "DOC NF": st.column_config.LinkColumn(
@@ -642,7 +690,7 @@ def render_consultar_nfs_page():
                 return f"{cores.get(status, '⚪')} {status}"
             
             df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
-            df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y')
+            df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].apply(formatar_data_brasil_hifen)
             
             def formatar_moeda(valor):
                 return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -660,6 +708,7 @@ def render_consultar_nfs_page():
                         display_text="📥 Abrir NF"
                     ),
                     "FORNECEDOR_NF": "FORNECEDOR",
+                    "DATA": st.column_config.DateColumn("Data", format="DD-MM-YYYY")
                 }
             )
             
