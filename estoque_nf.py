@@ -144,48 +144,6 @@ def get_gspread_client():
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     return gspread.authorize(credentials)
     
-# Funções auxiliares para formatação e parsing de datas e números
-def parse_date_from_editor(date_value):
-    """Converte valores do editor para datetime (suporte a hífen, barra e ISO)"""
-    if date_value is None or pd.isna(date_value) or date_value == '':
-        return pd.NaT
-    
-    # Se já for datetime, retorna como está
-    if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
-        return date_value
-    
-    # Se for string, tenta parse nos formatos esperados
-    if isinstance(date_value, str):
-        try:
-            # Tenta formato DD-MM-YYYY (com hífen)
-            return datetime.datetime.strptime(date_value, '%d-%m-%Y')
-        except ValueError:
-            try:
-                # Tenta formato DD/MM/YYYY (com barra)
-                return datetime.datetime.strptime(date_value, '%d/%m/%Y')
-            except ValueError:
-                try:
-                    # Tenta formato YYYY-MM-DD (padrão ISO)
-                    return datetime.datetime.strptime(date_value, '%Y-%m-%d')
-                except ValueError:
-                    # Tenta parse automático
-                    return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
-    
-    return pd.to_datetime(date_value, errors='coerce')
-
-def formatar_data_brasil_hifen(data):
-    """Formata datetime para exibição no formato DD-MM-YYYY"""
-    if pd.isna(data) or data is None:
-        return ""
-    try:
-        # Se for datetime, formata para DD-MM-YYYY
-        if isinstance(data, (pd.Timestamp, datetime.datetime, datetime.date)):
-            return data.strftime('%d-%m-%Y')
-        else:
-            return str(data)
-    except:
-        return str(data)
-
 def parse_brazil_number(value_str):
     """
     Converte uma string de número no formato brasileiro (1.234,56) para float (1234.56).
@@ -198,15 +156,10 @@ def parse_brazil_number(value_str):
     # Remove 'R$' e espaços.
     cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
     
-    # Assumes the last comma or dot is the decimal separator.
-    if ',' in cleaned_value and cleaned_value.rfind(',') > cleaned_value.rfind('.'):
-        # Case: 1.234,56
-        cleaned_value = cleaned_value.replace('.', '')
-        cleaned_value = cleaned_value.replace(',', '.')
-    else:
-        # Case: 123.45 or 12345
-        cleaned_value = cleaned_value.replace(',', '')
-    
+    # Assume que a vírgula é sempre o separador decimal.
+    cleaned_value = cleaned_value.replace('.', '')
+    cleaned_value = cleaned_value.replace(',', '.')
+
     try:
         return float(cleaned_value)
     except (ValueError, TypeError):
@@ -224,11 +177,11 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
         if not data or len(data) <= 1:
-             df = pd.DataFrame(columns=headers)
-        else:
-            headers = data[0]
-            records = data[1:]
-            df = pd.DataFrame(records, columns=headers)
+            return pd.DataFrame()
+        
+        headers = data[0]
+        records = data[1:]
+        df = pd.DataFrame(records, columns=headers)
 
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
@@ -236,16 +189,13 @@ def carregar_dados_almoxarifado():
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA"
         ]
         
-        if df.empty:
-             df = pd.DataFrame(columns=colunas_essenciais)
-        else:
-             for col in colunas_essenciais:
-                if col not in df.columns:
-                    df[col] = ''
+        for col in colunas_essenciais:
+            if col not in df.columns:
+                df[col] = ''
             
         for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
-                df[col] = df[col].apply(parse_date_from_editor)
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
@@ -271,7 +221,7 @@ def salvar_dados_almoxarifado(df):
         df_copy = df.copy()
         for col in ['DATA', 'VENCIMENTO']:
             if col in df_copy.columns:
-                df_copy[col] = df_copy[col].apply(lambda x: formatar_data_brasil_hifen(x) if pd.notna(x) else '')
+                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         
         data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
         worksheet.clear()
@@ -303,7 +253,7 @@ def carregar_dados_pedidos():
         
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df.columns:
-                df[col] = df[col].apply(parse_date_from_editor)
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # --- Tratamento de valores numéricos com a função robusta ---
         numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
@@ -329,7 +279,7 @@ def salvar_dados_pedidos(df):
         df_copy = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df_copy.columns:
-                df_copy[col] = df_copy[col].apply(lambda x: formatar_data_brasil_hifen(x) if pd.notna(x) else '')
+                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
         
         data_to_write = [df_copy.columns.values.tolist()] + df_copy.values.tolist()
         worksheet.clear()
@@ -585,7 +535,7 @@ def render_registrar_nf_page():
             df_ultimas_nfs_display,
             use_container_width=True,
             column_config={
-                "Data": st.column_config.DateColumn("Data", format="DD-MM-YYYY"),
+                "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
                 "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
                 "Anexo NF": st.column_config.LinkColumn(
                     "Anexo NF",
@@ -760,7 +710,7 @@ def render_consultar_nfs_page():
                 use_container_width=True,
                 height=400,
                 column_config={
-                    "DATA": st.column_config.DateColumn("Data", format="DD-MM-YYYY"),
+                    "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
                     "FORNECEDOR_NF": "Fornecedor",
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
