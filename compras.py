@@ -415,15 +415,17 @@ else:
             departamento_selecionado = solicitante_info['DEPARTAMENTO']
             filial_selecionada = solicitante_info['FILIAL']
 
+        # --- Alteração de Layout para 2 colunas ---
         col1, col2 = st.columns(2)
         with col1:
-            data_requisicao = st.date_input("Data da Requisição", datetime.date.today())
             st.text_input("Departamento", value=departamento_selecionado, disabled=True)
             st.text_input("Filial", value=filial_selecionada, disabled=True)
-            tipo_pedido = st.selectbox("Tipo de Pedido", ["LOCAL", "EMERGENCIAL", "PROGRAMADO"])
         
         with col2:
+            data_requisicao = st.date_input("Data da Requisição", datetime.date.today())
+            tipo_pedido = st.selectbox("Tipo de Pedido", ["LOCAL", "EMERGENCIAL", "PROGRAMADO"])
             requisicao = st.text_input("Número da Requisição")
+        # --- Fim da Alteração de Layout ---
 
         st.markdown("---")
         st.subheader("Itens da Requisição")
@@ -899,15 +901,16 @@ else:
         if not df_analise['DATA'].isnull().all():
             meses_disponiveis = df_analise['DATA'].dt.month.unique()
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-            mes_selecionado = col_filtro1.multiselect("Selecione o Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis))
+            with col_filtro1:
+                mes_selecionado = st.multiselect("Selecione o Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis))
+            with col_filtro2:
+                anos_disponiveis = df_analise['DATA'].dt.year.unique()
+                ano_selecionado = st.selectbox("Selecione o Ano", sorted(anos_disponiveis, reverse=True))
         else:
             mes_selecionado = []
-        
-        if not df_analise['DATA'].isnull().all():
-            anos_disponiveis = df_analise['DATA'].dt.year.unique()
-            ano_selecionado = col_filtro2.selectbox("Selecione o Ano", sorted(anos_disponiveis, reverse=True))
-        else:
             ano_selecionado = None
+            st.info("Nenhum dado com data válida para filtragem.")
+            st.stop()
 
         if mes_selecionado and ano_selecionado:
             df_filtrado_dash = df_analise[(df_analise['DATA'].dt.month.isin(mes_selecionado)) & (df_analise['DATA'].dt.year == ano_selecionado)]
@@ -1068,8 +1071,10 @@ else:
             meses_disponiveis_p = df_valid_dates_p['DATA'].dt.month.unique()
             anos_disponiveis_p = df_valid_dates_p['DATA'].dt.year.unique()
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-            mes_selecionado_p = col_filtro_p1.multiselect("Selecione o Mês", sorted(meses_disponiveis_p), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis_p))
-            ano_selecionado_p = col_filtro_p2.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
+            with col_filtro_p1:
+                mes_selecionado_p = st.multiselect("Selecione o Mês", sorted(meses_disponiveis_p), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis_p))
+            with col_filtro_p2:
+                ano_selecionado_p = st.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
             st.info("Nenhum pedido local com data válida para análise.")
             st.stop()
