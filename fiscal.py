@@ -14,6 +14,7 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
 import re
+import pytz
 
 # ==============================================================================
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
@@ -482,7 +483,10 @@ else:
                 st.session_state.alteracoes_pendentes = True
                 
                 updated_df = df.copy()
-
+                
+                # Definir fuso horário de Brasília
+                brasilia_tz = pytz.timezone('America/Sao_Paulo')
+                
                 for index, row in edited_df.iterrows():
                     novo_status_visual = row['STATUS_VISUAL']
                     novo_status_data = reverse_status_map.get(novo_status_visual)
@@ -492,15 +496,15 @@ else:
 
                         # Registrar data/hora quando mudar para FINALIZADO
                         if novo_status_data == 'FINALIZADO' and status_original != 'FINALIZADO':
-                            updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now()
+                            updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now(brasilia_tz)
                         
                         # Registrar data/hora quando mudar para CAPTURADO
                         if novo_status_data == 'CAPTURADO' and status_original != 'CAPTURADO':
-                            updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now()
+                            updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now(brasilia_tz)
                         
                         # Registrar envio quando mudar para CAPTURADO (almoxarifado)
                         if novo_status_data == 'CAPTURADO' and status_original != 'CAPTURADO':
-                            updated_df.loc[index, 'REGISTRO_ENVIO'] = datetime.datetime.now()
+                            updated_df.loc[index, 'REGISTRO_ENVIO'] = datetime.datetime.now(brasilia_tz)
                         
                         updated_df.loc[index, 'STATUS'] = novo_status_data
                         updated_df.loc[index, 'CONDICAO_PROBLEMA'] = str(row['PROBLEMA_VISUAL']).replace('🔴 ', '')
