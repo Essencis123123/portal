@@ -302,9 +302,12 @@ def carregar_dados_materiais():
     try:
         gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        # Use o índice correto da planilha. O quarto (índice 3) para a aba 'MATERIAIS'.
         worksheet = spreadsheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
+        # Garante que os nomes das colunas estejam em maiúsculas para corresponder ao código
+        df.columns = [col.upper() for col in df.columns]
         return df
     except Exception as e:
         st.warning(f"Aviso: Não foi possível carregar dados de materiais. Verifique a aba 'MATERIAIS' da planilha. {e}")
