@@ -11,14 +11,118 @@ import plotly.express as px
 from pandas.errors import EmptyDataError
 import numpy as np
 
-# Configuração da página
+# Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
     """
     <style>
-    /* ... (seu código CSS existente, que está ótimo) ... */
+    /* Cor do menu lateral e texto */
+    [data-testid="stSidebar"] {
+        background-color: #1C4D86;
+        color: white;
+    }
+    
+    /* Regras para garantir que TODO o texto no sidebar seja branco */
+    [data-testid="stSidebar"] *,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] label,
+    .stDownloadButton button p {
+        color: white !important;
+    }
+
+    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
+        color: white !important;
+    }
+    
+    /* Estilo para deixar a letra dos botões preta */
+    .stButton button p {
+        color: black !important;
+    }
+    .stDownloadButton button {
+        background-color: #0055a5;
+    }
+    .stDownloadButton button p {
+        color: white !important;
+    }
+    /* Estilo para a cor do texto do multiselect */
+    .stMultiSelect, .stSelectbox {
+        color: black !important;
+    }
+    .stMultiSelect div[data-baseweb="select"] {
+        background-color: #f0f2f5 !important;
+    }
+    
+    [data-testid="stSidebar"] img {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 80%;
+        border-radius: 10px;
+        padding: 10px 0;
+    }
+
+    /* Estilo para o container principal da página */
+    .main-container {
+        background-color: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        color: #333;
+    }
+    
+    /* Estilo para o cabeçalho principal da página */
+    .header-container {
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: white;
+    }
+    
+    .header-container h1 {
+        color: white;
+        margin: 0;
+    }
+
+    .header-container p {
+        color: white;
+        margin: 5px 0 0 0;
+        font-size: 18px;
+    }
+    
+    /* Estilo para os sub-cabeçalhos dentro da área principal */
+    h2, h3 {
+        color: #1C4D86;
+        font-weight: 600;
+    }
+    
+    /* Estilo para os botões de ação */
+    .stButton button {
+        background-color: #0055a5;
+        color: white;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton button:hover {
+        background-color: #007ea7;
+    }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -32,80 +136,91 @@ def load_logo(url):
         img = Image.open(BytesIO(response.content))
         return img
     except Exception:
-        st.error("Não foi possível carregar o logo.")
         return None
 
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
-# --- Funções de Conexão e Tratamento de Dados ---
+# --- Funções de Conexão e Carregamento de Dados ---
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    """Conecta com o Google Sheets usando os secrets do Streamlit."""
-    try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = json.loads(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        return gspread.authorize(creds)
-    except Exception as e:
-        st.error(f"Erro de autenticação com o Google Sheets: {e}")
-        return None
-
-def limpar_e_processar_df(df):
-    """Função auxiliar para tratar e limpar os dados do DataFrame."""
-    if df.empty:
-        return df
-
-    # Trata colunas de data
-    date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
-    for col in date_cols:
-        if col in df.columns and not df[col].empty:
-            df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+    """
+    Conecta com o Google Sheets usando os secrets do Streamlit.
+    """
+    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     
-    # Converte colunas numéricas
-    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
-    for col in numeric_cols:
-        if col in df.columns and not df[col].empty:
-            df[col] = df[col].astype(str).str.replace('.', '').str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
+    credentials_info = st.secrets["gcp_service_account"]
     
-    # Garante que colunas importantes existam
-    required_cols = ['STATUS_PEDIDO', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISAO_ENTREGA', 'CODIGO_MATERIAL', 'DATA_ENTREGA', 'QUANTIDADE', 'VALOR_ITEM', 'DATA']
-    for col in required_cols:
-        if col not in df.columns:
-            df[col] = '' if 'DATA' not in col else pd.NaT
-
-    # Define o status do pedido
-    df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE')
-
-    # Calcula o valor total
-    df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+    if isinstance(credentials_info, str):
+        try:
+            credentials_info = json.loads(credentials_info)
+        except json.JSONDecodeError as e:
+            st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
+            return None
     
-    return df
+    creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    client = gspread.authorize(creds)
+    return client
 
-@st.cache_data(ttl=600, show_spinner="Carregando dados do Google Sheets...")
+@st.cache_data(ttl=600)  # Cache de 10 minutos
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
-    gc = get_gspread_client()
-    if not gc:
-        return pd.DataFrame()
-    
     try:
+        gc = get_gspread_client()
+        
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
+        
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
-        
-        return limpar_e_processar_df(df)
 
-    except gspread.exceptions.SpreadsheetNotFound:
-        st.error("Planilha não encontrada. Verifique o ID no `secrets.toml`.")
-        return pd.DataFrame()
-    except gspread.exceptions.APIError as e:
-        st.error(f"Erro de API ao acessar a planilha: {e.args[0]}")
-        return pd.DataFrame()
+        # Trata colunas de data
+        date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+        for col in date_cols:
+            if col in df.columns and not df[col].empty:
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+        
+        # --- TRECHO FINAL CORRIGIDO PARA LIMPEZA DE DADOS ---
+        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        for col in numeric_cols:
+            if col in df.columns and not df[col].empty:
+                # Usa uma função lambda para converter cada valor individualmente
+                df[col] = df[col].apply(
+                    lambda x: pd.to_numeric(str(x).replace('.', '').replace(',', '.'), errors='coerce')
+                ).fillna(0)
+        
+        # --- A DIVISÃO POR 2 FOI REMOVIDA DAQUI ---
+        
+        # Garante que colunas importantes existam
+        if 'STATUS_PEDIDO' not in df.columns:
+            df['STATUS_PEDIDO'] = ''
+        if 'ORDEM_COMPRA' not in df.columns:
+            df['ORDEM_COMPRA'] = ''
+        if 'FORNECEDOR' not in df.columns:
+            df['FORNECEDOR'] = ''
+        if 'PREVISAO_ENTREGA' not in df.columns:
+            df['PREVISAO_ENTREGA'] = pd.NaT
+        if 'CODIGO_MATERIAL' not in df.columns:
+            df['CODIGO_MATERIAL'] = ''
+
+        # Define o status do pedido com base na data de entrega
+        df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
+            lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
+        )
+
+        # Calcula a coluna VALOR_TOTAL após a conversão numérica
+        if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
+            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+        
+        return df
     except Exception as e:
-        st.error(f"Erro inesperado ao carregar dados: {e}")
-        return pd.DataFrame()
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        st.info("Verifique suas credenciais e a planilha.")
+        return pd.DataFrame(columns=[
+            "DATA", "SOLICITANTE", "DEPARTAMENTO", "REQUISICAO", "CODIGO_MATERIAL", "MATERIAL",
+            "STATUS_PEDIDO", "DATA_APROVACAO", "DATA_ENTREGA", "ORDEM_COMPRA", "VALOR_ITEM", "FORNECEDOR", "PREVISAO_ENTREGA"
+        ])
+
 
 # Carrega os dados uma vez para o app
 df_pedidos = carregar_dados_pedidos()
@@ -125,8 +240,6 @@ with st.sidebar:
     st.divider()
     st.subheader("Filtros de Período")
 
-    filtro_mes_dash = []
-    filtro_ano_dash = []
     if 'DATA' in df_pedidos.columns and not df_pedidos['DATA'].isnull().all():
         df_pedidos['MES'] = df_pedidos['DATA'].dt.month
         df_pedidos['ANO'] = df_pedidos['DATA'].dt.year
@@ -135,6 +248,7 @@ with st.sidebar:
         meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
                        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
+        # Filtro de Mês como multiselect
         filtro_mes_dash = st.multiselect(
             "Selecione o(s) Mês(es):", 
             options=meses_disponiveis, 
@@ -142,13 +256,17 @@ with st.sidebar:
             format_func=lambda x: meses_nomes.get(x, x)
         )
         
+        # Filtro de Ano como multiselect
         filtro_ano_dash = st.multiselect(
             "Selecione o(s) Ano(s):", 
             options=anos_disponiveis,
             default=anos_disponiveis
         )
     else:
+        filtro_mes_dash = []
+        filtro_ano_dash = []
         st.info("Nenhum dado com data disponível para filtrar.")
+
 
 # Exibe o cabeçalho temático principal
 st.markdown("""
@@ -158,10 +276,12 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Verifica se o DataFrame não está vazio
+
+# Verifica se o DataFrame não está vazio antes de continuar
 if df_pedidos.empty:
-    st.info("Nenhum pedido registrado no sistema ou erro ao carregar dados.")
+    st.info("Nenhum pedido registrado no sistema.")
     st.stop()
+
 
 # --- FILTROS MOVIDOS PARA A PÁGINA PRINCIPAL ---
 st.markdown("---")
@@ -170,40 +290,67 @@ st.subheader("Filtros de Dados")
 col_filters1, col_filters2, col_filters3, col_filters4 = st.columns(4)
 
 with col_filters1:
-    solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
-    filtro_solicitante = st.selectbox("Solicitante:", options=['Todos'] + solicitantes_disponiveis)
+    filtro_solicitante = 'Todos'
+    if 'SOLICITANTE' in df_pedidos.columns and not df_pedidos.empty:
+        solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
+        filtro_solicitante = st.selectbox(
+            "Solicitante:",
+            options=['Todos'] + solicitantes_disponiveis
+        )
 
 with col_filters2:
-    departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
-    filtro_departamento = st.selectbox("Departamento:", options=['Todos'] + departamentos_disponiveis)
+    filtro_departamento = 'Todos'
+    if 'DEPARTAMENTO' in df_pedidos.columns and not df_pedidos.empty:
+        departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
+        filtro_departamento = st.selectbox(
+            "Departamento:",
+            options=['Todos'] + departamentos_disponiveis
+        )
 
 with col_filters3:
-    status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
-    filtro_status = st.selectbox("Status:", options=['Todos'] + sorted(status_disponiveis))
-
+    filtro_status = 'Todos'
+    if 'STATUS_PEDIDO' in df_pedidos.columns and not df_pedidos.empty:
+        status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
+        filtro_status = st.selectbox(
+            "Status:",
+            options=['Todos'] + sorted(status_disponiveis)
+        )
 with col_filters4:
-    cod_materiais_disponiveis = sorted(df_pedidos['CODIGO_MATERIAL'].dropna().unique().tolist())
-    filtro_material_cod = st.selectbox("Cód. Material:", options=['Todos'] + cod_materiais_disponiveis)
+    filtro_material_cod = 'Todos'
+    if 'CODIGO_MATERIAL' in df_pedidos.columns and not df_pedidos.empty:
+        cod_materiais_disponiveis = sorted(df_pedidos['CODIGO_MATERIAL'].dropna().unique().tolist())
+        filtro_material_cod = st.selectbox(
+            "Cód. Material:",
+            options=['Todos'] + cod_materiais_disponiveis
+        )
 
 # --- Aplicação dos Filtros na Tabela Principal ---
 df_filtrado = df_pedidos.copy()
 
+# Aplica os filtros de meses e anos
 if filtro_mes_dash:
     df_filtrado = df_filtrado[df_filtrado['DATA'].dt.month.isin(filtro_mes_dash)]
+
 if filtro_ano_dash:
     df_filtrado = df_filtrado[df_filtrado['DATA'].dt.year.isin(filtro_ano_dash)]
+
 if filtro_solicitante != 'Todos':
     df_filtrado = df_filtrado[df_filtrado['SOLICITANTE'] == filtro_solicitante]
+
 if filtro_departamento != 'Todos':
     df_filtrado = df_filtrado[df_filtrado['DEPARTAMENTO'] == filtro_departamento]
+
 if filtro_status != 'Todos':
     df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'] == filtro_status]
+    
 if filtro_material_cod != 'Todos':
     df_filtrado = df_filtrado[df_filtrado['CODIGO_MATERIAL'] == filtro_material_cod]
+
 
 if df_filtrado.empty:
     st.warning("Nenhum pedido encontrado com os filtros aplicados.")
     st.stop()
+
 
 # --- Análise e Métricas ---
 st.subheader("Visão Geral do Período")
@@ -220,6 +367,7 @@ with col3:
 with col4:
     valor_total_soma = df_filtrado['VALOR_TOTAL'].sum()
     st.metric("Valor Total dos Pedidos", f"R$ {valor_total_soma:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
 
 st.markdown("---")
 
@@ -242,7 +390,6 @@ st.markdown("---")
 st.subheader("Detalhes dos Pedidos")
 st.info("A tabela abaixo é apenas para visualização e não permite edição.")
 
-# Prepara o DataFrame para exibição
 df_tabela = df_filtrado.copy()
 
 def formatar_status(status):
@@ -250,35 +397,54 @@ def formatar_status(status):
         return '🟢 ENTREGUE'
     elif status == 'PENDENTE':
         return '⚪ PENDENTE'
-    return '🟡 EM ANDAMENTO'
+    else:
+        return '🟡 EM ANDAMENTO'
 
 df_tabela['STATUS'] = df_tabela['STATUS_PEDIDO'].apply(formatar_status)
-df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
-df_tabela['DATA ENTREGA'] = df_tabela['DATA_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
-df_tabela['PREVISÃO ENTREGA'] = df_tabela['PREVISAO_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
-df_tabela['VALOR TOTAL'] = df_tabela['VALOR_TOTAL'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+if 'DATA' in df_tabela.columns:
+    df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+else:
+    df_tabela['DATA REQUISIÇÃO'] = 'N/A'
+
+if 'DATA_ENTREGA' in df_tabela.columns:
+    df_tabela['DATA ENTREGA'] = df_tabela['DATA_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+else:
+    df_tabela['DATA ENTREGA'] = 'N/A'
+
+if 'PREVISAO_ENTREGA' in df_tabela.columns:
+    df_tabela['PREVISÃO ENTREGA'] = df_tabela['PREVISAO_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+else:
+    df_tabela['PREVISÃO ENTREGA'] = 'N/A'
+    
+# Converte o VALOR_TOTAL para string apenas para exibição
+df_tabela['VALOR_TOTAL_str'] = df_tabela['VALOR_TOTAL'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
 st.dataframe(
     df_tabela[[
         'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
-        'QUANTIDADE', 'VALOR TOTAL', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
+        'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ]],
     use_container_width=True,
     hide_index=True,
+    column_order=[
+        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
+        'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
+    ],
     column_config={
-        "DATA REQUISIÇÃO": "Data Requisição",
+        "DATA REQUISIÇÃO": st.column_config.DateColumn("Data Requisição"),
         "REQUISICAO": "N° Requisição",
         "SOLICITANTE": "Solicitante",
         "DEPARTAMENTO": "Departamento",
         "CODIGO_MATERIAL": "Cód. Material",
         "MATERIAL": "Material",
         "QUANTIDADE": "Quantidade",
-        "VALOR TOTAL": "Valor Total",
+        "VALOR_TOTAL_str": "Valor Total",  # Usa a nova coluna formatada
         "STATUS": "Status",
         "ORDEM_COMPRA": "N° Ordem de Compra",
         "FORNECEDOR": "Fornecedor",
-        "PREVISÃO ENTREGA": "Previsão Entrega",
-        "DATA ENTREGA": "Data Entrega"
+        "PREVISÃO ENTREGA": st.column_config.DateColumn("Previsão Entrega"),
+        "DATA ENTREGA": st.column_config.DateColumn("Data Entrega")
     }
 )
 
