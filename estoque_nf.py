@@ -341,7 +341,7 @@ else:
                 with col1:
                     data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                     
-                    fornecedores_disponiveis = df_pedidos['FORNECEDOR'].dropna().unique().tolist() if 'FORNECEDOR' in df_pedidos.columns else []
+                    fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
                     fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                     
                     nf_numero = st.text_input("Número da NF*")
@@ -355,7 +355,7 @@ else:
                     ]
                     recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
                     
-                    # Lógica de filtragem da Ordem de Compra
+                    # --- Lógica de filtragem da Ordem de Compra (CORRIGIDA) ---
                     ordens_compra_disponiveis = []
                     if fornecedor_nf:
                         pedidos_filtrados_por_fornecedor = st.session_state.df_pedidos[
@@ -397,7 +397,6 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            # --- LÓGICA DE VALIDAÇÃO DE VALORES ---
                             pedidos_relacionados = st.session_state.df_pedidos[
                                 st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
                             ]
@@ -409,7 +408,6 @@ else:
                                 except ValueError:
                                     st.warning("Não foi possível calcular o valor da OC. Verifique o formato dos dados.")
                             
-                            # CÁLCULO DA DIVERGÊNCIA
                             divergencia = valor_total_float - valor_oc_total
                             
                             st.session_state['novo_registro_nf'] = {
@@ -431,17 +429,14 @@ else:
                             }
                             st.session_state['divergencia_oc'] = divergencia
                             
-                            # EXIBE O POP-UP DE VALIDAÇÃO
-                            if abs(divergencia) > 0.01: # Definir uma tolerância para a diferença
+                            if abs(divergencia) > 0.01:
                                 st.session_state['mostrar_popup_divergencia'] = True
                                 st.session_state['valor_oc_total'] = valor_oc_total
                                 st.rerun()
                             else:
-                                # Se não houver divergência, salva diretamente
                                 novo_registro_nf = st.session_state['novo_registro_nf']
                                 st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
                                 
-                                # Atualiza dados na planilha de pedidos
                                 indices_a_atualizar = pedidos_relacionados.index
                                 st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
                                 st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
@@ -477,7 +472,6 @@ else:
                         novo_registro_nf = st.session_state['novo_registro_nf']
                         st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
                         
-                        # Atualiza dados na planilha de pedidos
                         pedidos_relacionados = st.session_state.df_pedidos[
                             st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == novo_registro_nf['ORDEM_COMPRA'].strip().upper()
                         ]
