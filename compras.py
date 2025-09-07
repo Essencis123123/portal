@@ -163,6 +163,51 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
+# Funções auxiliares para formatação e parsing de datas
+def parse_date_from_editor(date_value):
+    """Converte valores do editor para datetime (suporte a hífen, barra e ISO)"""
+    if date_value is None or pd.isna(date_value) or date_value == '':
+        return pd.NaT
+    
+    # Se já for datetime, retorna como está
+    if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
+        return date_value
+    
+    # Se for string, tenta parse nos formatos esperados
+    if isinstance(date_value, str):
+        try:
+            # Tenta formato DD-MM-YYYY (com hífen)
+            return datetime.datetime.strptime(date_value, '%d-%m-%Y')
+        except ValueError:
+            try:
+                # Tenta formato DD/MM/YYYY (com barra)
+                return datetime.datetime.strptime(date_value, '%d/%m/%Y')
+            except ValueError:
+                try:
+                    # Tenta formato YYYY-MM-DD (padrão ISO)
+                    return datetime.datetime.strptime(date_value, '%Y-%m-%d')
+                except ValueError:
+                    # Tenta parse automático
+                    return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+    
+    return pd.to_datetime(date_value, errors='coerce')
+
+def formatar_data_brasil_hifen(data):
+    """Formata datetime para exibição no formato DD-MM-YYYY"""
+    if pd.isna(data) or data is None:
+        return ""
+    try:
+        # Se já for string no formato com hífen, retorna como está
+        if isinstance(data, str) and '-' in data and len(data.split('-')) == 3:
+            return data
+        # Se for datetime, formata para DD-MM-YYYY
+        elif isinstance(data, (pd.Timestamp, datetime.datetime)):
+            return data.strftime('%d-%m-%Y')
+        else:
+            return str(data)
+    except:
+        return str(data)
+
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
@@ -186,11 +231,7 @@ def carregar_dados_pedidos():
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns and not df[col].empty:
-                # Primeiro tenta converter como string no formato brasileiro
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True, format='%d/%m/%Y')
-                # Se ainda tiver problemas, força a conversão
-                if df[col].isnull().all():
-                    df[col] = pd.to_datetime(df[col], errors='coerce')
+                df[col] = df[col].apply(parse_date_from_editor)
         
         # Converte colunas numéricas (elas já virão como float do Google Sheets)
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
@@ -245,11 +286,11 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df.copy()
         
-        # Converte as colunas de data para o formato string
+        # Converte as colunas de data para o formato string com HÍFEN
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
-                    lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+                    lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else ''
                 )
         
         # Converte valores numéricos para formato brasileiro com 2 casas decimais
@@ -384,31 +425,6 @@ def fazer_login(email, senha):
         st.rerun()
     else:
         st.error("E-mail ou senha incorretos.")
-
-# Função auxiliar para formatação de data
-def parse_date_brasil(date_str):
-    """Converte string de data no formato brasileiro para datetime"""
-    if pd.isna(date_str) or date_str == '':
-        return pd.NaT
-    
-    if isinstance(date_str, str):
-        try:
-            # Tenta formato DD/MM/YYYY
-            return datetime.datetime.strptime(date_str, '%d/%m/%Y')
-        except ValueError:
-            try:
-                # Tenta outros formatos
-                return pd.to_datetime(date_str, dayfirst=True)
-            except:
-                return pd.NaT
-    return pd.to_datetime(date_str, errors='coerce')
-
-def formatar_data_brasil(data):
-    """Formata data para string no formato brasileiro"""
-    if pd.isna(data):
-        return ""
-    return data.strftime('%d/%m/%Y')
-
 
 # --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state.logado:
@@ -579,7 +595,9 @@ else:
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")
         ].copy()
         
-        pedidos_pendentes_oc['DATA'] = pd.to_datetime(pedidos_pendentes_oc['DATA'], errors='coerce', dayfirst=True)
+        # Uso da nova função auxiliar para garantir que as datas estejam no formato correto
+        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+            pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_date_from_editor)
         
         if pedidos_pendentes_oc.empty:
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
@@ -592,10 +610,7 @@ else:
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
             pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
-        if 'DATA' in pedidos_pendentes_oc.columns:
-            pedidos_pendentes_oc['DATA'] = pedidos_pendentes_oc['DATA'].dt.strftime('%d/%m/%Y').fillna('')
-
-        data_cols_to_convert = ['DATA_APROVACAO', 'PREVISAO_ENTREGA']
+        data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
         for col in data_cols_to_convert:
             if col in pedidos_pendentes_oc.columns:
                 pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
@@ -628,8 +643,8 @@ else:
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                     "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
-                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD/MM/YYYY"),
+                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
+                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD-MM-YYYY"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
                 }
             )
@@ -639,16 +654,16 @@ else:
         if submitted:
             st.info("Detectando alterações...")
             
+            # Converte as colunas de data do editor para datetime
+            for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+                edited_df[col] = edited_df[col].apply(parse_date_from_editor)
+                
             # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                 # Converte para string, remove pontos de milhar e substitui vírgula por ponto
                 edited_df[col_val] = edited_df[col_val].astype(str).str.replace(r'\.(?=.*\d,)', '', regex=True).str.replace(',', '.', regex=False)
                 # Converte para numérico
                 edited_df[col_val] = pd.to_numeric(edited_df[col_val], errors='coerce').fillna(0)
-
-            edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
-            edited_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
-            edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
             
             edited_df['DIAS_EMISSAO'] = edited_df.apply(
                 lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
@@ -691,11 +706,11 @@ else:
         
         # Uso da nova função auxiliar para garantir que as datas estejam no formato correto
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
-            df_history[col] = df_history[col].apply(parse_date_brasil)
+            df_history[col] = df_history[col].apply(parse_date_from_editor)
         
         # Recalcula o VALOR_TOTAL com os valores limpos
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
-        df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
+        df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)
     
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
@@ -768,7 +783,7 @@ else:
         data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
         for col in data_cols_history:
             if col in df_display.columns:
-                df_display[col] = df_display[col].apply(formatar_data_brasil)
+                df_display[col] = df_display[col].apply(formatar_data_brasil_hifen)
 
         # Formata os valores para exibição com 2 casas decimais
         for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
@@ -785,7 +800,7 @@ else:
             column_config={
                 "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
                 "REQUISICAO": "N° Requisição",
-                "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY"),
+                "DATA": st.column_config.DateColumn("Data Requisição", format="DD-MM-YYYY"),
                 "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                 "DEPARTAMENTO": "Departamento",
                 "FILIAL": "Filial",
@@ -799,10 +814,10 @@ else:
                 "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
                 "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
-                "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação", format="DD/MM/YYYY"),
+                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
+                "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação", format="DD-MM-YYYY"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY"),
+                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD-MM-YYYY"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DOC NF": st.column_config.LinkColumn(
                     "Anexo NF",
@@ -833,7 +848,7 @@ else:
             
             # Aplica a nova função auxiliar de parse de data
             for col in data_cols_history:
-                edited_history_df[col] = edited_history_df[col].apply(parse_date_brasil)
+                edited_history_df[col] = edited_history_df[col].apply(parse_date_from_editor)
             
             def calcular_dias_atraso(row):
                 if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
@@ -988,11 +1003,11 @@ else:
         
         if not df_analise['DATA'].isnull().all():
             meses_disponiveis = df_analise['DATA'].dt.month.unique()
+            anos_disponiveis = df_analise['DATA'].dt.year.unique()
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             with col_filtro1:
                 mes_selecionado = st.multiselect("Selecione o Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis))
             with col_filtro2:
-                anos_disponiveis = df_analise['DATA'].dt.year.unique()
                 ano_selecionado = st.selectbox("Selecione o Ano", sorted(anos_disponiveis, reverse=True))
         else:
             mes_selecionado = []
