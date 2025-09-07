@@ -44,9 +44,14 @@ st.markdown(
     .stButton button p {
         color: black !important;
     }
+    /* NOVO: Estilo para garantir que o texto do botão de download seja preto */
+    .stDownloadButton button {
+        background-color: #0055a5;
+    }
     .stDownloadButton button p {
         color: white !important;
     }
+
 
     [data-testid="stSidebar"] img {
         display: block;
