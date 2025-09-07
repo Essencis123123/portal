@@ -148,7 +148,6 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # 🚨 CORREÇÃO: GARANTA QUE AS COLUNAS ESSENCIAIS EXISTAM SEMPRE!
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
@@ -173,7 +172,6 @@ def carregar_dados_almoxarifado():
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
-        # Retorne um DataFrame com as colunas em caso de erro grave
         return pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
@@ -383,26 +381,22 @@ else:
                             valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
-                            # Adicionado a busca para garantir que a OC exista na planilha de pedidos
-                            if 'ORDEM_COMPRA' in st.session_state.df_pedidos.columns:
-                                # Encontra as linhas na planilha de pedidos com a OC informada
-                                pedidos_relacionados = st.session_state.df_pedidos[
-                                    st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
-                                ]
-                                
-                                if not pedidos_relacionados.empty:
-                                    # Atualiza o status, a data de entrega e o doc da NF para todos os pedidos com essa OC
-                                    indices_a_atualizar = pedidos_relacionados.index
-                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
-                                    st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = doc_nf_link
-
-                                    # Salva as alterações na planilha de pedidos
-                                    salvar_dados_pedidos(st.session_state.df_pedidos)
-                                else:
-                                    st.warning(f"ℹ️ A Ordem de Compra '{ordem_compra_nf}' não foi encontrada na planilha de pedidos. O status não foi atualizado.")
+                            # --- LÓGICA DE VALIDAÇÃO DE VALORES ---
+                            pedidos_relacionados = st.session_state.df_pedidos[
+                                st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                            ]
                             
-                            novo_registro_nf = {
+                            valor_oc_total = 0.0
+                            if 'VALOR_ITEM' in pedidos_relacionados.columns and not pedidos_relacionados['VALOR_ITEM'].empty:
+                                try:
+                                    valor_oc_total = pd.to_numeric(pedidos_relacionados['VALOR_ITEM'], errors='coerce').sum()
+                                except ValueError:
+                                    st.warning("Não foi possível calcular o valor da OC. Verifique o formato dos dados.")
+                            
+                            # CÁLCULO DA DIVERGÊNCIA
+                            divergencia = valor_total_float - valor_oc_total
+                            
+                            st.session_state['novo_registro_nf'] = {
                                 "DATA": pd.to_datetime(data_recebimento),
                                 "RECEBEDOR": recebedor,
                                 "FORNECEDOR": fornecedor_nf,
@@ -419,17 +413,78 @@ else:
                                 "REGISTRO_ADICIONAL": "",
                                 "ORDEM_COMPRA": ordem_compra_nf
                             }
-                            st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                            st.session_state['divergencia_oc'] = divergencia
                             
-                            if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                                st.success(f"🎉 Nota fiscal {nf_numero} registrada com sucesso!")
+                            # EXIBE O POP-UP DE VALIDAÇÃO
+                            if abs(divergencia) > 0.01: # Definir uma tolerância para a diferença
+                                st.session_state['mostrar_popup_divergencia'] = True
+                                st.session_state['valor_oc_total'] = valor_oc_total
+                                st.rerun()
                             else:
-                                st.error("Erro ao salvar os dados da nota fiscal.")
+                                # Se não houver divergência, salva diretamente
+                                novo_registro_nf = st.session_state['novo_registro_nf']
+                                st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                                
+                                # Atualiza dados na planilha de pedidos
+                                indices_a_atualizar = pedidos_relacionados.index
+                                st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                                st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(data_recebimento)
+                                st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = doc_nf_link
+                                salvar_dados_pedidos(st.session_state.df_pedidos)
+                                
+                                if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                                    st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso!")
+                                else:
+                                    st.error("Erro ao salvar os dados da nota fiscal.")
+                                st.rerun()
                         
-                            st.balloons()
-                            st.rerun()
                         except ValueError:
                             st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
+        
+        # --- LÓGICA DO POP-UP DE VALIDAÇÃO ---
+        if st.session_state.get('mostrar_popup_divergencia'):
+            with st.form("popup_divergencia"):
+                valor_oc_formatado = f"R$ {st.session_state['valor_oc_total']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                valor_nf_formatado = f"R$ {st.session_state['novo_registro_nf']['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                divergencia_formatada = f"R$ {st.session_state['divergencia_oc']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                
+                st.warning(f"⚠️ **Atenção: Divergência de Valor!**")
+                st.write(f"O **Valor da Ordem de Compra** é: **{valor_oc_formatado}**")
+                st.write(f"O **Valor da Nota Fiscal** digitado é: **{valor_nf_formatado}**")
+                st.write(f"A **diferença** é de: **{divergencia_formatada}**")
+                
+                st.write("Você está ciente e concorda em registrar a nota fiscal com essa divergência?")
+                
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.form_submit_button("✅ Sim, Salvar Nota Fiscal"):
+                        novo_registro_nf = st.session_state['novo_registro_nf']
+                        st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+                        
+                        # Atualiza dados na planilha de pedidos
+                        pedidos_relacionados = st.session_state.df_pedidos[
+                            st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == novo_registro_nf['ORDEM_COMPRA'].strip().upper()
+                        ]
+                        indices_a_atualizar = pedidos_relacionados.index
+                        st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                        st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(novo_registro_nf['DATA'])
+                        st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = novo_registro_nf['DOC NF']
+                        salvar_dados_pedidos(st.session_state.df_pedidos)
+
+                        if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                            st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso, apesar da divergência.")
+                        else:
+                            st.error("Erro ao salvar os dados da nota fiscal.")
+                        
+                        st.session_state['mostrar_popup_divergencia'] = False
+                        st.balloons()
+                        st.rerun()
+
+                with col_btn2:
+                    if st.form_submit_button("❌ Não, Corrigir Valores"):
+                        st.session_state['mostrar_popup_divergencia'] = False
+                        st.info("Valores não salvos. Por favor, corrija as informações.")
+                        st.rerun()
         
         st.markdown("---")
         st.subheader("Últimas Notas Registradas")
@@ -519,7 +574,6 @@ else:
                 nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
                 ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
                 
-                # CORREÇÃO APLICADA AQUI: Adiciona verificação para evitar o KeyError
                 if 'FORNECEDOR' in df.columns:
                     fornecedores_unicos = sorted(df['FORNECEDOR'].dropna().unique().tolist())
                 else:
@@ -559,13 +613,12 @@ else:
                     'STATUS_FINANCEIRO', 'CONDICAO_PROBLEMA', 'OBSERVACAO', 'VENCIMENTO', 'DOC NF', 'VALOR FRETE'
                 ]].copy()
                 
-                # Função para adicionar bolinhas coloridas aos status
                 def colorir_status(status):
                     cores = {
-                        "EM ANDAMENTO": "🟡",  # Amarelo
-                        "NF PROBLEMA": "🔴",   # Vermelho  
-                        "CAPTURADO": "🟠",      # Laranja
-                        "FINALIZADO": "🟢"      # Verde
+                        "EM ANDAMENTO": "🟡",
+                        "NF PROBLEMA": "🔴",
+                        "CAPTURADO": "🟠",
+                        "FINALIZADO": "🟢"
                     }
                     return f"{cores.get(status, '⚪')} {status}"
                 
