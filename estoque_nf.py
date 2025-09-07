@@ -574,7 +574,7 @@ def render_registrar_nf_page():
             }
             return f"{cores.get(status, '⚪')} {status}"
         
-        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['STATUS_FINANCEIRO'].apply(colorir_status_display)
+        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
         
         st.dataframe(
             df_ultimas_nfs_display[[
