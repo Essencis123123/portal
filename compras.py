@@ -779,11 +779,8 @@ else:
         
         df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
-        # Aplicar a nova função auxiliar de formatação de data para a exibição
-        data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
-        for col in data_cols_history:
-            if col in df_display.columns:
-                df_display[col] = df_display[col].apply(formatar_data_brasil_hifen)
+        # O data_editor agora recebe a coluna de data como um objeto datetime.
+        # Ele se encarregará da formatação de acordo com a column_config.
 
         # Formata os valores para exibição com 2 casas decimais
         for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
@@ -793,7 +790,7 @@ else:
                 )
 
         edited_history_df = st.data_editor(
-            df_display,
+            df_history, # Passando o DataFrame com datas no formato datetime
             use_container_width=True,
             hide_index=False,
             key='history_editor',
@@ -832,7 +829,7 @@ else:
             ]
         )
 
-        if not edited_history_df.equals(df_display):
+        if not edited_history_df.equals(df_history):
             st.info("Salvando alterações...")
             
             edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
@@ -1292,7 +1289,7 @@ else:
             total_pedidos_local = len(df_performance_local)
             st.metric("Total de Pedidos Locais", total_pedidos_local)
         with col2:
-            media_economia = df_negociados['PERC_ECONOMIA'].mean() if 'PERC_ECONIOMIA' in df_negociados.columns and not df_negociados.empty else 0
+            media_economia = df_negociados['PERC_ECONOMIA'].mean() if 'PERC_ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
             st.metric("Média de Economia (%)", f"{media_economia:.2f}%")
         with col3:
             total_economizado = df_negociados['ECONOMIA'].sum() if 'ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
