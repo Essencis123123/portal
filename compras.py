@@ -582,7 +582,7 @@ else:
 
         st.markdown("---")
         st.subheader("⬆️ Upload em Lote de Requisições")
-        st.info("Envie um arquivo .csv ou .xlsx contendo todos os campos para registrar múltiplas requisições de uma vez.")
+        st.info("Envie um arquivo .csv ou .xlsx contendo as colunas para registrar múltiplas requisições de uma vez. O campo 'VALOR_TOTAL' não é necessário.")
         
         uploaded_file = st.file_uploader("Escolha um arquivo para upload", type=["csv", "xlsx"], key="bulk_upload")
         
@@ -594,12 +594,19 @@ else:
                     else:
                         df_upload = pd.read_excel(uploaded_file)
 
-                    # Verifica se todas as colunas necessárias estão no arquivo
-                    required_cols = list(st.session_state.df_pedidos.columns)
+                    # Verifica se todas as colunas necessárias estão no arquivo (excluindo VALOR_TOTAL)
+                    required_cols = [
+                        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
+                        "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+                        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF"
+                    ]
+                    
+                    df_upload.columns = [col.upper().strip() for col in df_upload.columns]
+                    
                     missing_cols = [col for col in required_cols if col not in df_upload.columns]
                     
                     if missing_cols:
-                        st.error(f"Erro: O arquivo está faltando as seguintes colunas: {', '.join(missing_cols)}")
+                        st.error(f"Erro: O arquivo está faltando as seguintes colunas: {', '.join(missing_cols)}. As colunas precisam ser: {', '.join(required_cols)}.")
                     else:
                         # Converte e trata as colunas de data
                         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
@@ -626,6 +633,7 @@ else:
                             axis=1
                         )
                         
+                        # CALCULA A COLUNA VALOR_TOTAL
                         df_upload['VALOR_TOTAL'] = df_upload['QUANTIDADE'] * df_upload['VALOR_ITEM']
 
                         # Concatena com o DataFrame existente
