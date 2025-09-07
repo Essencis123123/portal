@@ -1063,7 +1063,7 @@ else:
         st.header("📊 Análise de Performance de Negociações Locais")
 
         df_performance = st.session_state.df_pedidos.copy()
-        df_performance_local = df_performance[df_performance['TIPO_PEDIDO'] == 'LOCAL'].copy()
+        df_performance_local = df_performance.copy()
         
         df_performance_local['DATA'] = pd.to_datetime(df_performance_local['DATA'], errors='coerce', dayfirst=True)
         
