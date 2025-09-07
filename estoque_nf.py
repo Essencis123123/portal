@@ -17,6 +17,7 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
 import re
+import pytz
 
 # ==============================================================================
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
@@ -177,7 +178,7 @@ def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
 
-@st.cache_data(show_spinner=False)
+# REMOVIDO O DECORADOR @st.cache_data para recarregar sempre os dados
 def carregar_dados_almoxarifado():
     """Carrega dados do Google Sheets (aba de Almoxarifado)."""
     try:
@@ -198,14 +199,15 @@ def carregar_dados_almoxarifado():
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
-            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA"
+            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA",
+            "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ]
         
         for col in colunas_essenciais:
             if col not in df.columns:
                 df[col] = ''
             
-        for col in ['DATA', 'VENCIMENTO']:
+        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
                 df[col] = _to_datetime(df[col], dayfirst=True)
         
@@ -220,7 +222,7 @@ def carregar_dados_almoxarifado():
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-            "ORDEM_COMPRA"
+            "ORDEM_COMPRA", "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ])
 
 def salvar_dados_almoxarifado(df):
@@ -231,9 +233,15 @@ def salvar_dados_almoxarifado(df):
         worksheet = spreadsheet.get_worksheet(2)
 
         df_copy = df.copy()
+        
+        # Formata colunas de data/hora para o formato de string antes de salvar
         for col in ['DATA', 'VENCIMENTO']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        
+        for col in ['REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
         
         set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
@@ -409,6 +417,10 @@ def render_registrar_nf_page():
         with st.form("formulario_nota", clear_on_submit=True):
             col1_form, col2_form, col3_form = st.columns(3)
             
+            # Obtém a hora de Brasília para o registro
+            brasilia_tz = pytz.timezone('America/Sao_Paulo')
+            agora = datetime.datetime.now(brasilia_tz)
+            
             with col1_form:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
@@ -481,7 +493,9 @@ def render_registrar_nf_page():
                             "STATUS_FINANCEIRO": "EM ANDAMENTO",
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
-                            "ORDEM_COMPRA": ordem_compra_nf
+                            "ORDEM_COMPRA": ordem_compra_nf,
+                            "REGISTRO_ENVIO": agora, # Adiciona o registro de envio
+                            "REGISTRO_LANCAMENTO": "" # Inicializa como vazio
                         }
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
@@ -531,7 +545,7 @@ def render_registrar_nf_page():
             cores = {
                 "EM ANDAMENTO": "🟡",
                 "NF PROBLEMA": "🔴",
-                "CAPTURADO": "🟠",
+                "CAPTURADO": "🟣", # Alterado para roxo
                 "FINALIZADO": "🟢"
             }
             return f"{cores.get(status, '⚪')} {status}"
@@ -706,7 +720,7 @@ def render_consultar_nfs_page():
                 cores = {
                     "EM ANDAMENTO": "🟡",
                     "NF PROBLEMA": "🔴",
-                    "CAPTURADO": "🟠",
+                    "CAPTURADO": "🟣", # Alterado para roxo
                     "FINALIZADO": "🟢"
                 }
                 return f"{cores.get(status, '⚪')} {status}"
@@ -764,7 +778,11 @@ def render_configuracoes_page():
     with col1:
         st.info("**Informações do Sistema**")
         st.write(f"Total de notas cadastradas: **{len(df)}**")
-        st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
+        
+        # Obtém a hora de Brasília para exibir a última atualização
+        brasilia_tz = pytz.timezone('America/Sao_Paulo')
+        agora_brasilia = datetime.datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')
+        st.write(f"Última atualização: **{agora_brasilia}**")
         
         if st.button("🔄 Recarregar Dados"):
             # Limpa o cache de dados e recarrega tudo
