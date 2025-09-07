@@ -209,6 +209,7 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
+                # Converter para datetime com errors='coerce' para lidar com valores vazios/inválidos
                 df[col] = _to_datetime(df[col], dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
@@ -495,7 +496,7 @@ def render_registrar_nf_page():
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
                             "REGISTRO_ENVIO": agora, # Adiciona o registro de envio
-                            "REGISTRO_LANCAMENTO": "" # Inicializa como vazio
+                            "REGISTRO_LANCAMENTO": '' # Inicializa como vazio
                         }
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
@@ -528,6 +529,17 @@ def render_registrar_nf_page():
             df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
         else:
             df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].astype(str)
+
+        # Adicionando a formatação das colunas de registro
+        if not df_ultimas_nfs.empty and pd.api.types.is_datetime64_any_dtype(df_ultimas_nfs['REGISTRO_ENVIO']):
+            df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
+        else:
+            df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = ''
+        
+        if not df_ultimas_nfs.empty and pd.api.types.is_datetime64_any_dtype(df_ultimas_nfs['REGISTRO_LANCAMENTO']):
+            df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
+        else:
+            df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = ''
         
         col_map = {
             'DATA': 'Data',
@@ -537,7 +549,9 @@ def render_registrar_nf_page():
             'VOLUME': 'Volume',
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
-            'DOC NF': 'Anexo NF'
+            'DOC NF': 'Anexo NF',
+            'REGISTRO_ENVIO_VISUAL': 'Reg. Envio',
+            'REGISTRO_LANCAMENTO_VISUAL': 'Reg. Lançamento'
         }
         df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map)
         
