@@ -184,7 +184,7 @@ def carregar_dados_pedidos():
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
-            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+            df['VALOR_TOTAL'] = df['QUANTIDADE'].astype(float) * df['VALOR_ITEM'].astype(float)
 
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ""
@@ -1031,7 +1031,8 @@ else:
             st.info("Não há pedidos entregues no período para criar o ranking.")
         
         # --- Curva ABC ---
-        st.subheader("Análise de Materiais - Curva ABC")
+        st.markdown("---")
+        st.header("Análise de Materiais - Curva ABC")
         
         df_abc = df_filtrado_dash.copy()
 
@@ -1061,78 +1062,82 @@ else:
 
             custo_por_material['CLASSE'] = custo_por_material.apply(classificar_abc, axis=1)
 
-            # Cria o gráfico da Curva ABC
-            fig_abc = make_subplots(specs=[[{"secondary_y": True}]])
-
-            # Adiciona o gráfico de barras para o custo total
-            fig_abc.add_trace(
-                go.Bar(
-                    x=custo_por_material['CODIGO_MATERIAL'] + ' - ' + custo_por_material['MATERIAL'],
-                    y=custo_por_material['VALOR_TOTAL'],
-                    name='Custo Total (R$)',
-                    marker_color='#1C4D86',
-                ),
-                secondary_y=False,
-            )
-
-            # Adiciona o gráfico de linha para a participação acumulada
-            fig_abc.add_trace(
-                go.Scatter(
-                    x=custo_por_material['CODIGO_MATERIAL'] + ' - ' + custo_por_material['MATERIAL'],
-                    y=custo_por_material['PARTICIPACAO_ACUMULADA'],
-                    name='Participação Acumulada',
-                    mode='lines+markers',
-                    line=dict(color='red', width=2),
-                ),
-                secondary_y=True,
-            )
-
-            # Adiciona as linhas de referência para as classes A e B
-            fig_abc.add_hline(y=0.8, line_dash="dash", line_color="green", annotation_text="80% (Classe A)", annotation_position="bottom right")
-            fig_abc.add_hline(y=0.95, line_dash="dash", line_color="orange", annotation_text="95% (Classe B)", annotation_position="bottom right")
-
-            # Atualiza o layout do gráfico
-            fig_abc.update_layout(
-                title_text="Curva ABC do Custo dos Materiais",
-                xaxis_title="Material",
-                legend_orientation="h",
-                legend_y=-0.15,
-                legend_x=0.5
-            )
-            fig_abc.update_yaxes(title_text="Custo Total (R$)", secondary_y=False, tickformat=',.2f')
-            fig_abc.update_yaxes(title_text="Participação Acumulada", secondary_y=True, tickformat='.0%')
+            st.subheader("Visualização da Curva ABC")
+            col_abc_1, col_abc_2 = st.columns(2)
             
-            st.plotly_chart(fig_abc, use_container_width=True)
+            with col_abc_1:
+                fig_abc = make_subplots(specs=[[{"secondary_y": True}]])
 
-        st.markdown("---")
-        st.subheader("Análise Detalhada por Departamento")
-        
-        custo_por_departamento_tipo = df_filtrado_dash.groupby(['DEPARTAMENTO', 'TIPO_PEDIDO'])['VALOR_TOTAL'].sum().reset_index()
-        fig_custo_tipo = px.bar(
-            custo_por_departamento_tipo,
-            x='DEPARTAMENTO',
-            y='VALOR_TOTAL',
-            color='TIPO_PEDIDO',
-            title='Custo de Pedidos por Departamento e Tipo',
-            labels={'VALOR_TOTAL': 'Custo Total (R$)', 'DEPARTAMENTO': 'Departamento', 'TIPO_PEDIDO': 'Tipo de Pedido'},
-            barmode='stack',
-            text_auto='.2s'
-        )
-        st.plotly_chart(fig_custo_tipo, use_container_width=True)
+                # Adiciona o gráfico de barras para o custo total
+                fig_abc.add_trace(
+                    go.Bar(
+                        x=custo_por_material['CODIGO_MATERIAL'],
+                        y=custo_por_material['VALOR_TOTAL'],
+                        name='Custo Total (R$)',
+                        marker_color='#1C4D86',
+                    ),
+                    secondary_y=False,
+                )
 
-        quantidade_por_departamento_tipo = df_filtrado_dash.groupby(['DEPARTAMENTO', 'TIPO_PEDIDO'])['REQUISICAO'].count().reset_index()
-        quantidade_por_departamento_tipo.rename(columns={'REQUISICAO': 'Quantidade de Pedidos'}, inplace=True)
-        fig_quantidade_tipo = px.bar(
-            quantidade_por_departamento_tipo,
-            x='DEPARTAMENTO',
-            y='Quantidade de Pedidos',
-            color='TIPO_PEDIDO',
-            title='Quantidade de Pedidos por Departamento e Tipo',
-            labels={'Quantidade de Pedidos': 'Quantidade de Pedidos', 'DEPARTAMENTO': 'Departamento', 'TIPO_PEDIDO': 'Tipo de Pedido'},
-            barmode='stack',
-            text_auto=True
-        )
-        st.plotly_chart(fig_quantidade_tipo, use_container_width=True)
+                # Adiciona o gráfico de linha para a participação acumulada
+                fig_abc.add_trace(
+                    go.Scatter(
+                        x=custo_por_material['CODIGO_MATERIAL'],
+                        y=custo_por_material['PARTICIPACAO_ACUMULADA'],
+                        name='Participação Acumulada',
+                        mode='lines+markers',
+                        line=dict(color='red', width=2),
+                    ),
+                    secondary_y=True,
+                )
+
+                # Adiciona as linhas de referência para as classes A e B
+                fig_abc.add_hline(y=0.8, line_dash="dash", line_color="green", annotation_text="80% (Classe A)", annotation_position="bottom right")
+                fig_abc.add_hline(y=0.95, line_dash="dash", line_color="orange", annotation_text="95% (Classe B)", annotation_position="bottom right")
+
+                # Atualiza o layout do gráfico
+                fig_abc.update_layout(
+                    title_text="Curva ABC do Custo dos Materiais",
+                    xaxis_title="Material (Código)",
+                    legend_orientation="h",
+                    legend_y=-0.15,
+                    legend_x=0.5
+                )
+                fig_abc.update_yaxes(title_text="Custo Total (R$)", secondary_y=False, tickformat=',.2f')
+                fig_abc.update_yaxes(title_text="Participação Acumulada", secondary_y=True, tickformat='.0%')
+                
+                st.plotly_chart(fig_abc, use_container_width=True)
+
+            with col_abc_2:
+                st.subheader("Resumo por Classe")
+                total_custo_por_classe = custo_por_material.groupby('CLASSE')['VALOR_TOTAL'].sum().reset_index()
+                total_custo_por_classe['PARTICIPACAO'] = (total_custo_por_classe['VALOR_TOTAL'] / custo_total_geral) * 100
+                fig_pie = px.pie(
+                    total_custo_por_classe,
+                    values='VALOR_TOTAL',
+                    names='CLASSE',
+                    title='Distribuição de Custo por Classe ABC',
+                    color_discrete_sequence=['#1C4D86', '#007ea7', '#6c757d'],
+                    hole=0.4
+                )
+                fig_pie.update_traces(textinfo='percent+label', marker=dict(line=dict(color='#FFFFFF', width=1)))
+                st.plotly_chart(fig_pie, use_container_width=True)
+            
+            st.subheader("Ranking de Materiais por Custo Total")
+            st.info("Tabela com os materiais mais caros, ideal para focar as negociações.")
+            st.dataframe(
+                custo_por_material[['CLASSE', 'CODIGO_MATERIAL', 'MATERIAL', 'VALOR_TOTAL', 'PARTICIPACAO_ACUMULADA']],
+                column_config={
+                    "CLASSE": st.column_config.TextColumn("Classe"),
+                    "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
+                    "MATERIAL": st.column_config.TextColumn("Material"),
+                    "VALOR_TOTAL": st.column_config.NumberColumn("Custo Total (R$)", format="%.2f"),
+                    "PARTICIPACAO_ACUMULADA": st.column_config.NumberColumn("Part. Acumulada", format="%.2%")
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+
 
     elif menu == "📊 Performance ":
         st.markdown("""
@@ -1207,8 +1212,8 @@ else:
         # Recálculo das colunas de economia para o DataFrame filtrado
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
         df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                   ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                   0)
+                                                    ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                    0)
 
         csv_performance = df_negociados.to_csv(index=False, encoding='utf-8')
         st.download_button(
