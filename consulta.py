@@ -12,7 +12,7 @@ from pandas.errors import EmptyDataError
 import numpy as np
 
 # Configuração da página com layout wide e ícone
-st.set_page_config(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
+st.set_page_page(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
@@ -146,13 +146,11 @@ logo_img = load_logo(logo_url)
 def get_gspread_client():
     """
     Conecta com o Google Sheets usando os secrets do Streamlit.
-    Esta função foi aprimorada para lidar tanto com strings JSON quanto com objetos AttrDict.
     """
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     
     credentials_info = st.secrets["gcp_service_account"]
     
-    # Verifica se as credenciais são uma string e tenta convertê-las para JSON
     if isinstance(credentials_info, str):
         try:
             credentials_info = json.loads(credentials_info)
@@ -176,19 +174,21 @@ def carregar_dados_pedidos():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # Adiciona a nova coluna à lista de colunas de data
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
+        # Trata colunas de data
+        date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+        for col in date_cols:
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # --- CORREÇÃO AQUI: Substitui vírgula por ponto antes de converter para numérico ---
-        for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
+        # Trata colunas numéricas: Substitui vírgula por ponto e converte para numérico
+        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # Primeiro, converte a coluna para string para aplicar a substituição
-                df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
-                # Em seguida, converte para numérico
+                # Remove separador de milhar (ponto) e substitui vírgula por ponto decimal
+                df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
+        # Garante que colunas importantes existam
         if 'STATUS_PEDIDO' not in df.columns:
             df['STATUS_PEDIDO'] = ''
         if 'ORDEM_COMPRA' not in df.columns:
@@ -205,7 +205,7 @@ def carregar_dados_pedidos():
             lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
         )
 
-        # --- NOVO: Calcula a coluna VALOR_TOTAL ---
+        # Calcula a coluna VALOR_TOTAL após a conversão numérica
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
         
@@ -414,20 +414,19 @@ if 'PREVISAO_ENTREGA' in df_tabela.columns:
 else:
     df_tabela['PREVISÃO ENTREGA'] = 'N/A'
     
-# Formata as colunas de valor para o display
-# Mantive a formatação, mas as colunas não serão exibidas na tabela
-df_tabela['VALOR_TOTAL'] = df_tabela['VALOR_TOTAL'].astype(str).str.replace('.', ',', regex=False)
+# Converte o VALOR_TOTAL para string apenas para exibição
+df_tabela['VALOR_TOTAL_str'] = df_tabela['VALOR_TOTAL'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
 st.dataframe(
     df_tabela[[
         'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
-        'QUANTIDADE', 'VALOR_TOTAL', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
+        'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ]],
     use_container_width=True,
     hide_index=True,
     column_order=[
         'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
-        'QUANTIDADE', 'VALOR_TOTAL', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
+        'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
     ],
     column_config={
         "DATA REQUISIÇÃO": st.column_config.DateColumn("Data Requisição"),
@@ -437,7 +436,7 @@ st.dataframe(
         "CODIGO_MATERIAL": "Cód. Material",
         "MATERIAL": "Material",
         "QUANTIDADE": "Quantidade",
-        "VALOR_TOTAL": "Valor Total",
+        "VALOR_TOTAL_str": "Valor Total",  # Usa a nova coluna formatada
         "STATUS": "Status",
         "ORDEM_COMPRA": "N° Ordem de Compra",
         "FORNECEDOR": "Fornecedor",
@@ -446,7 +445,7 @@ st.dataframe(
     }
 )
 
-# --- NOVO: Adiciona a autosoma do valor total abaixo da tabela ---
+# --- Adiciona a autosoma do valor total abaixo da tabela ---
 if not df_filtrado.empty:
     valor_total_soma = df_filtrado['VALOR_TOTAL'].sum()
     st.markdown(f"<div style='text-align: right; font-size: 20px; font-weight: bold; padding-top: 15px;'>Valor Total dos Itens Filtrados: R$ {valor_total_soma:,.2f}</div>".replace(",", "X").replace(".", ",").replace("X", "."), unsafe_allow_html=True)
