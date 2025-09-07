@@ -220,10 +220,9 @@ def carregar_dados_pedidos():
         
         # --- CORREÇÃO AQUI: Tratamento de valores numéricos com vírgula ---
         if 'VALOR_ITEM' in df.columns:
-            # Converte para string para garantir a manipulação
             df['VALOR_ITEM'] = df['VALOR_ITEM'].astype(str)
             
-            # Remove pontos de milhar
+            # Remove pontos de milhar, se existirem
             df['VALOR_ITEM'] = df['VALOR_ITEM'].str.replace('.', '', regex=False)
             
             # Substitui a vírgula por ponto decimal
@@ -420,7 +419,6 @@ def render_registrar_nf_page():
                     st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
                 else:
                     try:
-                        # O valor da NF digitado já é tratado aqui para aceitar vírgula e ponto
                         valor_total_float = float(valor_total_nf.replace(".", "").replace(",", "."))
                         valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                         
