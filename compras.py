@@ -767,8 +767,8 @@ else:
             st.warning("Nenhum registro encontrado com os filtros aplicados.")
             st.stop()
         
-        df_display = df_history.copy()
-
+        # Cria uma cópia para o editor e formata apenas o status para exibição
+        df_for_editor = df_history.copy()
         def formatar_status_display(status):
             if status == 'ENTREGUE':
                 return '🟢 ENTREGUE'
@@ -776,28 +776,24 @@ else:
                 return '🟡 PENDENTE'
             else:
                 return status
-        
-        df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
-        
-        # O data_editor agora recebe a coluna de data como um objeto datetime.
-        # Ele se encarregará da formatação de acordo com a column_config.
+        df_for_editor['STATUS_PEDIDO'] = df_for_editor['STATUS_PEDIDO'].apply(formatar_status_display)
 
-        # Formata os valores para exibição com 2 casas decimais
+        # Formata os valores para exibição com 2 casas decimais no df de exibição
         for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
-            if col in df_display.columns:
-                df_display[col] = df_display[col].apply(
+            if col in df_for_editor.columns:
+                df_for_editor[col] = df_for_editor[col].apply(
                     lambda x: f"{float(x):.2f}" if pd.notna(x) and x != '' else ''
                 )
 
         edited_history_df = st.data_editor(
-            df_history, # Passando o DataFrame com datas no formato datetime
+            df_for_editor, 
             use_container_width=True,
             hide_index=False,
             key='history_editor',
             column_config={
                 "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
                 "REQUISICAO": "N° Requisição",
-                "DATA": st.column_config.DateColumn("Data Requisição", format="DD-MM-YYYY"),
+                "DATA": st.column_config.DateColumn("Data Requisição", format="DD-MM-YYYY", disabled=True),
                 "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                 "DEPARTAMENTO": "Departamento",
                 "FILIAL": "Filial",
@@ -829,9 +825,10 @@ else:
             ]
         )
 
-        if not edited_history_df.equals(df_history):
+        if not edited_history_df.equals(df_for_editor):
             st.info("Salvando alterações...")
             
+            # Mapeia o status de volta para o valor original (sem emoji)
             edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
                 '🟢 ENTREGUE': 'ENTREGUE',
                 '🟡 PENDENTE': 'PENDENTE',
@@ -843,7 +840,10 @@ else:
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                 edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
             
-            # Aplica a nova função auxiliar de parse de data
+            # Corrige a lista de colunas para o loop
+            data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
+            
+            # Converte as colunas de data do editor para datetime
             for col in data_cols_history:
                 edited_history_df[col] = edited_history_df[col].apply(parse_date_from_editor)
             
