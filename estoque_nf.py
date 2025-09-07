@@ -241,7 +241,7 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
         return False
 
-@st.cache_data(show_spinner=False)
+# REMOVIDO O DECORADOR @st.cache_data PARA GARANTIR ATUALIZAÇÃO CONSTANTE
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
@@ -469,7 +469,7 @@ def render_registrar_nf_page():
                         st.session_state['novo_registro_nf'] = {
                             "DATA": data_recebimento,
                             "RECEBEDOR": recebedor,
-                            "FORNECEDOR_NF": fornecedor_selecionado, 
+                            "FORNECEDOR_NF": fornecedor_selecionado,    
                             "NF": nf_numero,
                             "VOLUME": volume_nf,
                             "V. TOTAL NF": valor_total_float,
