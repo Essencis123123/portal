@@ -404,13 +404,15 @@ else:
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
 
-            # --- Lógica para as colunas visuais ---
+            # Mapeamento para exibição e para conversão de volta
             status_map = {
                 'EM ANDAMENTO': '🟡 EM ANDAMENTO',
                 'NF PROBLEMA': '🔴 NF PROBLEMA',
                 'CAPTURADO': '🟣 CAPTURADO',
                 'FINALIZADO': '🟢 FINALIZADO'
             }
+            reverse_status_map = {v: k for k, v in status_map.items()}
+
             df_display['STATUS_VISUAL'] = df_display['STATUS'].map(status_map).fillna(df_display['STATUS'])
             
             def formatar_vencimento_visual(dias):
@@ -424,7 +426,8 @@ else:
 
             def formatar_problema_visual(row):
                 if row['CONDICAO_PROBLEMA'] == 'CHAMADO':
-                    data_problema = datetime.date(2025, 9, 29) # Substitua pela sua coluna de data real, se houver
+                    # Apenas um exemplo, ajuste a lógica da data conforme sua necessidade
+                    data_problema = datetime.date(2025, 9, 29) 
                     dias_passados = (datetime.date.today() - data_problema).days
                     if dias_passados > 5:
                         return f"🔴 {row['CONDICAO_PROBLEMA']}"
@@ -432,8 +435,6 @@ else:
             
             df_display['PROBLEMA_VISUAL'] = df_display.apply(lambda row: formatar_problema_visual(row), axis=1)
 
-            # Lista de opções para o Selectbox, incluindo 'CAPTURADO'
-            status_options = list(status_map.values())
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
             # Formata colunas de data/hora para exibição
@@ -446,7 +447,8 @@ else:
                 df_display['REGISTRO_LANCAMENTO_VISUAL'] = df_display['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
             else:
                 df_display['REGISTRO_LANCAMENTO_VISUAL'] = ''
-
+            
+            # Use df_display para a visualização, mas salve o df original com as edições
             edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
@@ -458,7 +460,7 @@ else:
                     "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
                     "DIAS_VENCIMENTO_VISUAL": st.column_config.Column("Dias Vencimento", disabled=True),
-                    "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=status_options, default="🟡 EM ANDAMENTO"),
+                    "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=list(status_map.values()), default="🟡 EM ANDAMENTO"),
                     "PROBLEMA_VISUAL": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
                     "VALOR_JUROS": st.column_config.NumberColumn("Juros (R$)", format="%.2f"),
@@ -476,33 +478,35 @@ else:
                 hide_index=True
             )
 
+            # Verifica se houve alteração na tabela visualizada
             if not edited_df.equals(df_display):
                 st.session_state.alteracoes_pendentes = True
+                
+                # Cria uma cópia limpa do DataFrame original para aplicar as mudanças
+                updated_df = df.copy()
 
-                # Lógica para registrar a data de lançamento
+                # Itera sobre as linhas do DataFrame editado para aplicar as mudanças ao DataFrame original
                 for index, row in edited_df.iterrows():
-                    status_original = df_display.loc[index, 'STATUS']
-                    status_novo_visual = row['STATUS_VISUAL']
+                    # Mapeia o valor visual de volta para o valor de dados
+                    novo_status_visual = row['STATUS_VISUAL']
+                    novo_status_data = reverse_status_map.get(novo_status_visual, novo_status_visual)
                     
-                    status_novo = status_novo_visual.replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '').replace('🟣 ', '')
-                    
-                    # Preenche o registro de lançamento apenas se o status mudar para FINALIZADO
-                    if status_novo == 'FINALIZADO' and status_original != 'FINALIZADO':
-                        df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now()
-                    
-                    # Preenche o registro de envio apenas se o status mudar para CAPTURADO
-                    if status_novo == 'CAPTURADO' and status_original != 'CAPTURADO':
-                        df.loc[index, 'REGISTRO_ENVIO'] = datetime.datetime.now()
+                    status_original = updated_df.loc[index, 'STATUS']
 
-                    # Atualiza o status e problema no DataFrame principal
-                    df.loc[index, 'STATUS'] = status_novo
-                    df.loc[index, 'CONDICAO_PROBLEMA'] = row['PROBLEMA_VISUAL'].replace('🔴 ', '')
+                    # Lógica para registrar a data e hora do lançamento ou envio
+                    if novo_status_data == 'FINALIZADO' and status_original != 'FINALIZADO':
+                        updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now()
                     
-                    # Atualiza os valores numéricos que podem ser editados
-                    for col in ["VALOR_JUROS", "VALOR_FRETE"]:
-                        df.loc[index, col] = row[col]
+                    if novo_status_data == 'CAPTURADO' and status_original != 'CAPTURADO':
+                        updated_df.loc[index, 'REGISTRO_ENVIO'] = datetime.datetime.now()
                     
-                st.session_state.df = df.copy()
+                    # Aplica as outras alterações
+                    updated_df.loc[index, 'STATUS'] = novo_status_data
+                    updated_df.loc[index, 'CONDICAO_PROBLEMA'] = row['PROBLEMA_VISUAL'].replace('🔴 ', '')
+                    updated_df.loc[index, 'VALOR_JUROS'] = row['VALOR_JUROS']
+                    updated_df.loc[index, 'VALOR_FRETE'] = row['VALOR_FRETE']
+
+                st.session_state.df = updated_df
 
                 if salvar_dados(st.session_state.df):
                     st.session_state.ultimo_salvamento = datetime.datetime.now()
