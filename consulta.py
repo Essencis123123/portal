@@ -131,6 +131,7 @@ st.markdown(
 # Carregar a imagem do logo a partir da URL (com cache)
 @st.cache_data(show_spinner=False)
 def load_logo(url):
+    """Carrega a imagem de um URL e armazena em cache."""
     try:
         response = requests.get(url)
         img = Image.open(BytesIO(response.content))
@@ -162,6 +163,51 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
+# Funções auxiliares para formatação e parsing de datas
+def parse_date_from_editor(date_value):
+    """Converte valores do editor para datetime (suporte a hífen, barra e ISO)"""
+    if date_value is None or pd.isna(date_value) or date_value == '':
+        return pd.NaT
+    
+    # Se já for datetime, retorna como está
+    if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
+        return date_value
+    
+    # Se for string, tenta parse nos formatos esperados
+    if isinstance(date_value, str):
+        try:
+            # Tenta formato DD-MM-YYYY (com hífen)
+            return datetime.datetime.strptime(date_value, '%d-%m-%Y')
+        except ValueError:
+            try:
+                # Tenta formato DD/MM/YYYY (com barra)
+                return datetime.datetime.strptime(date_value, '%d/%m/%Y')
+            except ValueError:
+                try:
+                    # Tenta formato YYYY-MM-DD (padrão ISO)
+                    return datetime.datetime.strptime(date_value, '%Y-%m-%d')
+                except ValueError:
+                    # Tenta parse automático
+                    return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+    
+    return pd.to_datetime(date_value, errors='coerce')
+
+def formatar_data_brasil_hifen(data):
+    """Formata datetime para exibição no formato DD-MM-YYYY"""
+    if pd.isna(data) or data is None:
+        return ""
+    try:
+        # Se já for string no formato com hífen, retorna como está
+        if isinstance(data, str) and '-' in data and len(data.split('-')) == 3:
+            return data
+        # Se for datetime, formata para DD-MM-YYYY
+        elif isinstance(data, (pd.Timestamp, datetime.datetime)):
+            return data.strftime('%d-%m-%Y')
+        else:
+            return str(data)
+    except:
+        return str(data)
+
 @st.cache_data(ttl=600)  # Cache de 10 minutos
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
@@ -184,11 +230,11 @@ def carregar_dados_pedidos():
         
         df = pd.DataFrame(records, columns=headers)
 
-        # Trata colunas de data
+        # Trata colunas de data usando a nova função de parsing
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns and not df[col].empty:
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+                df[col] = df[col].apply(parse_date_from_editor)
         
         # --- TRECHO CORRIGIDO PARA LIMPEZA DE DADOS NUMÉRICOS ---
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
@@ -248,7 +294,7 @@ df_pedidos = carregar_dados_pedidos()
 
 # Verifica se o DataFrame não está vazio antes de continuar
 if df_pedidos is None or df_pedidos.empty:
-    st.info("Nenhun pedido registrado no sistema.")
+    st.info("Nenhum pedido registrado no sistema.")
     st.stop()
 
 # --- LAYOUT DO SIDEBAR ---
@@ -272,7 +318,7 @@ with st.sidebar:
         meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
         anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
         meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                       7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+                        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
         # Filtro de Mês como multiselect
         filtro_mes_dash = st.multiselect(
@@ -418,18 +464,19 @@ def formatar_status(status):
 
 df_tabela['STATUS'] = df_tabela['STATUS_PEDIDO'].apply(formatar_status)
 
+# Aplica a formatação de data para exibição consistente
 if 'DATA' in df_tabela.columns:
-    df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+    df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].apply(formatar_data_brasil_hifen)
 else:
     df_tabela['DATA REQUISIÇÃO'] = 'N/A'
 
 if 'DATA_ENTREGA' in df_tabela.columns:
-    df_tabela['DATA ENTREGA'] = df_tabela['DATA_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+    df_tabela['DATA ENTREGA'] = df_tabela['DATA_ENTREGA'].apply(formatar_data_brasil_hifen)
 else:
     df_tabela['DATA ENTREGA'] = 'N/A'
 
 if 'PREVISAO_ENTREGA' in df_tabela.columns:
-    df_tabela['PREVISÃO ENTREGA'] = df_tabela['PREVISAO_ENTREGA'].dt.strftime('%d/%m/%Y').replace('NaT', 'N/A')
+    df_tabela['PREVISÃO ENTREGA'] = df_tabela['PREVISAO_ENTREGA'].apply(formatar_data_brasil_hifen)
 else:
     df_tabela['PREVISÃO ENTREGA'] = 'N/A'
     
