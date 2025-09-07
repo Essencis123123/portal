@@ -406,27 +406,35 @@ else:
         st.header("📝 Registrar Nova Requisição de Compra")
         
         solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist()
-        solicitante_selecionado = st.selectbox("Selecione o Solicitante", solicitantes_nomes)
         
         departamento_selecionado = ""
         filial_selecionada = ""
-        if solicitante_selecionado:
-            solicitante_info = st.session_state.df_solicitantes[st.session_state.df_solicitantes['NOME'] == solicitante_selecionado].iloc[0]
-            departamento_selecionado = solicitante_info['DEPARTAMENTO']
-            filial_selecionada = solicitante_info['FILIAL']
 
-        # --- Alteração de Layout para 2 colunas ---
-        col1, col2 = st.columns(2)
+        # Usando colunas para compactar a primeira linha
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         with col1:
-            st.text_input("Departamento", value=departamento_selecionado, disabled=True)
-            st.text_input("Filial", value=filial_selecionada, disabled=True)
+            solicitante_selecionado = st.selectbox("Solicitante", solicitantes_nomes)
+            if solicitante_selecionado:
+                solicitante_info = st.session_state.df_solicitantes[st.session_state.df_solicitantes['NOME'] == solicitante_selecionado].iloc[0]
+                departamento_selecionado = solicitante_info['DEPARTAMENTO']
+                filial_selecionada = solicitante_info['FILIAL']
         
         with col2:
-            data_requisicao = st.date_input("Data da Requisição", datetime.date.today())
-            tipo_pedido = st.selectbox("Tipo de Pedido", ["LOCAL", "EMERGENCIAL", "PROGRAMADO"])
-            requisicao = st.text_input("Número da Requisição")
-        # --- Fim da Alteração de Layout ---
+            st.text_input("Departamento", value=departamento_selecionado, disabled=True)
+        
+        with col3:
+            st.text_input("Filial", value=filial_selecionada, disabled=True)
+            
+        with col4:
+            requisicao = st.text_input("N° Requisição")
 
+        # Segunda linha para os outros campos
+        col5, col6 = st.columns(2)
+        with col5:
+            data_requisicao = st.date_input("Data da Requisição", datetime.date.today())
+        with col6:
+            tipo_pedido = st.selectbox("Tipo de Pedido", ["LOCAL", "EMERGENCIAL", "PROGRAMADO"])
+        
         st.markdown("---")
         st.subheader("Itens da Requisição")
         
