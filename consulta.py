@@ -205,7 +205,10 @@ def carregar_dados_pedidos():
         ])
 
 
-# --- LAYOUT E FILTROS DO SIDEBAR ---
+# Carrega os dados uma vez para o app
+df_pedidos = carregar_dados_pedidos()
+
+# --- LAYOUT DO SIDEBAR ---
 with st.sidebar:
     if logo_img:
         st.image(logo_img, use_container_width=True)
@@ -213,24 +216,20 @@ with st.sidebar:
     st.title("🔎 Painel de Consulta")
     st.divider()
     
-    df_pedidos = carregar_dados_pedidos()
-    
-    # Adicionando um botão de recarregar dados
     if st.button("🔄 Recarregar Dados", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
     st.divider()
-
     st.subheader("Filtros de Período")
+
     if 'DATA' in df_pedidos.columns and not df_pedidos['DATA'].isnull().all():
-        # Filtros de data por multiselect
         df_pedidos['MES'] = df_pedidos['DATA'].dt.month
         df_pedidos['ANO'] = df_pedidos['DATA'].dt.year
         meses_disponiveis = sorted(df_pedidos['MES'].dropna().unique())
         anos_disponiveis = sorted(df_pedidos['ANO'].dropna().unique(), reverse=True)
         meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+                       7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
         filtro_mes_dash = st.multiselect(
             "Selecione os Meses:", 
@@ -248,45 +247,6 @@ with st.sidebar:
         filtro_ano_dash = ['Todos']
         st.info("Nenhum dado com data disponível para filtrar.")
 
-    st.subheader("Filtros de Dados")
-    
-    filtro_solicitante = ['Todos']
-    if 'SOLICITANTE' in df_pedidos.columns and not df_pedidos.empty:
-        solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
-        filtro_solicitante = st.multiselect(
-            "Filtrar por Solicitante:",
-            options=['Todos'] + solicitantes_disponiveis,
-            default=['Todos']
-        )
-    
-    filtro_departamento = ['Todos']
-    if 'DEPARTAMENTO' in df_pedidos.columns and not df_pedidos.empty:
-        departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
-        filtro_departamento = st.multiselect(
-            "Filtrar por Departamento:",
-            options=['Todos'] + departamentos_disponiveis,
-            default=['Todos']
-        )
-
-    filtro_status = ['Todos']
-    if 'STATUS_PEDIDO' in df_pedidos.columns and not df_pedidos.empty:
-        status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
-        filtro_status = st.multiselect(
-            "Filtrar por Status:",
-            options=['Todos'] + sorted(status_disponiveis),
-            default=['Todos']
-        )
-    
-    # NOVO FILTRO: Material
-    filtro_material = ['Todos']
-    if 'MATERIAL' in df_pedidos.columns and not df_pedidos.empty:
-        materiais_disponiveis = sorted(df_pedidos['MATERIAL'].dropna().unique().tolist())
-        filtro_material = st.multiselect(
-            "Filtrar por Material:",
-            options=['Todos'] + materiais_disponiveis,
-            default=['Todos']
-        )
-
 
 # Exibe o cabeçalho temático principal
 st.markdown("""
@@ -301,6 +261,52 @@ st.markdown("""
 if df_pedidos.empty:
     st.info("Nenhum pedido registrado no sistema.")
     st.stop()
+
+
+# --- FILTROS MOVIDOS PARA A PÁGINA PRINCIPAL ---
+st.markdown("---")
+st.subheader("Filtros de Dados")
+
+col_filters1, col_filters2, col_filters3, col_filters4 = st.columns(4)
+
+with col_filters1:
+    filtro_solicitante = ['Todos']
+    if 'SOLICITANTE' in df_pedidos.columns and not df_pedidos.empty:
+        solicitantes_disponiveis = sorted(df_pedidos['SOLICITANTE'].dropna().unique().tolist())
+        filtro_solicitante = st.multiselect(
+            "Solicitante:",
+            options=['Todos'] + solicitantes_disponiveis,
+            default=['Todos']
+        )
+
+with col_filters2:
+    filtro_departamento = ['Todos']
+    if 'DEPARTAMENTO' in df_pedidos.columns and not df_pedidos.empty:
+        departamentos_disponiveis = sorted(df_pedidos['DEPARTAMENTO'].dropna().unique().tolist())
+        filtro_departamento = st.multiselect(
+            "Departamento:",
+            options=['Todos'] + departamentos_disponiveis,
+            default=['Todos']
+        )
+
+with col_filters3:
+    filtro_status = ['Todos']
+    if 'STATUS_PEDIDO' in df_pedidos.columns and not df_pedidos.empty:
+        status_disponiveis = df_pedidos['STATUS_PEDIDO'].dropna().unique().tolist()
+        filtro_status = st.multiselect(
+            "Status:",
+            options=['Todos'] + sorted(status_disponiveis),
+            default=['Todos']
+        )
+with col_filters4:
+    filtro_material_cod = ['Todos']
+    if 'CODIGO_MATERIAL' in df_pedidos.columns and not df_pedidos.empty:
+        cod_materiais_disponiveis = sorted(df_pedidos['CODIGO_MATERIAL'].dropna().unique().tolist())
+        filtro_material_cod = st.multiselect(
+            "Cód. Material:",
+            options=['Todos'] + cod_materiais_disponiveis,
+            default=['Todos']
+        )
 
 # --- Aplicação dos Filtros na Tabela Principal ---
 df_filtrado = df_pedidos.copy()
@@ -321,9 +327,8 @@ if 'Todos' not in filtro_departamento:
 if 'Todos' not in filtro_status:
     df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'].isin(filtro_status)]
     
-# Aplica o novo filtro de material
-if 'Todos' not in filtro_material:
-    df_filtrado = df_filtrado[df_filtrado['MATERIAL'].isin(filtro_material)]
+if 'Todos' not in filtro_material_cod:
+    df_filtrado = df_filtrado[df_filtrado['CODIGO_MATERIAL'].isin(filtro_material_cod)]
 
 
 if df_filtrado.empty:
@@ -333,7 +338,6 @@ if df_filtrado.empty:
 
 # --- Análise e Métricas ---
 st.subheader("Visão Geral do Período")
-# --- NOVO: Adicionando o autosoma em um card
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     total_pedidos = len(df_filtrado)
@@ -345,7 +349,6 @@ with col3:
     pedidos_entregues = len(df_filtrado[df_filtrado['STATUS_PEDIDO'] == 'ENTREGUE'])
     st.metric("Pedidos Entregues", pedidos_entregues)
 with col4:
-    # Calcula e exibe o autosoma do valor total
     valor_total_soma = df_filtrado['VALOR_TOTAL'].sum()
     st.metric("Valor Total dos Pedidos", f"R$ {valor_total_soma:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
