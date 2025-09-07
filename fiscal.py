@@ -404,11 +404,11 @@ else:
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
 
-            # Mapeamento para exibição e para conversão de volta
+            # Mapeamento para exibição e para conversão de volta - INCLUINDO CAPTURADO
             status_map = {
                 'EM ANDAMENTO': '🟡 EM ANDAMENTO',
                 'NF PROBLEMA': '🔴 NF PROBLEMA',
-                'CAPTURADO': '🟣 CAPTURADO',
+                'CAPTURADO': '🟣 CAPTURADO',  # NOVA OPÇÃO ADICIONADA
                 'FINALIZADO': '🟢 FINALIZADO'
             }
             reverse_status_map = {v: k for k, v in status_map.items()}
@@ -490,9 +490,15 @@ else:
                     if novo_status_data:
                         status_original = updated_df.loc[index, 'STATUS']
 
+                        # Registrar data/hora quando mudar para FINALIZADO
                         if novo_status_data == 'FINALIZADO' and status_original != 'FINALIZADO':
                             updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now()
                         
+                        # Registrar data/hora quando mudar para CAPTURADO
+                        if novo_status_data == 'CAPTURADO' and status_original != 'CAPTURADO':
+                            updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now()
+                        
+                        # Registrar envio quando mudar para CAPTURADO (almoxarifado)
                         if novo_status_data == 'CAPTURADO' and status_original != 'CAPTURADO':
                             updated_df.loc[index, 'REGISTRO_ENVIO'] = datetime.datetime.now()
                         
