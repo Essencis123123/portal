@@ -192,22 +192,6 @@ def parse_date_from_editor(date_value):
     
     return pd.to_datetime(date_value, errors='coerce')
 
-def formatar_data_brasil_hifen(data):
-    """Formata datetime para exibição no formato DD-MM-YYYY"""
-    if pd.isna(data) or data is None:
-        return ""
-    try:
-        # Se já for string no formato com hífen, retorna como está
-        if isinstance(data, str) and '-' in data and len(data.split('-')) == 3:
-            return data
-        # Se for datetime, formata para DD-MM-YYYY
-        elif isinstance(data, (pd.Timestamp, datetime.datetime)):
-            return data.strftime('%d-%m-%Y')
-        else:
-            return str(data)
-    except:
-        return str(data)
-
 @st.cache_data(ttl=600)  # Cache de 10 minutos
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
@@ -464,50 +448,34 @@ def formatar_status(status):
 
 df_tabela['STATUS'] = df_tabela['STATUS_PEDIDO'].apply(formatar_status)
 
-# Aplica a formatação de data para exibição consistente
-if 'DATA' in df_tabela.columns:
-    df_tabela['DATA REQUISIÇÃO'] = df_tabela['DATA'].apply(formatar_data_brasil_hifen)
-else:
-    df_tabela['DATA REQUISIÇÃO'] = 'N/A'
-
-if 'DATA_ENTREGA' in df_tabela.columns:
-    df_tabela['DATA ENTREGA'] = df_tabela['DATA_ENTREGA'].apply(formatar_data_brasil_hifen)
-else:
-    df_tabela['DATA ENTREGA'] = 'N/A'
-
-if 'PREVISAO_ENTREGA' in df_tabela.columns:
-    df_tabela['PREVISÃO ENTREGA'] = df_tabela['PREVISAO_ENTREGA'].apply(formatar_data_brasil_hifen)
-else:
-    df_tabela['PREVISÃO ENTREGA'] = 'N/A'
-    
 # Converte o VALOR_TOTAL para string apenas para exibição
 df_tabela['VALOR_TOTAL_str'] = df_tabela['VALOR_TOTAL'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
 st.dataframe(
     df_tabela[[
-        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
-        'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
+        'DATA', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
+        'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISAO_ENTREGA', 'DATA_ENTREGA'
     ]],
     use_container_width=True,
     hide_index=True,
     column_order=[
-        'DATA REQUISIÇÃO', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
-        'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISÃO ENTREGA', 'DATA ENTREGA'
+        'DATA', 'REQUISICAO', 'SOLICITANTE', 'DEPARTAMENTO', 'CODIGO_MATERIAL', 'MATERIAL',
+        'QUANTIDADE', 'VALOR_TOTAL_str', 'STATUS', 'ORDEM_COMPRA', 'FORNECEDOR', 'PREVISAO_ENTREGA', 'DATA_ENTREGA'
     ],
     column_config={
-        "DATA REQUISIÇÃO": st.column_config.DateColumn("Data Requisição"),
+        "DATA": st.column_config.DateColumn("Data Requisição", format="DD-MM-YYYY"),
         "REQUISICAO": "N° Requisição",
         "SOLICITANTE": "Solicitante",
         "DEPARTAMENTO": "Departamento",
         "CODIGO_MATERIAL": "Cód. Material",
         "MATERIAL": "Material",
         "QUANTIDADE": "Quantidade",
-        "VALOR_TOTAL_str": "Valor Total",
+        "VALOR_TOTAL_str": st.column_config.NumberColumn("Valor Total", format="R$ %.2f"),
         "STATUS": "Status",
         "ORDEM_COMPRA": "N° Ordem de Compra",
         "FORNECEDOR": "Fornecedor",
-        "PREVISÃO ENTREGA": st.column_config.DateColumn("Previsão Entrega"),
-        "DATA ENTREGA": st.column_config.DateColumn("Data Entrega")
+        "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão Entrega", format="DD-MM-YYYY"),
+        "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD-MM-YYYY")
     }
 )
 
