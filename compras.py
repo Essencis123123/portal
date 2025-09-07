@@ -322,7 +322,11 @@ def salvar_dados_materiais(df):
         gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(3)
-        data_to_write = [df.columns.values.tolist()] + df.values.tolist()
+        
+        df_to_save = df.copy()
+        df_to_save = df_to_save.fillna('')
+
+        data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
         worksheet.clear()
         worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         st.success("Material cadastrado na planilha com sucesso!")
