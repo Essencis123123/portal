@@ -238,10 +238,16 @@ def salvar_dados_pedidos(df):
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
         
-        # Converte as colunas numéricas para string com formato de vírgula para decimal
-        for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'VALOR_TOTAL']:
+        # --- CORREÇÃO: Lógica para tratar os números corretamente antes de salvar ---
+        # Converte as colunas numéricas para string, removendo as casas decimais irrelevantes
+        # e garantindo o uso do ponto como separador decimal para a gravação
+        numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'VALOR_TOTAL']
+        for col in numeric_cols_to_save:
             if col in df_to_save.columns:
-                df_to_save[col] = df_to_save[col].apply(lambda x: f"{x:,.2f}".replace('.', 'X').replace(',', '.').replace('X', ',') if pd.notna(x) else '')
+                # Converte para string com 2 casas decimais e ponto como separador
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: f"{x:.2f}" if pd.notna(x) else ''
+                )
         
         # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
         if 'VALOR_TOTAL' in df_to_save.columns:
