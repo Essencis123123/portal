@@ -386,6 +386,9 @@ def fazer_login(email, senha):
         st.error("E-mail ou senha incorretos.")
 
 # --- INTERFACE PRINCIPAL ---
+logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
+logo_img = load_logo(logo_url)
+
 if 'logado' not in st.session_state or not st.session_state.logado:
     st.title("Login - Painel do Comprador")
     with st.form("login_form"):
@@ -394,8 +397,6 @@ if 'logado' not in st.session_state or not st.session_state.logado:
         if st.form_submit_button("Entrar"):
             fazer_login(email, senha)
 else:
-    logo_img = load_logo(logo_url)
-
     if 'df_pedidos' not in st.session_state:
         st.session_state.df_pedidos = carregar_dados_pedidos()
     if 'df_solicitantes' not in st.session_state:
