@@ -39,7 +39,7 @@ st.markdown(
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3,
+    [data.testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
     [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
@@ -146,24 +146,6 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Conexão e Carregamento de Dados ---
-# --- Funções de Conexão e Carregamento de Dados ---
-@st.cache_resource(show_spinner=False)
-def get_gspread_client():
-    """Conecta com o Google Sheets usando os secrets do Streamlit."""
-    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    credentials_info = st.secrets["gcp_service_account"]
-    
-    if isinstance(credentials_info, str):
-        try:
-            credentials_info = json.loads(credentials_info)
-        except json.JSONDecodeError as e:
-            st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
-            return None
-    
-    creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-    client = gspread.authorize(creds)
-    return client
-
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
@@ -188,7 +170,7 @@ def carregar_dados_pedidos():
         gc = get_gspread_client()
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         
-        # Use UNFORMATTED_VALUE para obter números como floats
+        # Get all values from the worksheet with the UNFORMATTED_VALUE option
         data = spreadsheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
         
         # O cabeçalho é a primeira linha
@@ -207,20 +189,14 @@ def carregar_dados_pedidos():
             if col in df.columns and not df[col].empty:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
-        # Converte colunas numéricas - tratamento correto para formato brasileiro
+        # Converte colunas numéricas (elas já virão como float do Google Sheets)
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns:
-                # Se for string, converte do formato brasileiro para float
-                if df[col].dtype == 'object':
-                    df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                # Arredonda para 2 casas decimais
-                df[col] = df[col].round(2)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
-            df['VALOR_TOTAL'] = df['VALOR_TOTAL'].round(2)
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ""
@@ -243,8 +219,6 @@ def carregar_dados_pedidos():
         st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
         return pd.DataFrame()
 
-
-
 def criar_dataframe_pedidos_vazio():
     """Cria um DataFrame de pedidos vazio com a estrutura correta."""
     return pd.DataFrame(columns=[
@@ -253,7 +227,11 @@ def criar_dataframe_pedidos_vazio():
         "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
     ])
 
-
+def formatar_numero_brasileiro(valor, casas_decimais=2):
+    """Formata número no padrão brasileiro (vírgula como separador decimal)"""
+    if pd.isna(valor) or valor == 0:
+        return ''
+    return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
 
 def salvar_dados_pedidos(df):
     """Salva o DataFrame de pedidos no Google Sheets."""
@@ -293,12 +271,6 @@ def salvar_dados_pedidos(df):
         
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
-
-def formatar_numero_brasileiro(valor, casas_decimais=2):
-    """Formata número no padrão brasileiro (vírgula como separador decimal)"""
-    if pd.isna(valor) or valor == 0:
-        return ''
-    return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
 
 @st.cache_data(show_spinner="Carregando dados de solicitantes...")
 def carregar_dados_solicitantes():
@@ -390,7 +362,6 @@ def salvar_dados_materiais(df):
         st.success("Material cadastrado na planilha com sucesso!")
     except Exception as e:
         st.error(f"Erro ao salvar dados de materiais no Google Sheets: {e}")
-
 
 # --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
 USERS = {
@@ -674,40 +645,42 @@ else:
             st.success("Dados atualizados com sucesso!")
             st.rerun()
 
-elif menu == "📜 Histórico ":
-    st.markdown("""
-        <div class='header-container'>
-            <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
-            <p>Gerencie e Edite os Registros Anteriores</p>
-        </div>
-    """, unsafe_allow_html=True)
-    st.header("📜 Histórico de Requisições e Pedidos")
-    st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
-    
-    df_history = st.session_state.df_pedidos.copy()
-    
-    df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+    elif menu == "📜 Histórico ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
+                <p>Gerencie e Edite os Registros Anteriores</p>
+            </div>
+        """, unsafe_allow_html=True)
+        st.header("📜 Histórico de Requisições e Pedidos")
+        st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
+        
+        df_history = st.session_state.df_pedidos.copy()
+        
+        df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
+        
+        # CORREÇÃO: Recalcula o VALOR_TOTAL com
     
     # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
-    df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
-    df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
-
-    df_almox = st.session_state.df_almoxarifado.copy()
-    if not df_almox.empty:
-        df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
-        df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
-        df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
-
-    df_valid_dates = df_history.dropna(subset=['DATA'])
+        df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
+        df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
     
-    if not df_valid_dates.empty:
-        meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
-        anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
+        df_almox = st.session_state.df_almoxarifado.copy()
+        if not df_almox.empty:
+            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
+            df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+    
+        df_valid_dates = df_history.dropna(subset=['DATA'])
         
-        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-        
-        col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
-        col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
+        if not df_valid_dates.empty:
+            meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
+            anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
+            
+            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+            
+            col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
+            col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
 
         with col_filter_row1_1:
             mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
