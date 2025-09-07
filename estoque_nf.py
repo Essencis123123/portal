@@ -346,8 +346,11 @@ def render_registrar_nf_page():
             
             with col1:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
-                fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+                
+                # --- ALTERAÇÃO AQUI: Puxando fornecedores da aba Almoxarifado ---
+                fornecedores_disponiveis = st.session_state.df_almoxarifado['FORNECEDOR'].dropna().unique().tolist()
                 fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
+                
                 nf_numero = st.text_input("Número da NF*")
                 
             with col2:
