@@ -189,10 +189,7 @@ def carregar_dados_pedidos():
                     lambda x: pd.to_numeric(str(x).replace('.', '').replace(',', '.'), errors='coerce')
                 ).fillna(0)
         
-        # --- NOVO: DIVIDE O VALOR DO ITEM POR 2 ---
-        if 'VALOR_ITEM' in df.columns:
-            df['VALOR_ITEM'] = df['VALOR_ITEM'] / 2
-        # --- FIM DO TRECHO ---
+        # --- A DIVISÃO POR 2 FOI REMOVIDA DAQUI ---
         
         # Garante que colunas importantes existam
         if 'STATUS_PEDIDO' not in df.columns:
