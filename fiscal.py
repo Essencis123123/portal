@@ -438,17 +438,15 @@ else:
 
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
-            # Formata colunas de data/hora para exibição
-            if 'REGISTRO_ENVIO' in df_display.columns:
-                df_display['REGISTRO_ENVIO_VISUAL'] = df_display['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
-            else:
-                df_display['REGISTRO_ENVIO_VISUAL'] = ''
+            # --- CORREÇÃO DO ERRO .dt ACCESSOR ---
+            # Converte as colunas de data/hora para datetime, tratando erros, antes de formatar para exibição
+            df_display['REGISTRO_ENVIO'] = pd.to_datetime(df_display['REGISTRO_ENVIO'], errors='coerce')
+            df_display['REGISTRO_LANCAMENTO'] = pd.to_datetime(df_display['REGISTRO_LANCAMENTO'], errors='coerce')
 
-            if 'REGISTRO_LANCAMENTO' in df_display.columns:
-                df_display['REGISTRO_LANCAMENTO_VISUAL'] = df_display['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
-            else:
-                df_display['REGISTRO_LANCAMENTO_VISUAL'] = ''
-            
+            df_display['REGISTRO_ENVIO_VISUAL'] = df_display['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
+            df_display['REGISTRO_LANCAMENTO_VISUAL'] = df_display['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
+            # --- FIM DA CORREÇÃO ---
+
             edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
