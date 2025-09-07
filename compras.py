@@ -653,7 +653,7 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        st.header("📝 Adicionar Histórico em Lote")
+        st.header("⬆️ Adicionar Histórico em Lote")
         st.info("Envie um arquivo `.csv` ou `.xlsx` com o histórico de pedidos para adicionar ao sistema.")
         
         uploaded_file = st.file_uploader("Escolha um arquivo para upload", type=["csv", "xlsx"])
@@ -662,21 +662,34 @@ else:
             try:
                 # Carrega o arquivo
                 if uploaded_file.name.endswith('.csv'):
-                    df_novo_historico = pd.read_csv(uploaded_file, sep=';', on_bad_lines='skip')
+                    # Tenta ler o CSV com diferentes separadores e on_bad_lines para maior robustez
+                    try:
+                        df_novo_historico = pd.read_csv(uploaded_file, on_bad_lines='skip', sep=';')
+                    except:
+                        uploaded_file.seek(0)
+                        df_novo_historico = pd.read_csv(uploaded_file, on_bad_lines='skip', sep=',')
                 else:
                     df_novo_historico = pd.read_excel(uploaded_file)
                 
                 # Padroniza nomes das colunas para maiúsculas e sem espaços
                 df_novo_historico.columns = [col.upper().replace(' ', '_') for col in df_novo_historico.columns]
                 
-                # Garante que todas as colunas necessárias existam
-                colunas_necessarias = st.session_state.df_pedidos.columns.tolist()
-                colunas_presentes = df_novo_historico.columns.tolist()
+                # Garante que as colunas essenciais existam
+                colunas_essenciais = ["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO"]
+                colunas_faltando = [col for col in colunas_essenciais if col not in df_novo_historico.columns]
                 
-                if not all(col in colunas_presentes for col in colunas_necessarias):
-                    colunas_faltando = [col for col in colunas_necessarias if col not in colunas_presentes]
+                if colunas_faltando:
                     st.error(f"Erro: As seguintes colunas obrigatórias estão faltando no seu arquivo: {', '.join(colunas_faltando)}")
                     st.stop()
+                
+                # Adiciona colunas opcionais se não existirem
+                colunas_opcionais = st.session_state.df_pedidos.columns.tolist()
+                for col in colunas_opcionais:
+                    if col not in df_novo_historico.columns:
+                        df_novo_historico[col] = ''
+                
+                # Reordena as colunas para o padrão do DataFrame principal
+                df_novo_historico = df_novo_historico[st.session_state.df_pedidos.columns]
                 
                 # Trata as colunas do novo DataFrame
                 for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
@@ -686,7 +699,10 @@ else:
                 for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']:
                     if col in df_novo_historico.columns:
                         df_novo_historico[col] = pd.to_numeric(df_novo_historico[col], errors='coerce').fillna(0)
-                        
+                
+                if 'VALOR_TOTAL' in df_novo_historico.columns:
+                    df_novo_historico.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
+                
                 # Concatena os DataFrames
                 st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_novo_historico], ignore_index=True)
                 
