@@ -194,13 +194,11 @@ def parse_brazil_number(value_str):
     
     cleaned_value = value_str.strip()
     
+    # Remove todos os pontos, tratando-os como separadores de milhar
+    cleaned_value = cleaned_value.replace('.', '')
+    
     # Troca a vírgula pelo ponto decimal
     cleaned_value = cleaned_value.replace(',', '.')
-    
-    # Remove todos os pontos restantes, tratando-os como separadores de milhar
-    if cleaned_value.count('.') > 1:
-        parts = cleaned_value.split('.')
-        cleaned_value = ''.join(parts[:-1]) + '.' + parts[-1]
     
     try:
         return float(cleaned_value)
