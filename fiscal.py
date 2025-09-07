@@ -13,11 +13,15 @@ import gspread
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
+import re
 
-# Configuração da página com layout wide
+# ==============================================================================
+# CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
+# ==============================================================================
+# Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
 
-# --- CSS Personalizado para o Tema Essencis ---
+# CSS personalizado para o tema Essencis
 st.markdown(
     """
     <style>
@@ -401,6 +405,7 @@ else:
             st.subheader("📋 Detalhes das Notas Fiscais")
 
             # --- Lógica para as colunas visuais ---
+            # Adiciona o novo mapeamento de status
             status_map = {
                 'EM ANDAMENTO': '🟡 EM ANDAMENTO',
                 'NF PROBLEMA': '🔴 NF PROBLEMA',
@@ -453,6 +458,7 @@ else:
                     "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
                     "DIAS_VENCIMENTO_VISUAL": st.column_config.Column("Dias Vencimento", disabled=True),
+                    # Atualiza o SelectboxColumn para usar os novos valores
                     "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=list(status_map.values()), default="EM ANDAMENTO"),
                     "PROBLEMA_VISUAL": st.column_config.SelectboxColumn("Problema", options=problema_options),
                     "REGISTRO_ADICIONAL": "Obs.",
@@ -460,7 +466,7 @@ else:
                     "VALOR_FRETE": st.column_config.NumberColumn("Frete (R$)", format="%.2f"),
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
-                    # NOVO: Adiciona as colunas de registro na visualização
+                    # Adiciona as colunas de registro na visualização
                     "REGISTRO_ENVIO_VISUAL": st.column_config.TextColumn("Reg. Envio (Almox.)", disabled=True),
                     "REGISTRO_LANCAMENTO_VISUAL": st.column_config.TextColumn("Reg. Lançamento (Fin.)", disabled=True),
                 },
@@ -471,26 +477,31 @@ else:
                 ],
                 hide_index=True
             )
-            # --- FIM DA CORREÇÃO ---
 
-            # Se houve alteração, salva automaticamente de forma segura
             if not edited_df.equals(df_display):
                 st.session_state.alteracoes_pendentes = True
 
                 # Lógica para registrar a data de lançamento
                 for index, row in edited_df.iterrows():
+                    status_original = df_display.loc[index, 'STATUS']
+                    status_novo_visual = row['STATUS_VISUAL']
+                    
                     # Mapeia o valor visual de volta para o original
-                    status_original = row['STATUS_VISUAL'].replace('🟢 FINALIZADO', 'FINALIZADO').replace('🟡 EM ANDAMENTO', 'EM ANDAMENTO').replace('🔴 NF PROBLEMA', 'NF PROBLEMA').replace('🟣 CAPTURADO', 'CAPTURADO')
+                    status_novo = status_novo_visual.replace('🟢 FINALIZADO', 'FINALIZADO').replace('🟡 EM ANDAMENTO', 'EM ANDAMENTO').replace('🔴 NF PROBLEMA', 'NF PROBLEMA').replace('🟣 CAPTURADO', 'CAPTURADO')
                     
                     # Se o status foi alterado para FINALIZADO E a coluna de lançamento está vazia
-                    if status_original == 'FINALIZADO' and pd.isna(df_display.loc[index, 'REGISTRO_LANCAMENTO']):
+                    if status_novo == 'FINALIZADO' and pd.isna(df_display.loc[index, 'REGISTRO_LANCAMENTO']):
                         edited_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now()
+                    
+                    # Se o status foi alterado para CAPTURADO E a coluna de envio está vazia
+                    if status_novo == 'CAPTURADO' and pd.isna(df_display.loc[index, 'REGISTRO_ENVIO']):
+                        edited_df.loc[index, 'REGISTRO_ENVIO'] = datetime.datetime.now()
 
                 # Normaliza tipos antes de salvar
                 edited_df["DATA"] = _to_datetime(edited_df["DATA"])
                 edited_df["VENCIMENTO"] = _to_datetime(edited_df["VENCIMENTO"])
                 
-                # NOVO: Normaliza as colunas de registro de volta para datetime
+                # Normaliza as colunas de registro de volta para datetime
                 edited_df['REGISTRO_ENVIO'] = _to_datetime(edited_df['REGISTRO_ENVIO_VISUAL'])
                 edited_df['REGISTRO_LANCAMENTO'] = _to_datetime(edited_df['REGISTRO_LANCAMENTO_VISUAL'])
 
@@ -501,12 +512,11 @@ else:
                 ref = pd.Timestamp.today().normalize()
                 edited_df["DIAS_VENCIMENTO"] = (edited_df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
 
-                # --- CORREÇÃO: Mapeia as colunas visuais de volta para as originais antes de salvar ---
+                # Mapeia as colunas visuais de volta para as originais antes de salvar
                 edited_df["STATUS"] = edited_df["STATUS_VISUAL"].str.replace('🟢 ', '').str.replace('🟡 ', '').str.replace('🔴 ', '').str.replace('🟣 ', '')
                 edited_df["CONDICAO_PROBLEMA"] = edited_df["PROBLEMA_VISUAL"].str.replace('🔴 ', '')
                 
                 edited_df.drop(columns=['STATUS_VISUAL', 'DIAS_VENCIMENTO_VISUAL', 'PROBLEMA_VISUAL', 'REGISTRO_ENVIO_VISUAL', 'REGISTRO_LANCAMENTO_VISUAL'], inplace=True, errors='ignore')
-                # --- FIM DA CORREÇÃO ---
                 
                 st.session_state.df = edited_df.copy()
 
