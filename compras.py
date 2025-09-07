@@ -15,6 +15,7 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
 import re
+from pandas.errors import EmptyDataError
 
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
@@ -130,7 +131,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Carregar a imagem do logo a partir da URL
+# --- Funções de Conexão, Carregamento e Utilitários ---
 @st.cache_data(show_spinner=False)
 def load_logo(url):
     """Carrega a imagem de um URL e armazena em cache."""
@@ -142,11 +143,6 @@ def load_logo(url):
     except Exception:
         return None
 
-logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-logo_img = load_logo(logo_url)
-
-# --- Funções de Conexão e Carregamento de Dados ---
-# --- Funções de Conexão e Carregamento de Dados ---
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
@@ -164,22 +160,23 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
-@st.cache_resource(show_spinner=False)
-def get_gspread_client():
-    """Conecta com o Google Sheets usando os secrets do Streamlit."""
-    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    credentials_info = st.secrets["gcp_service_account"]
-    
-    if isinstance(credentials_info, str):
-        try:
-            credentials_info = json.loads(credentials_info)
-        except json.JSONDecodeError as e:
-            st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
-            return None
-    
-    creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-    client = gspread.authorize(creds)
-    return client
+def formatar_numero_brasileiro(valor, casas_decimais=2):
+    """Formata número no padrão brasileiro (vírgula como separador decimal)"""
+    if pd.isna(valor) or valor == 0:
+        return ''
+    return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
+
+def criar_dataframe_pedidos_vazio():
+    """Cria um DataFrame de pedidos vazio com a estrutura correta."""
+    return pd.DataFrame(columns=[
+        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
+        "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
+    ])
+
+def criar_dataframe_solicitantes_vazio():
+    """Cria um DataFrame de solicitantes vazio."""
+    return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
 @st.cache_data(show_spinner="Carregando dados de pedidos...")
 def carregar_dados_pedidos():
@@ -191,22 +188,21 @@ def carregar_dados_pedidos():
         # Use UNFORMATTED_VALUE para obter números como floats
         data = spreadsheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
         
-        # O cabeçalho é a primeira linha
         headers = data[0]
         records = data[1:]
 
         if not records:
-            st.warning("A planilha está vazia ou não contém dados.")
-            return pd.DataFrame()
+            st.warning("A planilha de pedidos está vazia ou não contém dados.")
+            return criar_dataframe_pedidos_vazio()
         
         df = pd.DataFrame(records, columns=headers)
 
         # Trata colunas de data
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
-            if col in df.columns and not df[col].empty:
+            if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
-        
+                
         # Converte colunas numéricas - tratamento correto para formato brasileiro
         numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
@@ -214,9 +210,7 @@ def carregar_dados_pedidos():
                 # Se for string, converte do formato brasileiro para float
                 if df[col].dtype == 'object':
                     df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                # Arredonda para 2 casas decimais
-                df[col] = df[col].round(2)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).round(2)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
@@ -241,19 +235,7 @@ def carregar_dados_pedidos():
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
         st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
-        return pd.DataFrame()
-
-
-
-def criar_dataframe_pedidos_vazio():
-    """Cria um DataFrame de pedidos vazio com a estrutura correta."""
-    return pd.DataFrame(columns=[
-        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
-        "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
-    ])
-
-
+        return criar_dataframe_pedidos_vazio()
 
 def salvar_dados_pedidos(df):
     """Salva o DataFrame de pedidos no Google Sheets."""
@@ -279,26 +261,19 @@ def salvar_dados_pedidos(df):
                     lambda x: formatar_numero_brasileiro(x, 2) if pd.notna(x) else ''
                 )
         
-        # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
-        # Substitui NaN por string vazia para evitar problemas na gravação
         df_to_save = df_to_save.fillna('')
         
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
         st.success("Dados salvos na planilha com sucesso!")
         st.cache_data.clear()
+        st.rerun() # Adicionado para recarregar a página após o salvamento
         
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
-
-def formatar_numero_brasileiro(valor, casas_decimais=2):
-    """Formata número no padrão brasileiro (vírgula como separador decimal)"""
-    if pd.isna(valor) or valor == 0:
-        return ''
-    return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
 
 @st.cache_data(show_spinner="Carregando dados de solicitantes...")
 def carregar_dados_solicitantes():
@@ -316,10 +291,6 @@ def carregar_dados_solicitantes():
         st.error(f"Erro ao carregar dados de solicitantes do Google Sheets: {e}")
         return criar_dataframe_solicitantes_vazio()
 
-def criar_dataframe_solicitantes_vazio():
-    """Cria um DataFrame de solicitantes vazio."""
-    return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
-
 def salvar_dados_solicitantes(df):
     """Salva o DataFrame de solicitantes no Google Sheets."""
     try:
@@ -333,6 +304,8 @@ def salvar_dados_solicitantes(df):
         worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         
         st.success("Solicitante cadastrado na planilha com sucesso!")
+        st.cache_data.clear()
+        
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
@@ -388,9 +361,9 @@ def salvar_dados_materiais(df):
         worksheet.clear()
         worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         st.success("Material cadastrado na planilha com sucesso!")
+        
     except Exception as e:
         st.error(f"Erro ao salvar dados de materiais no Google Sheets: {e}")
-
 
 # --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
 USERS = {
@@ -513,7 +486,7 @@ else:
         with col_item2:
             descricao_material = ""
             if item_codigo and not st.session_state.df_materiais.empty:
-                material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
+                material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo.upper()]
                 if not material_info.empty:
                     descricao_material = material_info.iloc[0]['DESCRICAO']
             item_material = st.text_input("Descrição do Material", value=descricao_material, disabled=True, key="material_input")
@@ -521,14 +494,14 @@ else:
             unidade_medida = st.selectbox("Unidade de Medida", ["UN", "KG", "L", "M", "M2", "M3", "PÇ"], key="unidade_medida_input")
         with col_item4:
             item_quantidade = st.number_input("Quantidade", min_value=1, value=1, key="quantidade_input")
-            if st.button("➕ Adicionar Item"):
-                if item_codigo and item_material and item_quantidade > 0 and unidade_medida:
-                    novo_item = pd.DataFrame([{"CODIGO_MATERIAL": item_codigo, "MATERIAL": item_material, "UN": unidade_medida, "QUANTIDADE": item_quantidade}])
-                    st.session_state.itens_requisicao_temp = pd.concat([st.session_state.itens_requisicao_temp, novo_item], ignore_index=True)
-                    st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
-                    st.rerun()
-                else:
-                    st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
+        if st.button("➕ Adicionar Item"):
+            if item_codigo and item_material and item_quantidade > 0 and unidade_medida:
+                novo_item = pd.DataFrame([{"CODIGO_MATERIAL": item_codigo.upper(), "MATERIAL": item_material.upper(), "UN": unidade_medida, "QUANTIDADE": item_quantidade}])
+                st.session_state.itens_requisicao_temp = pd.concat([st.session_state.itens_requisicao_temp, novo_item], ignore_index=True)
+                st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
+                st.rerun()
+            else:
+                st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
         
         st.write("---")
         
@@ -590,10 +563,7 @@ else:
             pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
             pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
 
-        if 'DATA' in pedidos_pendentes_oc.columns:
-            pedidos_pendentes_oc['DATA'] = pedidos_pendentes_oc['DATA'].dt.strftime('%d/%m/%Y').fillna('')
-
-        data_cols_to_convert = ['DATA_APROVACAO', 'PREVISAO_ENTREGA']
+        data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
         for col in data_cols_to_convert:
             if col in pedidos_pendentes_oc.columns:
                 pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
@@ -637,16 +607,14 @@ else:
         if submitted:
             st.info("Detectando alterações...")
             
-            # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
+            # Converte os valores do editor para o tipo correto
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-                # Converte para string, remove pontos de milhar e substitui vírgula por ponto
-                edited_df[col_val] = edited_df[col_val].astype(str).str.replace(r'\.(?=.*\d,)', '', regex=True).str.replace(',', '.', regex=False)
-                # Converte para numérico
+                edited_df[col_val] = edited_df[col_val].astype(str).str.replace(r'[^0-9,]+', '', regex=True).str.replace(',', '.', regex=False)
                 edited_df[col_val] = pd.to_numeric(edited_df[col_val], errors='coerce').fillna(0)
 
-            edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
-            edited_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
-            edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce', dayfirst=True)
+            edited_df['DATA_APROVACAO'] = pd.to_datetime(edited_df['DATA_APROVACAO'], errors='coerce')
+            edited_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_df['PREVISAO_ENTREGA'], errors='coerce')
+            edited_df['DATA'] = pd.to_datetime(edited_df['DATA'], errors='coerce')
             
             edited_df['DIAS_EMISSAO'] = edited_df.apply(
                 lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
@@ -654,9 +622,10 @@ else:
             )
             
             for index, edited_row in edited_df.iterrows():
+                original_row = pedidos_pendentes_oc.iloc[index]
                 original_index = st.session_state.df_pedidos[
-                    (st.session_state.df_pedidos['REQUISICAO'] == edited_row['REQUISICAO']) & 
-                    (st.session_state.df_pedidos['MATERIAL'] == edited_row['MATERIAL'])
+                    (st.session_state.df_pedidos['REQUISICAO'] == original_row['REQUISICAO']) &
+                    (st.session_state.df_pedidos['MATERIAL'] == original_row['MATERIAL'])
                 ].index
                 
                 if not original_index.empty:
@@ -688,16 +657,15 @@ else:
         
         df_history['DATA'] = pd.to_datetime(df_history['DATA'], errors='coerce', dayfirst=True)
         
-        # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
-        df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)  # Garante 2 casas decimais
-    
+        df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)
+
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
             df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
             df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
             df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
-    
+
         df_valid_dates = df_history.dropna(subset=['DATA'])
         
         if not df_valid_dates.empty:
@@ -709,155 +677,141 @@ else:
             col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
             col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
 
-        with col_filter_row1_1:
-            mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
-        with col_filter_row1_2:
-            ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
-        with col_filter_row1_3:
-            status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
-            status_selecionado_h = st.selectbox("Status", status_options)
-        with col_filter_row1_4:
-            solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
-            solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
+            with col_filter_row1_1:
+                mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
+            with col_filter_row1_2:
+                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
+            with col_filter_row1_3:
+                status_options = ['Todos'] + sorted(df_history['STATUS_PEDIDO'].unique().tolist())
+                status_selecionado_h = st.selectbox("Status", status_options)
+            with col_filter_row1_4:
+                solicitantes_disponiveis = ['Todos'] + sorted(df_history['SOLICITANTE'].unique().tolist())
+                solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
+                
+            with col_filter_row2_1:
+                req_filter = st.text_input("N° Requisição")
+            with col_filter_row2_2:
+                oc_filter = st.text_input("N° Ordem de Compra")
+            with col_filter_row2_3:
+                cod_material_filter = st.text_input("Código Material")
             
-        with col_filter_row2_1:
-            req_filter = st.text_input("N° Requisição")
-        with col_filter_row2_2:
-            oc_filter = st.text_input("N° Ordem de Compra")
-        with col_filter_row2_3:
-            cod_material_filter = st.text_input("Código Material")
-        
-        df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
-    else:
-        st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
-        st.stop()
-    
-    if status_selecionado_h != 'Todos':
-        df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
-    if solicitante_selecionado_h != 'Todos':
-        df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
-    if req_filter:
-        df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
-    if oc_filter:
-        df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
-    if cod_material_filter:
-        df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
-
-    if df_history.empty:
-        st.warning("Nenhum registro encontrado com os filtros aplicados.")
-        st.stop()
-    
-    df_display = df_history.copy()
-
-    def formatar_status_display(status):
-        if status == 'ENTREGUE':
-            return '🟢 ENTREGUE'
-        elif status == 'PENDENTE':
-            return '🟡 PENDENTE'
+            df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
         else:
-            return status
-    
-    df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
-    
-    data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
-    for col in data_cols_history:
-        if col in df_display.columns:
-            df_display[col] = df_display[col].apply(
-                lambda x: x.date() if pd.notna(x) else None
-            )
-
-    # CORREÇÃO: Formata os valores para exibição com 2 casas decimais
-    for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
-        if col in df_display.columns:
-            df_display[col] = df_display[col].apply(
-                lambda x: f"{float(x):.2f}" if pd.notna(x) and x != '' else ''
-            )
-
-    edited_history_df = st.data_editor(
-        df_display,
-        use_container_width=True,
-        hide_index=False,
-        key='history_editor',
-        column_config={
-            "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
-            "REQUISICAO": st.column_config.TextColumn("N° Requisição", disabled=True),
-            "DATA": st.column_config.DateColumn("Data Requisição", disabled=True),
-            "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
-            "DEPARTAMENTO": "Departamento",
-            "FILIAL": "Filial",
-            "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material", disabled=True),
-            "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
-            "UN": st.column_config.TextColumn("UN", disabled=True),
-            "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
-            "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
-            "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
-            "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-            "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
-            "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
-            "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-            "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega"),
-            "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação"),
-            "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-            "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega"),
-            "DIAS_ATRASO": "Dias Atraso",
-            "DOC NF": st.column_config.LinkColumn(
-                "Anexo NF",
-                help="Clique para visualizar o anexo",
-                display_text="📥 Anexo"
-            )
-        },
-        column_order=[
-            "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
-            "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-            "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
-        ]
-    )
-
-    if not edited_history_df.equals(df_display):
-        st.info("Salvando alterações...")
+            st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
+            st.stop()
         
-        edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
-            '🟢 ENTREGUE': 'ENTREGUE',
-            '🟡 PENDENTE': 'PENDENTE',
-            'EM ANDAMENTO': 'EM ANDAMENTO',
-            '': ''
-        }).fillna(edited_history_df['STATUS_PEDIDO'])
+        if status_selecionado_h != 'Todos':
+            df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h]
+        if solicitante_selecionado_h != 'Todos':
+            df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h]
+        if req_filter:
+            df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
+        if oc_filter:
+            df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
+        if cod_material_filter:
+            df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
 
-        # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
-        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-            edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
+        if df_history.empty:
+            st.warning("Nenhum registro encontrado com os filtros aplicados.")
+            st.stop()
         
-        edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce', dayfirst=True)
-        edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce', dayfirst=True)
-        edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce', dayfirst=True)
-        edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce', dayfirst=True)
+        df_display = df_history.copy()
+
+        def formatar_status_display(status):
+            if status == 'ENTREGUE':
+                return '🟢 ENTREGUE'
+            elif status == 'PENDENTE':
+                return '🟡 PENDENTE'
+            else:
+                return 'EM ANDAMENTO'
         
-        def calcular_dias_atraso(row):
-            if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
-                if row['DATA_ENTREGA'] > row['PREVISAO_ENTREGA']:
-                    return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days
-            return 0
-
-        edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
-
-        for col in edited_history_df.columns:
-            if col in st.session_state.df_pedidos.columns:
-                st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
+        df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
         
-        if 'DIAS_EMISSAO' not in edited_history_df.columns and 'DIAS_EMISSAO' in st.session_state.df_pedidos.columns:
-            pass
-        
-        salvar_dados_pedidos(st.session_state.df_pedidos)
-        st.success("Histórico atualizado com sucesso!")
-        st.rerun()
+        data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
+        for col in data_cols_history:
+            if col in df_display.columns:
+                df_display[col] = pd.to_datetime(df_display[col], errors='coerce').dt.date
 
-    st.markdown("---")
-    st.subheader("💰 Resumo do Custo Total")
-    total_historico = df_history['VALOR_TOTAL'].sum()
-    st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        # Adiciona o link para o DOC NF
+        df_display['DOC NF'] = df_display['DOC NF'].apply(
+            lambda x: f"[📥 Anexo]({x})" if x and x.startswith('http') else 'Não Anexado'
+        )
 
+        edited_history_df = st.data_editor(
+            df_display,
+            use_container_width=True,
+            hide_index=False,
+            key='history_editor',
+            column_config={
+                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO']),
+                "REQUISICAO": st.column_config.TextColumn("N° Requisição", disabled=True),
+                "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=True),
+                "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+                "DEPARTAMENTO": "Departamento",
+                "FILIAL": "Filial",
+                "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material", disabled=True),
+                "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
+                "UN": st.column_config.TextColumn("UN", disabled=True),
+                "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
+                "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
+                "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
+                "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
+                "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
+                "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
+                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
+                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
+                "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação", format="DD/MM/YYYY"),
+                "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
+                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY"),
+                "DIAS_ATRASO": "Dias Atraso",
+                "DOC NF": "Anexo NF"
+            },
+            column_order=[
+                "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+                "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
+                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
+            ]
+        )
 
-        
+        if not edited_history_df.equals(df_display):
+            st.info("Salvando alterações...")
+            
+            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
+                '🟢 ENTREGUE': 'ENTREGUE',
+                '🟡 PENDENTE': 'PENDENTE',
+                'EM ANDAMENTO': 'EM ANDAMENTO'
+            }).fillna(edited_history_df['STATUS_PEDIDO'])
+            
+            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                edited_history_df[col_val] = edited_history_df[col_val].astype(str).str.replace(r'[^0-9,]+', '', regex=True).str.replace(',', '.', regex=False)
+                edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
+            
+            edited_history_df['DATA_APROVACAO'] = pd.to_datetime(edited_history_df['DATA_APROVACAO'], errors='coerce')
+            edited_history_df['DATA_ENTREGA'] = pd.to_datetime(edited_history_df['DATA_ENTREGA'], errors='coerce')
+            edited_history_df['PREVISAO_ENTREGA'] = pd.to_datetime(edited_history_df['PREVISAO_ENTREGA'], errors='coerce')
+            edited_history_df['DATA'] = pd.to_datetime(edited_history_df['DATA'], errors='coerce')
+
+            def calcular_dias_atraso(row):
+                if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
+                    if row['DATA_ENTREGA'] > row['PREVISAO_ENTREGA']:
+                        return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days
+                return 0
+
+            edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
+
+            for col in edited_history_df.columns:
+                if col in st.session_state.df_pedidos.columns:
+                    st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
+            
+            salvar_dados_pedidos(st.session_state.df_pedidos)
+            st.success("Histórico atualizado com sucesso!")
+            st.rerun()
+
+        st.markdown("---")
+        st.subheader("💰 Resumo do Custo Total")
+        total_historico = df_history['VALOR_TOTAL'].sum()
+        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
     elif menu == "👤 Cadastro ":
         st.markdown("""
             <div class='header-container'>
@@ -884,10 +838,10 @@ else:
                 if st.form_submit_button("Cadastrar Solicitante"):
                     if nome and departamento and filial and email:
                         novo_solicitante = pd.DataFrame([{
-                            "NOME": nome,
-                            "DEPARTAMENTO": departamento,
+                            "NOME": nome.upper(),
+                            "DEPARTAMENTO": departamento.upper(),
                             "EMAIL": email,
-                            "FILIAL": filial
+                            "FILIAL": filial.upper()
                         }])
                         st.session_state.df_solicitantes = pd.concat([st.session_state.df_solicitantes, novo_solicitante], ignore_index=True)
                         salvar_dados_solicitantes(st.session_state.df_solicitantes)
@@ -930,24 +884,16 @@ else:
                         else:
                             df_novos_materiais = pd.read_excel(uploaded_file)
                         
-                        # Converte os nomes das colunas para maiúsculas e remove espaços
                         df_novos_materiais.columns = [col.upper().strip() for col in df_novos_materiais.columns]
 
-                        # Verifica se as colunas necessárias existem
                         if 'CODIGO' not in df_novos_materiais.columns or 'DESCRICAO' not in df_novos_materiais.columns:
                             st.error("O arquivo deve conter as colunas 'CODIGO' e 'DESCRICAO'.")
                         else:
-                            # Preenche valores vazios para evitar o erro de JSON
                             df_novos_materiais = df_novos_materiais.fillna('')
-                            
-                            # Converte as colunas para maiúsculas antes de concatenar
                             df_novos_materiais['CODIGO'] = df_novos_materiais['CODIGO'].astype(str).str.upper()
                             df_novos_materiais['DESCRICAO'] = df_novos_materiais['DESCRICAO'].astype(str).str.upper()
 
-                            # Adiciona os novos materiais ao DataFrame principal
                             st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, df_novos_materiais], ignore_index=True)
-
-                            # Remove duplicados
                             st.session_state.df_materiais.drop_duplicates(subset=['CODIGO'], inplace=True, ignore_index=True)
                             
                             salvar_dados_materiais(st.session_state.df_materiais)
@@ -958,7 +904,7 @@ else:
                     
                     except Exception as e:
                         st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
-        
+
     elif menu == "📊 Dashboards ":
         st.markdown("""
             <div class='header-container'>
@@ -1002,7 +948,6 @@ else:
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
         
-        # CORREÇÃO: Recalcula o VALOR_TOTAL com os valores limpos
         df_filtrado_dash['VALOR_TOTAL'] = df_filtrado_dash['QUANTIDADE'] * df_filtrado_dash['VALOR_ITEM']
         
         st.subheader("Visão Geral")
@@ -1101,22 +1046,18 @@ else:
         
         df_abc = df_filtrado_dash.copy()
 
-        # Remove linhas sem valor total ou material
         df_abc = df_abc[df_abc['VALOR_TOTAL'] > 0]
         if df_abc.empty:
             st.info("Nenhum dado com custo total para gerar a Curva ABC.")
         else:
-            # Agrupa os dados por material e calcula o custo total de cada um
             custo_por_material = df_abc.groupby(['CODIGO_MATERIAL', 'MATERIAL'])['VALOR_TOTAL'].sum().reset_index()
             custo_por_material.sort_values(by='VALOR_TOTAL', ascending=False, inplace=True)
             custo_por_material.reset_index(drop=True, inplace=True)
 
-            # Calcula a participação percentual e a participação acumulada
             custo_total_geral = custo_por_material['VALOR_TOTAL'].sum()
             custo_por_material['PARTICIPACAO'] = (custo_por_material['VALOR_TOTAL'] / custo_total_geral)
             custo_por_material['PARTICIPACAO_ACUMULADA'] = custo_por_material['PARTICIPACAO'].cumsum()
 
-            # Classifica os materiais em A, B e C
             def classificar_abc(row):
                 if row['PARTICIPACAO_ACUMULADA'] <= 0.8:
                     return 'A'
@@ -1133,7 +1074,6 @@ else:
             with col_abc_1:
                 fig_abc = make_subplots(specs=[[{"secondary_y": True}]])
 
-                # Adiciona o gráfico de barras para o custo total
                 fig_abc.add_trace(
                     go.Bar(
                         x=custo_por_material['CODIGO_MATERIAL'],
@@ -1144,7 +1084,6 @@ else:
                     secondary_y=False,
                 )
 
-                # Adiciona o gráfico de linha para a participação acumulada
                 fig_abc.add_trace(
                     go.Scatter(
                         x=custo_por_material['CODIGO_MATERIAL'],
@@ -1156,11 +1095,9 @@ else:
                     secondary_y=True,
                 )
 
-                # Adiciona as linhas de referência para as classes A e B
                 fig_abc.add_hline(y=0.8, line_dash="dash", line_color="green", annotation_text="80% (Classe A)", annotation_position="bottom right")
                 fig_abc.add_hline(y=0.95, line_dash="dash", line_color="orange", annotation_text="95% (Classe B)", annotation_position="bottom right")
 
-                # Atualiza o layout do gráfico
                 fig_abc.update_layout(
                     title_text="Curva ABC do Custo dos Materiais",
                     xaxis_title="Material (Código)",
@@ -1203,7 +1140,6 @@ else:
                 use_container_width=True
             )
 
-
     elif menu == "📊 Performance ":
         st.markdown("""
             <div class='header-container'>
@@ -1245,10 +1181,9 @@ else:
             st.info("Nenhum dado disponível para o período selecionado.")
             st.stop()
 
-        # Recálculo das colunas de economia para o DataFrame filtrado
         df_negociados = df_performance_filtrado.copy()
         df_negociados = df_negociados[
-            (df_negociados['VALOR_RENEGOCIADO'] > 0) & 
+            (df_negociados['VALOR_RENEGOCIADO'] > 0) &
             (df_negociados['VALOR_ITEM'] > 0) &
             (df_negociados['VALOR_ITEM'] != df_negociados['VALOR_RENEGOCIADO'])
         ].copy()
@@ -1258,10 +1193,10 @@ else:
             st.stop()
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
-        df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                    ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                    0)
-                                                    
+        df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0,
+                                                 ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100,
+                                                 0)
+                                                 
         df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
         st.subheader("Visão Geral da Performance")
@@ -1287,7 +1222,7 @@ else:
         )
 
         st.subheader("Curva de Desempenho da Negociação (Média Mensal)")
-        df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').astype(str)
+        df_negociados['MES_APROVACAO'] = pd.to_datetime(df_negociados['DATA_APROVACAO']).dt.to_period('M').astype(str)
         
         curva_mensal = df_negociados.groupby('MES_APROVACAO')['PERC_ECONOMIA'].mean().reset_index()
         
