@@ -633,24 +633,26 @@ else:
             
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             
-            col_filter_h1, col_filter_h2, col_filter_h3, col_filter_h4 = st.columns(4)
-            col_filter_h5, col_filter_h6 = st.columns(2)
-            
-            with col_filter_h1:
+            col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
+            col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
+
+            with col_filter_row1_1:
                 mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
-            with col_filter_h2:
+            with col_filter_row1_2:
                 ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
-            with col_filter_h3:
+            with col_filter_row1_3:
                 status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
                 status_selecionado_h = st.selectbox("Status", status_options)
-            with col_filter_h4:
+            with col_filter_row1_4:
                 solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist()
                 solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis)
                 
-            with col_filter_h5:
+            with col_filter_row2_1:
                 req_filter = st.text_input("N° Requisição")
-            with col_filter_h6:
+            with col_filter_row2_2:
                 oc_filter = st.text_input("N° Ordem de Compra")
+            with col_filter_row2_3:
+                cod_material_filter = st.text_input("Código Material")
             
             df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
         else:
@@ -665,6 +667,8 @@ else:
             df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)]
         if oc_filter:
             df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)]
+        if cod_material_filter:
+            df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
 
         if df_history.empty:
             st.warning("Nenhum registro encontrado com os filtros aplicados.")
