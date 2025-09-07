@@ -251,6 +251,8 @@ def criar_dataframe_pedidos_vazio():
         "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
     ])
 
+
+
 def salvar_dados_pedidos(df):
     """Salva o DataFrame de pedidos no Google Sheets."""
     try:
@@ -267,13 +269,12 @@ def salvar_dados_pedidos(df):
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
         
-        # Converte valores numéricos para formato brasileiro
+        # Converte valores numéricos para formato brasileiro com 2 casas decimais
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
-# Na função salvar_dados_pedidos, substitua a conversão numérica por:
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
-                    lambda x: formatar_numero_brasileiro(x, 4) if pd.notna(x) else ''
+                    lambda x: formatar_numero_brasileiro(x, 2) if pd.notna(x) else ''
                 )
         
         # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
@@ -291,7 +292,7 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
-def formatar_numero_brasileiro(valor, casas_decimais=4):
+def formatar_numero_brasileiro(valor, casas_decimais=2):
     """Formata número no padrão brasileiro (vírgula como separador decimal)"""
     if pd.isna(valor) or valor == 0:
         return ''
