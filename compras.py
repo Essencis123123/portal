@@ -434,7 +434,7 @@ else:
             item_codigo = st.text_input("Código do Material", key="codigo_material_input")
         with col_item2:
             descricao_material = ""
-            if item_codigo:
+            if item_codigo and not st.session_state.df_materiais.empty:
                 material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
                 if not material_info.empty:
                     descricao_material = material_info.iloc[0]['DESCRICAO']
