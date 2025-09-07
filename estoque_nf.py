@@ -148,15 +148,20 @@ def carregar_dados_almoxarifado():
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        # SE O DATAFRAME ESTIVER VAZIO, GARANTA QUE AS COLUNAS ESSENCIAIS EXISTAM
-        if df.empty:
-            df = pd.DataFrame(columns=[
-                "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
-                "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
-                "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-                "ORDEM_COMPRA"
-            ])
+        # 🚨 CORREÇÃO: GARANTA QUE AS COLUNAS ESSENCIAIS EXISTAM SEMPRE!
+        colunas_essenciais = [
+            "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
+            "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA"
+        ]
 
+        if df.empty:
+            df = pd.DataFrame(columns=colunas_essenciais)
+        else:
+            for col in colunas_essenciais:
+                if col not in df.columns:
+                    df[col] = ''
+            
         for col in ['DATA', 'VENCIMENTO']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
@@ -165,22 +170,10 @@ def carregar_dados_almoxarifado():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # GARANTA QUE AS NOVAS COLUNAS SEMPRE EXISTAM
-        if 'CONDICAO_PROBLEMA' not in df.columns:
-            df['CONDICAO_PROBLEMA'] = ''
-        if 'REGISTRO_ADICIONAL' not in df.columns:
-            df['REGISTRO_ADICIONAL'] = ''
-        if 'ORDEM_COMPRA' not in df.columns:
-            df['ORDEM_COMPRA'] = ''
-        if 'STATUS_FINANCEIRO' not in df.columns:
-            df['STATUS_FINANCEIRO'] = ''
-        if 'DOC NF' not in df.columns:
-            df['DOC NF'] = ''
-
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
-        # Retorne um DataFrame com as colunas em caso de erro
+        # Retorne um DataFrame com as colunas em caso de erro grave
         return pd.DataFrame(columns=[
             "DATA", "RECEBEDOR", "FORNECEDOR", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
