@@ -184,52 +184,17 @@ def carregar_dados_pedidos():
 # --- TRECHO CORRIGIDO PARA LIMPEZA DE DADOS NUMÉRICOS ---
         # --- TRECHO CORRIGIDO E SIMPLIFICADO ---
        # --- TRECHO COMPLETAMENTE REFEITO ---
-        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
-        
+        # --- TRECHO FINAL CORRIGIDO PARA LIMPEZA DE DADOS ---
+        numeric_cols = ['QUANTIDATE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols:
             if col in df.columns and not df[col].empty:
-                # DEBUG: Mostrar valores ANTES de qualquer processamento
-                print(f"=== COLUNA {col} ===")
-                print("Valores ORIGINAIS:")
-                print(df[col].head(10).tolist())
-                
-                # Passo 1: Converter para string
-                df[col] = df[col].astype(str)
-                
-                # Passo 2: Limpar caracteres indesejados (mantém apenas números, vírgula e ponto)
-                df[col] = df[col].str.replace(r'[^\d,\.]', '', regex=True)
-                
-                # Passo 3: Processamento ESPECÍFICO para formato brasileiro
-                for i in range(len(df[col])):
-                    valor_str = df[col].iloc[i]
-                    
-                    if pd.isna(valor_str) or valor_str == '':
-                        df[col].iloc[i] = 0
-                        continue
-                        
-                    # Se tem vírgula, é formato brasileiro (1.234,56)
-                    if ',' in valor_str:
-                        # Remove todos os pontos (separadores de milhar)
-                        valor_limpo = valor_str.replace('.', '')
-                        # Substitui vírgula por ponto (decimal internacional)
-                        valor_limpo = valor_limpo.replace(',', '.')
-                        df[col].iloc[i] = valor_limpo
-                    else:
-                        # Se não tem vírgula, remove pontos (podem ser milhares ou decimais)
-                        valor_limpo = valor_str.replace('.', '')
-                        df[col].iloc[i] = valor_limpo
-                
-                # DEBUG: Mostrar valores APÓS limpeza de strings
-                print("Valores após limpeza string:")
-                print(df[col].head(10).tolist())
-                
-                # Passo 4: Converter para numérico
+                # Primeiro, remove qualquer caractere que NÃO seja um dígito (0-9) ou uma vírgula.
+                # Isso limpa moedas, espaços e outros símbolos.
+                df[col] = df[col].astype(str).str.replace(r'[^\d,]', '', regex=True)  # ⚠️ PROBLEMA AQUI!
+                # Em seguida, troca a vírgula (agora a única que sobrou) por um ponto.
+                df[col] = df[col].str.replace(',', '.', regex=False)
+                # Converte para um tipo numérico (float)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                
-                # DEBUG: Mostrar valores FINAIS
-                print("Valores FINAIS (numéricos):")
-                print(df[col].head(10).tolist())
-                print("====================\n")
         # --- FIM DO TRECHO ---
         
         # Garante que colunas importantes existam
