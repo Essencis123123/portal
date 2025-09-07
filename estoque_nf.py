@@ -359,11 +359,21 @@ else:
                     ordens_compra_disponiveis = []
                     if fornecedor_nf:
                         pedidos_filtrados_por_fornecedor = st.session_state.df_pedidos[
-                            (st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_nf) &
-                            (st.session_state.df_pedidos['STATUS_PEDIDO'] != 'ENTREGUE')
+                            (st.session_state.df_pedidos['FORNECEDOR'].astype(str).str.strip().str.upper() == fornecedor_nf.strip().upper())
                         ]
-                        ordens_compra_disponiveis = sorted(pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'].dropna().unique().tolist())
-                    
+                        
+                        # Exclui OCs que já estão em notas fiscais finalizadas
+                        oc_ja_registradas = st.session_state.df_almoxarifado[
+                            st.session_state.df_almoxarifado['ORDEM_COMPRA'].isin(pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'])
+                        ]['ORDEM_COMPRA'].tolist()
+
+                        oc_disponiveis = pedidos_filtrados_por_fornecedor[
+                            (~pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'].isin(oc_ja_registradas)) &
+                            (pedidos_filtrados_por_fornecedor['STATUS_PEDIDO'].astype(str).str.upper() != 'ENTREGUE')
+                        ]['ORDEM_COMPRA'].dropna().unique().tolist()
+                        
+                        ordens_compra_disponiveis = sorted(oc_disponiveis)
+
                     ordem_compra_nf = st.selectbox(
                         "N° Ordem de Compra*",
                         options=[''] + ordens_compra_disponiveis,
