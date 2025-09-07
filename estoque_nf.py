@@ -347,8 +347,8 @@ def render_registrar_nf_page():
             with col1:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
-                # Puxando fornecedores da aba Almoxarifado
-                fornecedores_disponiveis = st.session_state.df_almoxarifado['FORNECEDOR_NF'].dropna().unique().tolist()
+                # CORRIGIDO: Puxando fornecedores da aba de pedidos, coluna FORNECEDOR.
+                fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
                 fornecedor_nf = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
                 
                 nf_numero = st.text_input("Número da NF*")
@@ -404,7 +404,7 @@ def render_registrar_nf_page():
                         st.session_state['novo_registro_nf'] = {
                             "DATA": pd.to_datetime(data_recebimento),
                             "RECEBEDOR": recebedor,
-                            "FORNECEDOR_NF": fornecedor_nf, # Alterado para FORNECEDOR_NF
+                            "FORNECEDOR_NF": fornecedor_nf, 
                             "NF": nf_numero,
                             "VOLUME": volume_nf,
                             "V. TOTAL NF": valor_total_float,
@@ -439,7 +439,7 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10)
         st.dataframe(
-            df_ultimas_nfs[[ 'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF', 'STATUS_FINANCEIRO', 'DOC NF']], # Alterado para FORNECEDOR_NF
+            df_ultimas_nfs[[ 'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF', 'STATUS_FINANCEIRO', 'DOC NF']],
             use_container_width=True,
             column_config={
                 "DOC NF": st.column_config.LinkColumn(
@@ -536,7 +536,6 @@ def render_dashboard_page():
         with col_g2:
             problemas_df = df_almoxarifado_filtrado[df_almoxarifado_filtrado['STATUS_FINANCEIRO'] == 'NF PROBLEMA']
             if not problemas_df.empty:
-                # Alterado para FORNECEDOR_NF
                 top_problemas = problemas_df['FORNECEDOR_NF'].value_counts().head(10).reset_index()
                 top_problemas.columns = ['Fornecedor', 'Notas com Problema']
                 fig_barras = px.bar(top_problemas, x='Notas com Problema', y='Fornecedor', orientation='h', title='Top 10 Fornecedores com Problemas')
@@ -565,7 +564,6 @@ def render_consultar_nfs_page():
             nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
             ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
             
-            # Alterado para FORNECEDOR_NF
             fornecedores_unicos = sorted(df['FORNECEDOR_NF'].dropna().unique().tolist()) if 'FORNECEDOR_NF' in df.columns else []
             fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + fornecedores_unicos)
         
@@ -583,7 +581,7 @@ def render_consultar_nfs_page():
         
         if nf_consulta: df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False)]
         if ordem_compra_consulta: df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False)]
-        if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta] # Alterado para FORNECEDOR_NF
+        if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
         if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
         
         df_consulta = df_consulta[
@@ -595,7 +593,7 @@ def render_consultar_nfs_page():
         
         if not df_consulta.empty:
             df_exibir_consulta = df_consulta[[
-                'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF', # Alterado para FORNECEDOR_NF
+                'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
                 'STATUS_FINANCEIRO', 'DOC NF'
             ]].copy()
             
@@ -626,7 +624,7 @@ def render_consultar_nfs_page():
                         help="Clique para abrir a nota fiscal.",
                         display_text="📥 Abrir NF"
                     ),
-                    "FORNECEDOR_NF": "FORNECEDOR", # Adicionando esta linha para renomear a coluna
+                    "FORNECEDOR_NF": "FORNECEDOR",
                 }
             )
             
