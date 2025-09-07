@@ -12,7 +12,7 @@ from pandas.errors import EmptyDataError
 import numpy as np
 
 # Configuração da página com layout wide e ícone
-st.set_page_config(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
+st.set_page_page_config(page_title="Painel de Consulta", layout="wide", page_icon="🔎")
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
@@ -276,6 +276,16 @@ with st.sidebar:
             options=['Todos'] + sorted(status_disponiveis),
             default=['Todos']
         )
+    
+    # NOVO FILTRO: Material
+    filtro_material = ['Todos']
+    if 'MATERIAL' in df_pedidos.columns and not df_pedidos.empty:
+        materiais_disponiveis = sorted(df_pedidos['MATERIAL'].dropna().unique().tolist())
+        filtro_material = st.multiselect(
+            "Filtrar por Material:",
+            options=['Todos'] + materiais_disponiveis,
+            default=['Todos']
+        )
 
 
 # Exibe o cabeçalho temático principal
@@ -310,6 +320,11 @@ if 'Todos' not in filtro_departamento:
 
 if 'Todos' not in filtro_status:
     df_filtrado = df_filtrado[df_filtrado['STATUS_PEDIDO'].isin(filtro_status)]
+    
+# Aplica o novo filtro de material
+if 'Todos' not in filtro_material:
+    df_filtrado = df_filtrado[df_filtrado['MATERIAL'].isin(filtro_material)]
+
 
 if df_filtrado.empty:
     st.warning("Nenhum pedido encontrado com os filtros aplicados.")
