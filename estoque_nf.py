@@ -355,24 +355,25 @@ else:
                     ]
                     recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
                     
-                    # --- Lógica de filtragem da Ordem de Compra (CORRIGIDA) ---
+                    # --- Lógica de filtragem da Ordem de Compra ---
                     ordens_compra_disponiveis = []
                     if fornecedor_nf:
                         pedidos_filtrados_por_fornecedor = st.session_state.df_pedidos[
-                            (st.session_state.df_pedidos['FORNECEDOR'].astype(str).str.strip().str.upper() == fornecedor_nf.strip().upper())
+                            (st.session_state.df_pedidos['FORNECEDOR'].astype(str).str.strip() == fornecedor_nf.strip())
                         ]
                         
-                        # Exclui OCs que já estão em notas fiscais finalizadas
+                        # Exclui OCs que já estão em notas fiscais
                         oc_ja_registradas = st.session_state.df_almoxarifado[
                             st.session_state.df_almoxarifado['ORDEM_COMPRA'].isin(pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'])
                         ]['ORDEM_COMPRA'].tolist()
 
                         oc_disponiveis = pedidos_filtrados_por_fornecedor[
-                            (~pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'].isin(oc_ja_registradas)) &
-                            (pedidos_filtrados_por_fornecedor['STATUS_PEDIDO'].astype(str).str.upper() != 'ENTREGUE')
+                            (~pedidos_filtrados_por_fornecedor['ORDEM_COMPRA'].isin(oc_ja_registradas))
                         ]['ORDEM_COMPRA'].dropna().unique().tolist()
                         
-                        ordens_compra_disponiveis = sorted(oc_disponiveis)
+                        # Padroniza e filtra
+                        oc_disponiveis = sorted([oc.strip() for oc in oc_disponiveis])
+                        ordens_compra_disponiveis = oc_disponiveis
 
                     ordem_compra_nf = st.selectbox(
                         "N° Ordem de Compra*",
@@ -408,7 +409,7 @@ else:
                             valor_frete_float = float(valor_frete_nf.replace(".", "").replace(",", "."))
                             
                             pedidos_relacionados = st.session_state.df_pedidos[
-                                st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                                st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip() == ordem_compra_nf.strip()
                             ]
                             
                             valor_oc_total = 0.0
@@ -483,7 +484,7 @@ else:
                         st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
                         
                         pedidos_relacionados = st.session_state.df_pedidos[
-                            st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == novo_registro_nf['ORDEM_COMPRA'].strip().upper()
+                            st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip() == novo_registro_nf['ORDEM_COMPRA'].strip()
                         ]
                         indices_a_atualizar = pedidos_relacionados.index
                         st.session_state.df_pedidos.loc[indices_a_atualizar, 'STATUS_PEDIDO'] = 'ENTREGUE'
