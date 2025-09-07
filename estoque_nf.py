@@ -205,6 +205,7 @@ def salvar_dados_almoxarifado(df):
         st.error(f"Erro ao salvar dados do almoxarifado: {e}")
         return False
 
+@st.cache_data(show_spinner=False)
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
@@ -216,6 +217,11 @@ def carregar_dados_pedidos():
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+        
+        # --- ALTERAÇÃO AQUI: Tratamento do valor com vírgula ---
+        if 'VALOR_ITEM' in df.columns:
+            df['VALOR_ITEM'] = df['VALOR_ITEM'].astype(str).str.replace(',', '.', regex=True)
+            df['VALOR_ITEM'] = pd.to_numeric(df['VALOR_ITEM'], errors='coerce').fillna(0)
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
@@ -415,7 +421,8 @@ def render_registrar_nf_page():
                         valor_oc_total = 0.0
                         if not pedidos_relacionados.empty:
                             try:
-                                valor_oc_total = pd.to_numeric(pedidos_relacionados['VALOR_ITEM'], errors='coerce').sum()
+                                # A CORREÇÃO JÁ FOI FEITA NA FUNÇÃO carregar_dados_pedidos()
+                                valor_oc_total = pedidos_relacionados['VALOR_ITEM'].sum()
                             except ValueError:
                                 st.warning("Não foi possível calcular o valor da OC. Verifique o formato dos dados.")
                         
