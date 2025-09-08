@@ -507,8 +507,8 @@ def render_registrar_nf_page():
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_ENVIO": agora,
-                            "REGISTRO_LANCAMENTO": agora
+                            "REGISTRO_LANCAMENTO": agora, # Agora registra a hora correta
+                            "REGISTRO_ENVIO": "" # Esta coluna não será mais usada para este fim
                         }
                         # --- FIM DA CORREÇÃO ---
                         st.session_state['divergencia_oc'] = divergencia
@@ -540,7 +540,6 @@ def render_registrar_nf_page():
         # Agora, a formatação de data/hora funcionará corretamente
         df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y').fillna('')
         df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y').fillna('')
-        df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
         df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
 
         col_map = {
@@ -552,8 +551,7 @@ def render_registrar_nf_page():
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
-            'REGISTRO_ENVIO_VISUAL': 'Registro de Envio',
-            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Lançamento'
+            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Envio' # Nome da coluna alterado
         }
         
         # Filtra apenas as colunas que existem no DataFrame
@@ -585,8 +583,7 @@ def render_registrar_nf_page():
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
                 ),
-                "Registro de Envio": st.column_config.TextColumn("Registro de Envio"),
-                "Registro de Lançamento": st.column_config.TextColumn("Registro de Lançamento")
+                "Registro de Envio": st.column_config.TextColumn("Registro de Envio")
             },
             hide_index=True
         )
@@ -814,6 +811,7 @@ def render_configuracoes_page():
         st.write(f"Última atualização: **{agora_brasilia}**")
         
         if st.button("🔄 Recarregar Dados"):
+            st.cache_data.clear()
             st.session_state.df_pedidos = carregar_dados_pedidos()
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
             st.success("Dados recarregados com sucesso!")
