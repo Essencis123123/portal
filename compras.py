@@ -1332,8 +1332,4 @@ else:
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
-<<<<<<< HEAD
             st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
-=======
-            st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
->>>>>>> b60e7ce1cd42713e8091a476beecbc9649d1b70a
