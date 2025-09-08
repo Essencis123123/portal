@@ -126,6 +126,7 @@ def create_message(sender, to, subject, message_text):
 
 def send_message(service, user_id, message):
     try:
+        # 'user_id' é a conta que está enviando, no caso, a própria conta de serviço
         message = service.users().messages().send(userId=user_id, body=message).execute()
         st.success(f"E-mail enviado com sucesso!")
         return message
@@ -211,6 +212,9 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
+            # Pega o email da conta de serviço para o remetente
+            sender_email = secrets_dict["gcp_service_account"]["client_email"]
+
             # 1. Envia e-mail para o usuário
             subject_user = "Confirmação de Envio de Reembolso"
             body_user = f"""
@@ -230,8 +234,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             Atenciosamente,
             Equipe de Reembolsos Essencis
             """
-            message_user = create_message("me", email, subject_user, body_user)
-            send_message(gmail_service, "me", message_user)
+            message_user = create_message(sender_email, email, subject_user, body_user)
+            send_message(gmail_service, sender_email, message_user)
 
             # 2. Envia e-mail para o administrador
             admin_email = "earaujo@essencis.com.br"
@@ -255,8 +259,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             Atenciosamente,
             Sistema de Reembolsos
             """
-            message_admin = create_message("me", admin_email, subject_admin, body_admin)
-            send_message(gmail_service, "me", message_admin)
+            message_admin = create_message(sender_email, admin_email, subject_admin, body_admin)
+            send_message(gmail_service, sender_email, message_admin)
 
         except Exception as e:
             st.error(f"Erro ao adicionar reembolso: {e}")
@@ -433,7 +437,6 @@ else:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             
             if not df_usuario.empty:
-                # Formata a coluna VALOR para exibir duas casas decimais
                 df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}" if pd.notnull(x) else "")
                 st.dataframe(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
             else:
