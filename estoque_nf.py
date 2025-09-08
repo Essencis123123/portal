@@ -186,7 +186,6 @@ def carregar_dados_almoxarifado():
         spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(2)
         
-        # Use UNFORMATTED_VALUE para obter os valores brutos
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
         if not data or len(data) <= 1:
@@ -248,17 +247,15 @@ def salvar_dados_almoxarifado(df):
         }, errors='ignore')
         
         # Formata colunas de data/hora para o formato de string antes de salvar
-        for col in ['DATA', 'VENCIMENTO']:
-            if col in df_copy.columns:
-                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
-        
-        for col in ['REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
+        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
 
         # Remove colunas duplicadas e de visualização
         df_copy = df_copy.loc[:,~df_copy.columns.duplicated()]
         
+        # Limpa a planilha e escreve os novos dados
+        worksheet.clear()
         set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
     except Exception as e:
@@ -433,10 +430,6 @@ def render_registrar_nf_page():
         with st.form("formulario_nota", clear_on_submit=True):
             col1_form, col2_form, col3_form = st.columns(3)
             
-            # Obtém a hora de Brasília para o registro
-            brasilia_tz = pytz.timezone('America/Sao_Paulo')
-            agora = datetime.datetime.now(brasilia_tz)
-            
             with col1_form:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
@@ -509,9 +502,7 @@ def render_registrar_nf_page():
                             "STATUS_FINANCEIRO": "EM ANDAMENTO",
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
-                            "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_ENVIO": agora,
-                            "REGISTRO_LANCAMENTO": ''
+                            "ORDEM_COMPRA": ordem_compra_nf
                         }
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
@@ -534,29 +525,9 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
-        # --- CORREÇÃO AQUI: Garante que as colunas de data/hora sejam do tipo datetime antes de formatar. ---
-        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
-            if col in df_ultimas_nfs.columns:
-                df_ultimas_nfs[col] = pd.to_datetime(df_ultimas_nfs[col], errors='coerce')
-        # --- FIM DA CORREÇÃO ---
-
-        # Agora, a formatação de data/hora funcionará corretamente
-        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].apply(
-            lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
-        )
+        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
+        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
         
-        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].apply(
-            lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
-        )
-
-        df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].apply(
-            lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else ''
-        )
-        
-        df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].apply(
-            lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else ''
-        )
-
         col_map = {
             'DATA': 'Data',
             'FORNECEDOR_NF': 'Fornecedor',
@@ -565,42 +536,32 @@ def render_registrar_nf_page():
             'VOLUME': 'Volume',
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
-            'DOC NF': 'Anexo NF',
-            'REGISTRO_ENVIO_VISUAL': 'Reg. Envio',
-            'REGISTRO_LANCAMENTO_VISUAL': 'Reg. Lançamento'
+            'DOC NF': 'Anexo NF'
         }
-        
-        # Filtra apenas as colunas que existem no DataFrame
-        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns or f'{col}_VISUAL' in df_ultimas_nfs.columns]
-        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols or f'{k}_VISUAL' in df_ultimas_nfs.columns}
-        
-        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map_filtered)
+        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map)
         
         def colorir_status_display(status):
             cores = {
                 "EM ANDAMENTO": "🟡",
                 "NF PROBLEMA": "🔴",
-                "CAPTURADO": "🟣",
+                "CAPTURADO": "🟠",
                 "FINALIZADO": "🟢"
             }
             return f"{cores.get(status, '⚪')} {status}"
         
-        if 'Status Financeiro' in df_ultimas_nfs_display.columns:
-            df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
+        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
         
         st.dataframe(
             df_ultimas_nfs_display,
             use_container_width=True,
             column_config={
-                "Data": st.column_config.TextColumn("Data"),
+                "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
                 "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
                 "Anexo NF": st.column_config.LinkColumn(
                     "Anexo NF",
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
-                ),
-                "Reg. Envio": st.column_config.TextColumn("Registro de Envio"),
-                "Reg. Lançamento": st.column_config.TextColumn("Registro de Lançamento")
+                )
             },
             hide_index=True
         )
