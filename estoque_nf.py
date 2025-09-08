@@ -208,7 +208,11 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
+                # --- CORREÇÃO AQUI ---
+                # Garante que os valores '0' ou '0.0' sejam tratados como nulos (NaT)
+                df[col] = df[col].apply(lambda x: np.nan if str(x).strip() in ['0', '0.0'] else x)
                 df[col] = _to_datetime(df[col], dayfirst=True)
+                # --- FIM DA CORREÇÃO ---
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
@@ -487,7 +491,6 @@ def render_registrar_nf_page():
                         
                         divergencia = valor_total_float - valor_oc_total
                         
-                        # --- CORREÇÃO AQUI ---
                         brasilia_tz = pytz.timezone('America/Sao_Paulo')
                         agora = datetime.datetime.now(brasilia_tz)
                         
@@ -507,10 +510,10 @@ def render_registrar_nf_page():
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_ENVIO": "",
-                            "REGISTRO_LANCAMENTO": agora, # Agora registra a hora correta
+                            "REGISTRO_ENVIO": agora, # Adicionando o registro de envio
+                            "REGISTRO_LANCAMENTO": agora
                         }
-                        # --- FIM DA CORREÇÃO ---
+                        
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
                         
@@ -551,14 +554,14 @@ def render_registrar_nf_page():
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
-            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Envio'
+            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Envio' # Nome da coluna alterado
         }
         
         # Filtra apenas as colunas que existem no DataFrame
-        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns]
-        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols}
+        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns or f'{col}_VISUAL' in df_ultimas_nfs.columns]
+        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols or f'{k}_VISUAL' in df_ultimas_nfs.columns}
         
-        df_ultimas_nfs_display = df_ultimas_nfs[available_cols].rename(columns=col_map_filtered)
+        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map_filtered)
         
         def colorir_status_display(status):
             cores = {
