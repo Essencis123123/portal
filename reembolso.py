@@ -27,6 +27,39 @@ except FileNotFoundError:
     st.error("O arquivo .streamlit/secrets.toml não foi encontrado.")
     st.stop()
 
+# --- Constantes para o formulário ---
+DEPARTAMENTOS = [
+    "1601 - Financeiro / Administrativo",
+    "1201 - Administração da Manutenção",
+    "2302 - Aterro K1",
+    "2303 - Aterro K2",
+    "1202 - Manutenção de veículos e equipamentos",
+    "1203 - Manutenção Eletromecânica",
+    "1301 - Balança",
+    "1302 - Laboratório",
+    "1303 - Manutenção de aterros",
+    "1304 - Serviços Gerais",
+    "1308 - Tecnologia da Informação",
+    "1401 - Comercial",
+    "1502 - Comunicação",
+    "1505 - Segurança do Trabalho",
+    "2401 - Coprocessamento",
+    "2305 - Tratamento de efluentes privados",
+]
+
+TIPOS_DESPESA = [
+    "Corridas de Uber, 99 ou táxi",
+    "Estacionamento e pedágios",
+    "Alimentação",
+    "Material de escritório (canetas, papel, clips, etc.)",
+    "Boletos de inscrição (cursos, eventos, concursos)",
+    "Taxas públicas (DAE, GRU, cartório, etc.)",
+    "Ingressos corporativos ou institucionais",
+    "Manutenção de Máquinas e Equipamentos",
+    "Materiais de baixo custo (torneiras, lâmpadas, tomadas)",
+    "Outros"
+]
+
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
 
@@ -59,10 +92,19 @@ def get_reembolsos_sheet():
         sheet = spreadsheet.worksheet("Reembolsos")
         return sheet
     except gspread.exceptions.APIError as e:
-        st.error(f"Erro de autenticação ou acesso à planilha: {e}. Por favor, verifique as permissões.")
+        st.error(f"Erro de autenticação ou acesso à planilha: {e}.")
         return None
     except gspread.exceptions.WorksheetNotFound:
         st.error("A aba 'Reembolsos' não foi encontrada na planilha.")
+        return None
+
+def get_usuarios_sheet():
+    try:
+        spreadsheet = gs_client.open_by_key(SHEET_ID)
+        sheet = spreadsheet.worksheet("Usuarios")
+        return sheet
+    except gspread.exceptions.WorksheetNotFound:
+        st.error("A aba 'Usuarios' não foi encontrada na planilha.")
         return None
 
 # --- Funções para Envio de E-mail ---
@@ -138,17 +180,24 @@ def load_reembolsos_data():
         return df
     return pd.DataFrame()
 
-def add_reembolso(data, nome, departamento, tipo_despesa, valor, justificativa, caminho_recibo, status="Pendente"):
+def load_usuarios_data():
+    sheet = get_usuarios_sheet()
+    if sheet:
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
+        return df
+    return pd.DataFrame()
+
+def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justificativa, caminho_recibo, status="Pendente"):
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
         try:
-            row = [data_formatada, nome, departamento, tipo_despesa, valor, justificativa, status, caminho_recibo]
+            row = [data_formatada, nome, departamento, tipo_despesa, valor, justificativa, status, caminho_recibo, email]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
             # 1. Envia e-mail para o usuário
-            user_email = nome # Supondo que 'NOME' seja o e-mail do usuário
             subject_user = "Confirmação de Envio de Reembolso"
             body_user = f"""
             Olá, {nome}!
@@ -165,9 +214,9 @@ def add_reembolso(data, nome, departamento, tipo_despesa, valor, justificativa, 
             Em breve, você receberá uma notificação sobre o status do seu pedido.
             
             Atenciosamente,
-            Equipe de Reembolsos
+            Equipe de Reembolsos Essencis
             """
-            message_user = create_message("me", user_email, subject_user, body_user)
+            message_user = create_message("me", email, subject_user, body_user)
             send_message(gmail_service, "me", message_user)
 
             # 2. Envia e-mail para o administrador
@@ -199,9 +248,9 @@ def add_reembolso(data, nome, departamento, tipo_despesa, valor, justificativa, 
             st.error(f"Erro ao adicionar reembolso: {e}")
 
 # --- Interface do Usuário (Streamlit) ---
-st.title("💰 Gestão de Reembolsos")
+st.title("💰 Gestão de Reembolsos Essencis")
 
-menu = st.sidebar.selectbox("Menu Principal", ["Dashboard", "Adicionar Reembolso", "Meu Histórico"])
+menu = st.sidebar.selectbox("Menu Principal", ["Dashboard", "Cadastrar Novo Usuário", "Adicionar Reembolso", "Meu Histórico"])
 
 # --- Seção do Dashboard ---
 if menu == "Dashboard":
@@ -233,57 +282,104 @@ if menu == "Dashboard":
     else:
         st.warning("Não há dados de reembolso para exibir.")
 
+# --- Seção de Cadastro de Usuário ---
+elif menu == "Cadastrar Novo Usuário":
+    st.header("Cadastrar Novo Usuário")
+    with st.form("form_cadastro"):
+        nome = st.text_input("Nome Completo")
+        email = st.text_input("E-mail Essencis")
+        departamento = st.selectbox("Departamento", DEPARTAMENTOS)
+        
+        submit_cadastro = st.form_submit_button("Cadastrar")
+        
+        if submit_cadastro:
+            if nome and email and departamento:
+                sheet = get_usuarios_sheet()
+                if sheet:
+                    try:
+                        row = [nome, email, departamento]
+                        sheet.append_row(row)
+                        st.success(f"Usuário {nome} cadastrado com sucesso!")
+                    except Exception as e:
+                        st.error(f"Erro ao cadastrar usuário: {e}")
+            else:
+                st.error("Por favor, preencha todos os campos.")
+
 # --- Seção de Adicionar Reembolso ---
 elif menu == "Adicionar Reembolso":
     st.header("Adicionar Novo Reembolso")
     
-    # Lista de tipos de despesa e custos
-    tipos_despesa = ["Aéreo", "Combustível", "Hospedagem", "Pedágio", "Alimentação", "Outros"]
+    # Carrega a lista de usuários para o selectbox
+    df_usuarios = load_usuarios_data()
+    if df_usuarios.empty:
+        st.warning("Não há usuários cadastrados. Por favor, cadastre um usuário primeiro.")
+        st.stop()
     
-    with st.form("form_reembolso"):
-        nome_funcionario = st.text_input("Nome Completo")
-        email_funcionario = st.text_input("E-mail (Para Notificação)")
-        departamento = st.text_input("Departamento")
-        tipo_despesa_selecionada = st.selectbox("Tipo de Despesa", tipos_despesa)
-        valor_reembolso = st.number_input("Valor", min_value=0.01, format="%.2f")
-        justificativa = st.text_area("Justificativa")
-        data_reembolso = st.date_input("Data", value=datetime.date.today())
-        
-        recibo_anexo = st.file_uploader("Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"])
-        
-        submit_button = st.form_submit_button("Salvar Reembolso")
-        
-        if submit_button:
-            if nome_funcionario and email_funcionario and valor_reembolso and data_reembolso and departamento and tipo_despesa_selecionada and justificativa:
-                caminho_recibo = None
-                if recibo_anexo:
-                    try:
+    # Mapeia nome para departamento e email
+    usuario_selecionado = st.selectbox(
+        "Selecione o Usuário",
+        df_usuarios['NOME']
+    )
+    
+    if 'NOME' in df_usuarios.columns and 'EMAIL' in df_usuarios.columns and 'DEPARTAMENTO' in df_usuarios.columns:
+        df_usuario_info = df_usuarios[df_usuarios['NOME'] == usuario_selecionado].iloc[0]
+        nome_funcionario = df_usuario_info['NOME']
+        email_funcionario = df_usuario_info['EMAIL']
+        departamento_funcionario = df_usuario_info['DEPARTAMENTO']
+    else:
+        st.error("Colunas 'NOME', 'EMAIL' ou 'DEPARTAMENTO' não encontradas na planilha de usuários.")
+        st.stop()
+    
+    st.subheader(f"Dados de {nome_funcionario}")
+    st.info(f"E-mail: {email_funcionario} | Departamento: {departamento_funcionario}")
+    
+    # Loop para adicionar múltiplos reembolsos
+    num_reembolsos = st.number_input("Quantos reembolsos deseja adicionar?", min_value=1, step=1)
+    
+    for i in range(int(num_reembolsos)):
+        st.markdown(f"### Reembolso #{i + 1}")
+        with st.form(f"form_reembolso_{i}"):
+            tipo_despesa_selecionada = st.selectbox(f"Tipo de Despesa", TIPOS_DESPESA, key=f"tipo_despesa_{i}")
+            valor_reembolso = st.number_input(f"Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
+            justificativa = st.text_area(f"Justificativa", key=f"justificativa_{i}")
+            data_reembolso = st.date_input(f"Data", value=datetime.date.today(), key=f"data_{i}")
+            recibo_anexo = st.file_uploader(f"Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"], key=f"recibo_{i}")
+            
+            submit_button = st.form_submit_button("Salvar Este Reembolso")
+            
+            if submit_button:
+                if valor_reembolso and data_reembolso and justificativa:
+                    caminho_recibo = None
+                    if recibo_anexo:
                         caminho_recibo = upload_to_supabase(recibo_anexo)
                         if not caminho_recibo:
                             st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
-                    except Exception as e:
-                        st.warning(f"Erro no upload: {e}. O reembolso será salvo sem anexo.")
-                
-                # Use o e-mail como 'nome' para a função de e-mail, mas o nome real para a planilha
-                add_reembolso(data_reembolso, nome_funcionario, departamento, tipo_despesa_selecionada, 
-                              valor_reembolso, justificativa, caminho_recibo)
-            else:
-                st.error("Por favor, preencha todos os campos obrigatórios.")
-
+                    
+                    add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_funcionario, 
+                                  tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
+                else:
+                    st.error("Por favor, preencha todos os campos obrigatórios.")
+    
 # --- Seção Meu Histórico ---
 elif menu == "Meu Histórico":
     st.header("Meu Histórico de Reembolsos")
     
-    # Simula a autenticação para saber quem é o usuário
-    # Em uma aplicação real, você usaria um sistema de login
-    usuario_atual = st.text_input("Digite seu Nome para ver o histórico:")
+    df_usuarios = load_usuarios_data()
+    if df_usuarios.empty:
+        st.warning("Não há usuários cadastrados. Por favor, cadastre um usuário primeiro.")
+        st.stop()
     
-    if usuario_atual:
+    usuario_selecionado = st.selectbox(
+        "Selecione o seu Nome para ver o histórico:",
+        df_usuarios['NOME']
+    )
+    
+    if usuario_selecionado:
         df_reembolsos = load_reembolsos_data()
         
         if not df_reembolsos.empty and 'NOME' in df_reembolsos.columns:
             # Filtra os reembolsos pelo nome do usuário
-            df_usuario = df_reembolsos[df_reembolsos['NOME'].str.lower() == usuario_atual.lower()]
+            df_usuario = df_reembolsos[df_reembolsos['NOME'].str.lower() == usuario_selecionado.lower()]
             
             if not df_usuario.empty:
                 st.write(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
