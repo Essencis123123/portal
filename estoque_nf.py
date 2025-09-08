@@ -235,15 +235,17 @@ def salvar_dados_almoxarifado(df):
 
         df_copy = df.copy()
 
-        # Mapeia as colunas do DataFrame para os nomes exatos da planilha
+        # Mapeamento para os nomes exatos da planilha, se necessário
         df_copy = df_copy.rename(columns={
-            "FORNECEDOR_NF": "FORNECEDOR_NF",
+            "REGISTRO_ADICIONAL": "OBSERVACAO",
             "V. TOTAL NF": "V. TOTAL NF",
             "DOC NF": "DOC NF",
             "CONDICAO FRETE": "CONDICAO FRETE",
             "VALOR FRETE": "VALOR FRETE",
-            "OBSERVACAO": "OBSERVACAO",
-            "REGISTRO_ADICIONAL": "REGISTRO_ADICIONAL"
+            "FORNECEDOR_NF": "FORNECEDOR_NF",
+            "REGISTRO_LANCAMENTO": "REGISTRO_LANCAMENTO",
+            "REGISTRO_ENVIO": "REGISTRO_ENVIO",
+            "STATUS_FINANCEIRO": "STATUS_FINANCEIRO",
         }, errors='ignore')
         
         # Formata colunas de data/hora para o formato de string antes de salvar
