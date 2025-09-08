@@ -202,7 +202,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
-         valor_formatado = f"{valor:.2f}".replace('.', ',') # Substitui ponto por vírgula para manter o padrão brasileiro
+        # Formata o valor com duas casas decimais
+        valor_formatado = f"{valor:.2f}".replace('.', ',')
         try:
             row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, caminho_recibo, email]
             sheet.append_row(row)
@@ -219,7 +220,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             - Data: {data_formatada}
             - Departamento: {departamento}
             - Tipo de Despesa: {tipo_despesa}
-            - Valor: R$ {valor:,.2f}
+            - Valor: R$ {valor_formatado}
             - Justificativa: {justificativa}
             
             Em breve, você receberá uma notificação sobre o status do seu pedido.
@@ -243,7 +244,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             - Data: {data_formatada}
             - Departamento: {departamento}
             - Tipo de Despesa: {tipo_despesa}
-            - Valor: R$ {valor:,.2f}
+            - Valor: R$ {valor_formatado}
             - Justificativa: {justificativa}
             - ID do Anexo: {caminho_recibo}
             
