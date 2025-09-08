@@ -80,7 +80,7 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-@st.cache_resource(ttl=3600)
+# Removido o @st.cache_resource para evitar que o token expire
 def get_google_api_service():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
         secrets_dict["gcp_service_account"],
