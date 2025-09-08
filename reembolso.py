@@ -212,7 +212,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
-            # --- Envio de E-mail usando o token OAuth do usuário ---
+            # --- E-mail de remetente fixo ---
             sender_email = st.session_state.user_email_oauth
             
             # 1. Envia e-mail para o usuário
@@ -312,15 +312,19 @@ if not st.session_state.creds or not st.session_state.creds.valid:
         if authorization_code:
             try:
                 flow.fetch_token(code=authorization_code)
-                st.session_state.creds = flow.credentials
-                # Salva o email do usuário que autorizou para usar como remetente
-                st.session_state.user_email_oauth = flow.credentials.id_token['email']
-                st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-                st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
-                st.rerun()
+                if flow.credentials: # Verifica se as credenciais foram obtidas
+                    st.session_state.creds = flow.credentials
+                    st.session_state.user_email_oauth = flow.credentials.id_token['email']
+                    st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+                    st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
+                    st.rerun()
+                else:
+                    st.error("Erro: Não foi possível obter as credenciais. Por favor, tente novamente.")
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
-                st.stop()
+
+    # Se a autorização ainda não foi concluída, pare a execução do script
+    if not st.session_state.creds or not st.session_state.creds.valid:
         st.stop()
 
 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
