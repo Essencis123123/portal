@@ -182,4 +182,4 @@ if not df_reembolsos.empty:
                 st.write("---")
                 
 else:
-    st.warning("Não há dados de reembolso para gerenciar.")
+    st.warning("Não há dados de reembolso para gerenciar.") add
