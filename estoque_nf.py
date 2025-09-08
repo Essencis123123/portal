@@ -247,7 +247,7 @@ def salvar_dados_almoxarifado(df):
             "REGISTRO_ENVIO": "REGISTRO_ENVIO",
             "STATUS_FINANCEIRO": "STATUS_FINANCEIRO",
         }, errors='ignore')
-        
+
         # Formata colunas de data/hora para o formato de string antes de salvar
         for col in ['DATA', 'VENCIMENTO']:
             if col in df_copy.columns:
@@ -507,12 +507,12 @@ def render_registrar_nf_page():
                             "OBSERVACAO": observacao,
                             "DOC NF": doc_nf_link,
                             "VENCIMENTO": vencimento_nf,
-                            "STATUS_FINANCEIRO": "EM ANDAMENTO",  # Alterado para "EM ANDAMENTO"
+                            "STATUS_FINANCEIRO": "EM ANDAMENTO",
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_ENVIO": agora, # Adiciona o registro de envio
-                            "REGISTRO_LANCAMENTO": '' # Inicializa como vazio
+                            "REGISTRO_ENVIO": agora,
+                            "REGISTRO_LANCAMENTO": ''
                         }
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
@@ -535,25 +535,22 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
-        # Correção aplicada: verificação de tipo de dado antes da formatação
-        if not df_ultimas_nfs.empty and pd.api.types.is_datetime64_any_dtype(df_ultimas_nfs['DATA']):
-            df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
-        else:
-            df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].astype(str)
+        # Formata as colunas de data para exibição
+        for col in ['DATA', 'VENCIMENTO']:
+            if col in df_ultimas_nfs.columns:
+                df_ultimas_nfs[col] = df_ultimas_nfs[col].apply(
+                    lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+                )
         
-        if not df_ultimas_nfs.empty and pd.api.types.is_datetime64_any_dtype(df_ultimas_nfs['VENCIMENTO']):
-            df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
-        else:
-            df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].astype(str)
+        # Formata as colunas de timestamp (data e hora completas)
+        for col in ['REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
+            if col in df_ultimas_nfs.columns:
+                df_ultimas_nfs[f'{col}_VISUAL'] = df_ultimas_nfs[col].apply(
+                    lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else ''
+                )
+            else:
+                df_ultimas_nfs[f'{col}_VISUAL'] = ''
 
-        # Adicionando a formatação das colunas de registro
-        if not df_ultimas_nfs.empty and pd.api.types.is_datetime64_any_dtype(df_ultimas_nfs['REGISTRO_ENVIO']):
-            df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
-        else:
-            df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = ''
-        
-        # A coluna de REGISTRO_LANCAMENTO_VISUAL é removida da visualização
-        
         col_map = {
             'DATA': 'Data',
             'FORNECEDOR_NF': 'Fornecedor',
@@ -564,34 +561,43 @@ def render_registrar_nf_page():
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
             'REGISTRO_ENVIO_VISUAL': 'Reg. Envio',
+            'REGISTRO_LANCAMENTO_VISUAL': 'Reg. Lançamento'
         }
-        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map)
+        
+        # Filtra apenas as colunas que existem no DataFrame
+        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns or f'{col}_VISUAL' in df_ultimas_nfs.columns]
+        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols or f'{k}_VISUAL' in df_ultimas_nfs.columns}
+        
+        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map_filtered)
         
         def colorir_status_display(status):
             cores = {
                 "EM ANDAMENTO": "🟡",
                 "NF PROBLEMA": "🔴",
-                "CAPTURADO": "🟣", # Alterado para roxo
+                "CAPTURADO": "🟣",
                 "FINALIZADO": "🟢"
             }
             return f"{cores.get(status, '⚪')} {status}"
         
-        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
+        if 'Status Financeiro' in df_ultimas_nfs_display.columns:
+            df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
         
         st.dataframe(
             df_ultimas_nfs_display[[
                 'Data', 'Fornecedor', 'Número NF', 'Ordem de Compra', 'Volume', 
-                'Valor Total NF', 'Status Financeiro', 'Anexo NF', 'Reg. Envio'
+                'Valor Total NF', 'Status Financeiro', 'Anexo NF', 'Reg. Envio', 'Reg. Lançamento'
             ]],
             use_container_width=True,
             column_config={
-                "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                "Data": st.column_config.TextColumn("Data"),
                 "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
                 "Anexo NF": st.column_config.LinkColumn(
                     "Anexo NF",
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
-                )
+                ),
+                "Reg. Envio": st.column_config.TextColumn("Registro de Envio"),
+                "Reg. Lançamento": st.column_config.TextColumn("Registro de Lançamento")
             },
             hide_index=True
         )
