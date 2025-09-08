@@ -229,7 +229,7 @@ def salvar_dados_almoxarifado(df):
     """Salva os dados do DataFrame no Google Sheets (aba de Almoxarifado)."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(2)
 
         df_copy = df.copy()
@@ -264,7 +264,7 @@ def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(0)
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
@@ -299,7 +299,7 @@ def salvar_dados_pedidos(df):
     """Salva os dados de pedidos no Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(0)
 
         df_copy = df.copy()
@@ -318,7 +318,7 @@ def carregar_dados_solicitantes():
     """Carrega dados dos solicitantes do Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(1)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
