@@ -212,10 +212,13 @@ def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
+        if gc is None:
+            return criar_dataframe_pedidos_vazio()
+            
+        sheet = gc.open("dados_pedido")
         
         # Get all values from the worksheet with the UNFORMATTED_VALUE option
-        data = spreadsheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
+        data = sheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
         
         # O cabeçalho é a primeira linha
         headers = data[0]
@@ -223,7 +226,7 @@ def carregar_dados_pedidos():
 
         if not records:
             st.warning("A planilha está vazia ou não contém dados.")
-            return pd.DataFrame()
+            return criar_dataframe_pedidos_vazio()
         
         df = pd.DataFrame(records, columns=headers)
 
@@ -261,7 +264,7 @@ def carregar_dados_pedidos():
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
         st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
-        return pd.DataFrame()
+        return criar_dataframe_pedidos_vazio()
 
 def criar_dataframe_pedidos_vazio():
     """Cria um DataFrame de pedidos vazio com a estrutura correta."""
@@ -281,8 +284,11 @@ def salvar_dados_pedidos(df):
     """Salva o DataFrame de pedidos no Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(0)
+        if gc is None:
+            return
+        
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(0)
 
         df_to_save = df.copy()
         
@@ -320,8 +326,11 @@ def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(1)
+        if gc is None:
+            return criar_dataframe_solicitantes_vazio()
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(1)
         
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -339,8 +348,11 @@ def salvar_dados_solicitantes(df):
     """Salva o DataFrame de solicitantes no Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(1)
+        if gc is None:
+            return
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(1)
 
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
         
@@ -356,8 +368,11 @@ def carregar_dados_almoxarifado():
     """Carrega dados do almoxarifado para preencher a nota fiscal."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(2)
+        if gc is None:
+            return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(2)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
@@ -374,8 +389,11 @@ def carregar_dados_materiais():
     """Carrega o DataFrame de materiais do Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(3)
+        if gc is None:
+            return pd.DataFrame(columns=['CODIGO', 'DESCRICAO'])
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(3)
         data = worksheet.get_all_records()
         
         if not data:
@@ -393,8 +411,11 @@ def salvar_dados_materiais(df):
     """Salva o DataFrame de materiais no Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(3)
+        if gc is None:
+            return
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(3)
         
         df_to_save = df.copy()
         df_to_save = df_to_save.fillna('')
@@ -428,12 +449,7 @@ def fazer_login(email, senha):
 
 # --- INTERFACE PRINCIPAL ---
 if 'logado' not in st.session_state or not st.session_state.logado:
-    st.title("Login - Painel do Comprador")
-    with st.form("login_form"):
-        email = st.text_input("E-mail")
-        senha = st.text_input("Senha", type="password")
-        if st.form_submit_button("Entrar"):
-            fazer_login(email, senha)
+    render_login_page()
 else:
     logo_img = load_logo(logo_url)
 
@@ -857,7 +873,7 @@ else:
                 if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
                     return (row['DATA_APROVACAO'] - row['DATA']).days
                 return 0
-            
+                
             edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
             edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(calcular_dias_emissao, axis=1)
 
@@ -1278,9 +1294,9 @@ else:
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
         df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                 ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                 0)
-                                                 
+                                                    ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                    0)
+                                                    
         df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
         st.subheader("Visão Geral da Performance")
@@ -1333,3 +1349,27 @@ else:
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
             st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
+    
+    elif menu == "📊 Performance ":
+        # Código para a página de Performance (já parece estar no código que você enviou, mas está duplicado)
+        # O código que você enviou tinha a seção "📊 Performance " duplicada. Vou ignorar o segundo bloco.
+        pass
+        
+    def render_login_page():
+        """Exibe a página de login."""
+        st.title("👨‍💼 Login do Comprador")
+        with st.form("login_form"):
+            email = st.text_input("E-mail")
+            senha = st.text_input("Senha", type="password")
+            if st.form_submit_button("Entrar"):
+                fazer_login(email, senha)
+
+    def render_main_app():
+        # ... O código da render_main_app está acima, dentro do else
+        pass
+    
+    # Renderiza a página de login ou a principal, dependendo do estado da sessão
+    if 'logado' not in st.session_state or not st.session_state.logado:
+        render_login_page()
+    else:
+        render_main_app()
