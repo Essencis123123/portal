@@ -507,8 +507,8 @@ def render_registrar_nf_page():
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_LANCAMENTO": agora, # Agora registra a hora correta
-                            "REGISTRO_ENVIO": "" # Esta coluna não será mais usada para este fim
+                            "REGISTRO_ENVIO": agora,
+                            "REGISTRO_LANCAMENTO": agora
                         }
                         # --- FIM DA CORREÇÃO ---
                         st.session_state['divergencia_oc'] = divergencia
@@ -533,13 +533,14 @@ def render_registrar_nf_page():
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
         # Converte as colunas de data para datetime, tratando erros
-        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_LANCAMENTO']:
+        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df_ultimas_nfs.columns:
                 df_ultimas_nfs[col] = pd.to_datetime(df_ultimas_nfs[col], errors='coerce', dayfirst=True)
         
         # Agora, a formatação de data/hora funcionará corretamente
         df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y').fillna('')
         df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y').fillna('')
+        df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
         df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
 
         col_map = {
@@ -551,7 +552,8 @@ def render_registrar_nf_page():
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
-            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Envio' # Nome da coluna alterado
+            'REGISTRO_ENVIO_VISUAL': 'Registro de Envio',
+            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Lançamento'
         }
         
         # Filtra apenas as colunas que existem no DataFrame
@@ -583,7 +585,8 @@ def render_registrar_nf_page():
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
                 ),
-                "Registro de Envio": st.column_config.TextColumn("Registro de Envio")
+                "Registro de Envio": st.column_config.TextColumn("Registro de Envio"),
+                "Registro de Lançamento": st.column_config.TextColumn("Registro de Lançamento")
             },
             hide_index=True
         )
