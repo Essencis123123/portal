@@ -212,8 +212,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
-            # --- Envio de E-mail usando o token OAuth do usuário ---
-            sender_email = st.session_state.user_email_oauth
+            # --- E-mail de remetente fixo ---
+            sender_email = "suprimentosessencis@gmail.com"
             
             # 1. Envia e-mail para o usuário
             subject_user = "Confirmação de Envio de Reembolso"
@@ -321,8 +321,7 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                 st.error(f"Erro ao obter o token: {e}")
                 st.stop()
         st.stop()
-
-# Conecta ao Gmail Service após a autenticação
+        
 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
 
 # --- Layout do Aplicativo ---
