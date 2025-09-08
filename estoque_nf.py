@@ -235,19 +235,12 @@ def salvar_dados_almoxarifado(df):
 
         df_copy = df.copy()
 
-        # Mapeamento para os nomes exatos da planilha, se necessário
+        # Mapeamento para os nomes exatos da planilha
         df_copy = df_copy.rename(columns={
             "REGISTRO_ADICIONAL": "OBSERVACAO",
-            "V. TOTAL NF": "V. TOTAL NF",
-            "DOC NF": "DOC NF",
             "CONDICAO FRETE": "CONDICAO FRETE",
-            "VALOR FRETE": "VALOR FRETE",
-            "FORNECEDOR_NF": "FORNECEDOR_NF",
-            "REGISTRO_LANCAMENTO": "REGISTRO_LANCAMENTO",
-            "REGISTRO_ENVIO": "REGISTRO_ENVIO",
-            "STATUS_FINANCEIRO": "STATUS_FINANCEIRO",
         }, errors='ignore')
-
+        
         # Formata colunas de data/hora para o formato de string antes de salvar
         for col in ['DATA', 'VENCIMENTO']:
             if col in df_copy.columns:
@@ -535,21 +528,28 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
-        # Formata as colunas de data para exibição
-        for col in ['DATA', 'VENCIMENTO']:
+        # --- CORREÇÃO AQUI: Garante que as colunas de data/hora sejam do tipo datetime antes de formatar. ---
+        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df_ultimas_nfs.columns:
-                df_ultimas_nfs[col] = df_ultimas_nfs[col].apply(
-                    lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
-                )
+                df_ultimas_nfs[col] = pd.to_datetime(df_ultimas_nfs[col], errors='coerce')
+        # --- FIM DA CORREÇÃO ---
+
+        # Agora, a formatação de data/hora funcionará corretamente
+        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].apply(
+            lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+        )
         
-        # Formata as colunas de timestamp (data e hora completas)
-        for col in ['REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
-            if col in df_ultimas_nfs.columns:
-                df_ultimas_nfs[f'{col}_VISUAL'] = df_ultimas_nfs[col].apply(
-                    lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else ''
-                )
-            else:
-                df_ultimas_nfs[f'{col}_VISUAL'] = ''
+        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].apply(
+            lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+        )
+
+        df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].apply(
+            lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else ''
+        )
+        
+        df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].apply(
+            lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else ''
+        )
 
         col_map = {
             'DATA': 'Data',
@@ -583,10 +583,7 @@ def render_registrar_nf_page():
             df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
         
         st.dataframe(
-            df_ultimas_nfs_display[[
-                'Data', 'Fornecedor', 'Número NF', 'Ordem de Compra', 'Volume', 
-                'Valor Total NF', 'Status Financeiro', 'Anexo NF', 'Reg. Envio', 'Reg. Lançamento'
-            ]],
+            df_ultimas_nfs_display,
             use_container_width=True,
             column_config={
                 "Data": st.column_config.TextColumn("Data"),
@@ -762,7 +759,7 @@ def render_consultar_nfs_page():
                 cores = {
                     "EM ANDAMENTO": "🟡",
                     "NF PROBLEMA": "🔴",
-                    "CAPTURADO": "🟣", # Alterado para roxo
+                    "CAPTURADO": "🟣",
                     "FINALIZADO": "🟢"
                 }
                 return f"{cores.get(status, '⚪')} {status}"
