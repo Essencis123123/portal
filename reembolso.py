@@ -185,6 +185,9 @@ def load_usuarios_data():
     if sheet:
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
+        # Padroniza os nomes das colunas para evitar KeyError
+        if not df.empty:
+            df.columns = df.columns.str.upper()
         return df
     return pd.DataFrame()
 
@@ -309,31 +312,24 @@ elif menu == "Cadastrar Novo Usuário":
 elif menu == "Adicionar Reembolso":
     st.header("Adicionar Novo Reembolso")
     
-    # Carrega a lista de usuários para o selectbox
     df_usuarios = load_usuarios_data()
-    if df_usuarios.empty:
+    if df_usuarios.empty or 'NOME' not in df_usuarios.columns:
         st.warning("Não há usuários cadastrados. Por favor, cadastre um usuário primeiro.")
         st.stop()
     
-    # Mapeia nome para departamento e email
     usuario_selecionado = st.selectbox(
         "Selecione o Usuário",
         df_usuarios['NOME']
     )
     
-    if 'NOME' in df_usuarios.columns and 'EMAIL' in df_usuarios.columns and 'DEPARTAMENTO' in df_usuarios.columns:
-        df_usuario_info = df_usuarios[df_usuarios['NOME'] == usuario_selecionado].iloc[0]
-        nome_funcionario = df_usuario_info['NOME']
-        email_funcionario = df_usuario_info['EMAIL']
-        departamento_funcionario = df_usuario_info['DEPARTAMENTO']
-    else:
-        st.error("Colunas 'NOME', 'EMAIL' ou 'DEPARTAMENTO' não encontradas na planilha de usuários.")
-        st.stop()
+    df_usuario_info = df_usuarios[df_usuarios['NOME'] == usuario_selecionado].iloc[0]
+    nome_funcionario = df_usuario_info['NOME']
+    email_funcionario = df_usuario_info['EMAIL']
+    departamento_funcionario = df_usuario_info['DEPARTAMENTO']
     
     st.subheader(f"Dados de {nome_funcionario}")
     st.info(f"E-mail: {email_funcionario} | Departamento: {departamento_funcionario}")
     
-    # Loop para adicionar múltiplos reembolsos
     num_reembolsos = st.number_input("Quantos reembolsos deseja adicionar?", min_value=1, step=1)
     
     for i in range(int(num_reembolsos)):
@@ -365,7 +361,7 @@ elif menu == "Meu Histórico":
     st.header("Meu Histórico de Reembolsos")
     
     df_usuarios = load_usuarios_data()
-    if df_usuarios.empty:
+    if df_usuarios.empty or 'NOME' not in df_usuarios.columns:
         st.warning("Não há usuários cadastrados. Por favor, cadastre um usuário primeiro.")
         st.stop()
     
@@ -378,7 +374,6 @@ elif menu == "Meu Histórico":
         df_reembolsos = load_reembolsos_data()
         
         if not df_reembolsos.empty and 'NOME' in df_reembolsos.columns:
-            # Filtra os reembolsos pelo nome do usuário
             df_usuario = df_reembolsos[df_reembolsos['NOME'].str.lower() == usuario_selecionado.lower()]
             
             if not df_usuario.empty:
