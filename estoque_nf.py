@@ -183,7 +183,7 @@ def carregar_dados_almoxarifado():
     """Carrega dados do Google Sheets (aba de Almoxarifado)."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(2)
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
