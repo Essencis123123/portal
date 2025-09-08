@@ -212,8 +212,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
-            # --- E-mail de remetente fixo ---
-            sender_email = "suprimentosessencis@gmail.com"
+            # --- Envio de E-mail usando o token OAuth do usuário ---
+            sender_email = st.session_state.user_email_oauth
             
             # 1. Envia e-mail para o usuário
             subject_user = "Confirmação de Envio de Reembolso"
@@ -294,7 +294,7 @@ if not st.session_state.creds or not st.session_state.creds.valid:
         redirect_uri = secrets_dict["google_oauth"]["redirect_uri_app"]
         flow = InstalledAppFlow.from_client_config(
             {
-                "web": {
+                "installed": { # O tipo 'installed' é o correto para o InstalledAppFlow
                     "client_id": secrets_dict["google_oauth"]["client_id"],
                     "client_secret": secrets_dict["google_oauth"]["client_secret"],
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
