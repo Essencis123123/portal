@@ -209,9 +209,9 @@ def carregar_dados_almoxarifado():
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
                 # --- CORREÇÃO AQUI ---
-                # Garante que os valores '0' ou '0.0' sejam tratados como nulos (NaT)
-                df[col] = df[col].apply(lambda x: np.nan if str(x).strip() in ['0', '0.0'] else x)
-                df[col] = _to_datetime(df[col], dayfirst=True)
+                # Substitui strings vazias, zeros e valores nulos por NaT para evitar o 01/01/1970
+                df[col] = df[col].replace('', np.nan).replace(0, np.nan).replace('0', np.nan)
+                df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
                 # --- FIM DA CORREÇÃO ---
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
@@ -510,7 +510,7 @@ def render_registrar_nf_page():
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_ENVIO": agora, # Adicionando o registro de envio
+                            "REGISTRO_ENVIO": agora,
                             "REGISTRO_LANCAMENTO": agora
                         }
                         
@@ -554,7 +554,7 @@ def render_registrar_nf_page():
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
-            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Envio' # Nome da coluna alterado
+            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Lançamento'
         }
         
         # Filtra apenas as colunas que existem no DataFrame
@@ -586,7 +586,7 @@ def render_registrar_nf_page():
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
                 ),
-                "Registro de Envio": st.column_config.TextColumn("Registro de Envio")
+                "Registro de Lançamento": st.column_config.TextColumn("Registro de Lançamento")
             },
             hide_index=True
         )
