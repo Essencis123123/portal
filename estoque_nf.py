@@ -183,8 +183,9 @@ def carregar_dados_almoxarifado():
     """Carrega dados do Google Sheets (aba de Almoxarifado)."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(2)
+        # CORREÇÃO: Usando o nome da planilha e o índice da aba
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(2)
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
@@ -229,8 +230,9 @@ def salvar_dados_almoxarifado(df):
     """Salva os dados do DataFrame no Google Sheets (aba de Almoxarifado)."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(2)
+        # CORREÇÃO: Usando o nome da planilha e o índice da aba
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(2)
 
         df_copy = df.copy()
 
@@ -264,8 +266,9 @@ def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(0)
+        # CORREÇÃO: Usando o nome da planilha e o índice da aba
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(0)
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
@@ -299,8 +302,9 @@ def salvar_dados_pedidos(df):
     """Salva os dados de pedidos no Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(0)
+        # CORREÇÃO: Usando o nome da planilha e o índice da aba
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(0)
 
         df_copy = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
@@ -318,8 +322,9 @@ def carregar_dados_solicitantes():
     """Carrega dados dos solicitantes do Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(1)
+        # CORREÇÃO: Usando o nome da planilha e o índice da aba
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(1)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
         return df
@@ -490,7 +495,7 @@ def render_registrar_nf_page():
                         st.session_state['novo_registro_nf'] = {
                             "DATA": data_recebimento,
                             "RECEBEDOR": recebedor,
-                            "FORNECEDOR_NF": fornecedor_selecionado,    
+                            "FORNECEDOR_NF": fornecedor_selecionado,   
                             "NF": nf_numero,
                             "VOLUME": volume_nf,
                             "V. TOTAL NF": valor_total_float,
