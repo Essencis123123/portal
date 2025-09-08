@@ -324,14 +324,15 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
                 st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
                 st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao obter o token: {e}")
+        except Exception as e:
+            st.error(f"Erro ao obter o token: {e}")
 
     if not st.session_state.creds or not st.session_state.creds.valid:
         st.stop()
 
-st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
+if st.session_state.creds and st.session_state.creds.valid:
+    st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+    st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
 
 # --- Layout do Aplicativo ---
 st.title("💰 Gestão de Reembolsos Essencis")
