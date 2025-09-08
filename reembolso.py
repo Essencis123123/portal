@@ -20,6 +20,11 @@ from supabase import create_client, Client
 import toml
 from streamlit_option_menu import option_menu
 
+# --- NOVO IMPORT PARA OAUTH 2.0 ---
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
 
@@ -71,6 +76,7 @@ if "logged_in" not in st.session_state:
 
 # --- Conexão com Google Sheets e APIs ---
 SHEET_ID = secrets_dict["gcp_service_account"]["sheet_id"]
+SCOPES = ['https://www.googleapis.com/auth/gmail.send']
 
 @st.cache_resource(ttl=3600)
 def get_gspread_client():
@@ -80,21 +86,46 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-# Removido o @st.cache_resource para evitar que o token expire
-def get_google_api_service():
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        secrets_dict["gcp_service_account"],
-        ['https://www.googleapis.com/auth/gmail.send']
-    )
-    gmail_service = build('gmail', 'v1', credentials=creds)
-    return gmail_service
+# --- FUNÇÃO ATUALIZADA PARA OAUTH 2.0 ---
+@st.cache_resource
+def get_gmail_service_oauth():
+    creds = None
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_config(
+                {
+                    "installed": {
+                        "client_id": secrets_dict["google_oauth"]["client_id"],
+                        "client_secret": secrets_dict["google_oauth"]["client_secret"],
+                        "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"],
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token"
+                    }
+                }, SCOPES)
+            auth_url, _ = flow.authorization_url(prompt='consent')
+            st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
+            code = st.text_input("Cole o código de autorização aqui:")
+            if code:
+                flow.fetch_token(code=code)
+                creds = flow.credentials
+                with open('token.json', 'w') as token:
+                    token.write(creds.to_json())
+            else:
+                st.stop()
+    
+    return build('gmail', 'v1', credentials=creds)
 
-gs_client = get_gspread_client()
-gmail_service = get_google_api_service()
+# --- Instância do serviço do Gmail (OAuth) ---
+gmail_service = get_gmail_service_oauth()
 
 def get_reembolsos_sheet():
     try:
-        spreadsheet = gs_client.open_by_key(SHEET_ID)
+        spreadsheet = get_gspread_client().open_by_key(SHEET_ID)
         sheet = spreadsheet.worksheet("Reembolsos")
         return sheet
     except gspread.exceptions.APIError as e:
@@ -106,7 +137,7 @@ def get_reembolsos_sheet():
 
 def get_usuarios_sheet():
     try:
-        spreadsheet = gs_client.open_by_key(SHEET_ID)
+        spreadsheet = get_gspread_client().open_by_key(SHEET_ID)
         sheet = spreadsheet.worksheet("Usuarios")
         return sheet
     except gspread.exceptions.WorksheetNotFound:
@@ -126,7 +157,6 @@ def create_message(sender, to, subject, message_text):
 
 def send_message(service, user_id, message):
     try:
-        # 'user_id' é a conta que está enviando, no caso, a própria conta de serviço
         message = service.users().messages().send(userId=user_id, body=message).execute()
         st.success(f"E-mail enviado com sucesso!")
         return message
@@ -260,7 +290,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             Sistema de Reembolsos
             """
             message_admin = create_message(sender_email, admin_email, subject_admin, body_admin)
-            send_message(gmail_service, sender_email, message_admin)
+            send_message(gmail_service, admin_email, message_admin)
 
         except Exception as e:
             st.error(f"Erro ao adicionar reembolso: {e}")
