@@ -23,7 +23,7 @@ import pytz
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
 # ==============================================================================
 # Configuração da página com layout wide e ícone
-st.set_page_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
+st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
 # CSS personalizado para o tema Essencis
 st.markdown(
@@ -430,10 +430,6 @@ def render_registrar_nf_page():
         with st.form("formulario_nota", clear_on_submit=True):
             col1_form, col2_form, col3_form = st.columns(3)
             
-            # Obtém a hora de Brasília para o registro de lançamento
-            brasilia_tz = pytz.timezone('America/Sao_Paulo')
-            agora = datetime.datetime.now(brasilia_tz)
-            
             with col1_form:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
@@ -491,6 +487,10 @@ def render_registrar_nf_page():
                         
                         divergencia = valor_total_float - valor_oc_total
                         
+                        # --- CORREÇÃO AQUI ---
+                        brasilia_tz = pytz.timezone('America/Sao_Paulo')
+                        agora = datetime.datetime.now(brasilia_tz)
+                        
                         st.session_state['novo_registro_nf'] = {
                             "DATA": data_recebimento,
                             "RECEBEDOR": recebedor,
@@ -507,8 +507,10 @@ def render_registrar_nf_page():
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_LANCAMENTO": agora  # REGISTRO DE LANÇAMENTO AGORA É A HORA DO ENVIO
+                            "REGISTRO_LANCAMENTO": agora, # Agora registra a hora correta
+                            "REGISTRO_ENVIO": "" # Esta coluna não será mais usada para este fim
                         }
+                        # --- FIM DA CORREÇÃO ---
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
                         
@@ -538,8 +540,6 @@ def render_registrar_nf_page():
         # Agora, a formatação de data/hora funcionará corretamente
         df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y').fillna('')
         df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y').fillna('')
-        
-        # Formata a coluna REGISTRO_LANCAMENTO para exibição
         df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
 
         col_map = {
@@ -706,6 +706,7 @@ def render_consultar_nfs_page():
             nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
             ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
             
+            df['FORNECEDOR_NF'] = df['FORNECEDOR_NF'].astype(str)
             fornecedores_unicos = sorted(df['FORNECEDOR_NF'].dropna().unique().tolist()) if 'FORNECEDOR_NF' in df.columns else []
             fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + fornecedores_unicos)
         
@@ -805,7 +806,6 @@ def render_configuracoes_page():
         st.info("**Informações do Sistema**")
         st.write(f"Total de notas cadastradas: **{len(df)}**")
         
-        # Obtém a hora de Brasília para exibir a última atualização
         brasilia_tz = pytz.timezone('America/Sao_Paulo')
         agora_brasilia = datetime.datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')
         st.write(f"Última atualização: **{agora_brasilia}**")
