@@ -344,32 +344,37 @@ else:
     )
 
     if menu == "Dashboard":
-        st.header("Resumo dos Reembolsos")
+        st.header("Resumo dos Seus Reembolsos")
         df_reembolsos = load_reembolsos_data()
         
-        if not df_reembolsos.empty:
-            if 'STATUS' in df_reembolsos.columns:
-                fig_status = px.bar(df_reembolsos['STATUS'].value_counts(),
-                                    title="Total de Reembolsos por Status",
-                                    labels={'index': 'STATUS', 'value': 'Quantidade'})
-                st.plotly_chart(fig_status)
+        if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
+            # Filtra os dados de reembolso para o usuário logado
+            df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == st.session_state.current_user['EMAIL'].lower()]
+
+            if not df_usuario.empty:
+                st.subheader("Estatísticas")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total de Reembolsos", len(df_usuario))
+                with col2:
+                    if 'VALOR' in df_usuario.columns:
+                        total_valor = df_usuario['VALOR'].sum()
+                        st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+                with col3:
+                    if 'STATUS' in df_usuario.columns:
+                        pendentes = df_usuario[df_usuario['STATUS'] == 'Pendente'].shape[0]
+                        st.metric("Pendentes", pendentes)
+                
+                if 'STATUS' in df_usuario.columns:
+                    fig_status = px.bar(df_usuario['STATUS'].value_counts(),
+                                        title="Seus Reembolsos por Status",
+                                        labels={'index': 'STATUS', 'value': 'Quantidade'})
+                    st.plotly_chart(fig_status)
             else:
-                st.warning("Coluna 'STATUS' não encontrada nos dados.")
-            
-            st.subheader("Estatísticas")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total de Reembolsos", len(df_reembolsos))
-            with col2:
-                if 'VALOR' in df_reembolsos.columns:
-                    total_valor = df_reembolsos['VALOR'].sum()
-                    st.metric("Valor Total", f"R$ {total_valor:,.2f}")
-            with col3:
-                if 'STATUS' in df_reembolsos.columns:
-                    pendentes = df_reembolsos[df_reembolsos['STATUS'] == 'Pendente'].shape[0]
-                    st.metric("Pendentes", pendentes)
+                st.info("Você ainda não tem reembolsos para exibir.")
         else:
-            st.warning("Não há dados de reembolso para exibir.")
+            st.warning("Não foi possível carregar os dados de reembolso ou a coluna 'EMAIL' não existe na planilha 'Reembolsos'.")
+
 
     elif menu == "Adicionar Reembolso":
         st.header("Adicionar Novo Reembolso")
