@@ -212,7 +212,7 @@ def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         
         # Get all values from the worksheet with the UNFORMATTED_VALUE option
         data = spreadsheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
@@ -281,7 +281,7 @@ def salvar_dados_pedidos(df):
     """Salva o DataFrame de pedidos no Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(0)
 
         df_to_save = df.copy()
@@ -320,7 +320,7 @@ def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(1)
         
         data = worksheet.get_all_records()
@@ -339,7 +339,7 @@ def salvar_dados_solicitantes(df):
     """Salva o DataFrame de solicitantes no Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(1)
 
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
@@ -356,7 +356,7 @@ def carregar_dados_almoxarifado():
     """Carrega dados do almoxarifado para preencher a nota fiscal."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(2)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -374,7 +374,7 @@ def carregar_dados_materiais():
     """Carrega o DataFrame de materiais do Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(3)
         data = worksheet.get_all_records()
         
@@ -393,7 +393,7 @@ def salvar_dados_materiais(df):
     """Salva o DataFrame de materiais no Google Sheets."""
     try:
         gc = get_gspread_client()
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(3)
         
         df_to_save = df.copy()
