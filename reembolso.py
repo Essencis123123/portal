@@ -115,7 +115,7 @@ def load_data():
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         if not df.empty:
-            df['Data'] = pd.to_datetime(df['Data'], format='%d/%m/%Y', errors='coerce').dt.date
+            df['DATA'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce').dt.date
         return df
     return pd.DataFrame()
 
@@ -125,7 +125,8 @@ def add_reembolso(data, nome, valor, caminho_recibo, status="Pendente"):
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
         try:
-            row = [data_formatada, nome, valor, status, caminho_recibo, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+            # A ordem dos dados deve ser a mesma das colunas na planilha
+            row = [data_formatada, nome, '', '', valor, '', status, caminho_recibo]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
         except Exception as e:
@@ -142,9 +143,9 @@ if menu == "Dashboard":
     df_reembolsos = load_data()
     if not df_reembolsos.empty:
         # Gráfico de status
-        fig_status = px.bar(df_reembolsos['Status'].value_counts(),
+        fig_status = px.bar(df_reembolsos['STATUS'].value_counts(),
                             title="Total de Reembolsos por Status",
-                            labels={'index': 'Status', 'value': 'Quantidade'})
+                            labels={'index': 'STATUS', 'value': 'Quantidade'})
         st.plotly_chart(fig_status)
     else:
         st.warning("Não há dados de reembolso para exibir.")
@@ -154,12 +155,12 @@ elif menu == "Adicionar Reembolso":
     st.header("Adicionar Novo Reembolso")
     
     with st.form("form_reembolso"):
-        nome_funcionario = st.text_input("Nome do Funcionário")
-        valor_reembolso = st.number_input("Valor do Reembolso", min_value=0.01, format="%.2f")
-        data_reembolso = st.date_input("Data do Reembolso", value=datetime.date.today())
+        nome_funcionario = st.text_input("NOME")
+        valor_reembolso = st.number_input("VALOR", min_value=0.01, format="%.2f")
+        data_reembolso = st.date_input("DATA", value=datetime.date.today())
         
         # Campo para o anexo do recibo
-        recibo_anexo = st.file_uploader("Anexar Recibo", type=["jpg", "jpeg", "png", "pdf"])
+        recibo_anexo = st.file_uploader("ID_COMPROVANTE", type=["jpg", "jpeg", "png", "pdf"])
         
         submit_button = st.form_submit_button("Salvar Reembolso")
         
@@ -185,34 +186,32 @@ elif menu == "Gerenciar Reembolsos":
     df_reembolsos = load_data()
 
     if not df_reembolsos.empty:
-        # Crie uma nova coluna 'Recibo' que contém o caminho do arquivo
-        df_reembolsos['Recibo'] = df_reembolsos['Caminho Recibo'].apply(lambda x: "Ver Recibo" if x else "N/A")
+        # Renomeia as colunas para melhor exibição no Streamlit, mantendo o original para a lógica
+        df_reembolsos.rename(columns={'ID_COMPROVANTE': 'Caminho_Recibo_Original'}, inplace=True)
         
-        # Renomeie a coluna original para esconder na visualização principal
-        df_reembolsos.rename(columns={'Caminho Recibo': 'Caminho_Recibo_Original'}, inplace=True)
+        # Cria a coluna "Ver Recibo"
+        df_reembolsos['Ver Recibo'] = df_reembolsos['Caminho_Recibo_Original'].apply(lambda x: "Ver Recibo" if x else "N/A")
         
-        colunas_para_exibir = ['Data', 'Nome', 'Valor', 'Status', 'Recibo']
+        colunas_para_exibir = ['DATA', 'NOME', 'VALOR', 'STATUS', 'Ver Recibo']
         
-        edited_df = st.data_editor(
+        st.data_editor(
             df_reembolsos[colunas_para_exibir],
             column_config={
-                "Valor": st.column_config.NumberColumn(format="R$ %.2f"),
-                "Recibo": st.column_config.LinkColumn("Recibo", display_text="Ver Recibo", help="Clique para ver o recibo.")
+                "VALOR": st.column_config.NumberColumn(format="R$ %.2f"),
+                "Ver Recibo": st.column_config.LinkColumn("Ver Recibo", display_text="Clique aqui", help="Clique para ver o recibo.")
             },
             hide_index=True,
         )
 
-        st.info("Para ver o recibo, clique no link 'Ver Recibo' na tabela.")
-
         # Lógica para mostrar o recibo quando o usuário interage
         if 'last_edited_cell' in st.session_state:
             cell_info = st.session_state.last_edited_cell
-            if cell_info and cell_info['column_name'] == 'Recibo':
+            if cell_info and cell_info['column_name'] == 'Ver Recibo':
                 row_index = cell_info['row_index']
                 caminho_recibo = df_reembolsos.iloc[row_index]['Caminho_Recibo_Original']
                 
                 if caminho_recibo:
-                    st.subheader(f"Recibo para {df_reembolsos.iloc[row_index]['Nome']}")
+                    st.subheader(f"Recibo para {df_reembolsos.iloc[row_index]['NOME']}")
                     # Gera a URL assinada e exibe a imagem
                     url_recibo = get_signed_url(caminho_recibo)
                     if url_recibo:
