@@ -9,3 +9,4 @@ Pillow
 openpyxl
 google-api-python-client
 supabase
+streamlit-option-menu
