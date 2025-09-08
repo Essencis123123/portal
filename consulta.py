@@ -198,7 +198,7 @@ def carregar_dados_pedidos():
     try:
         gc = get_gspread_client()
         
-        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
+        sheet = client.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(0)
         
         # Use UNFORMATTED_VALUE para obter os valores brutos
