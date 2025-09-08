@@ -290,45 +290,47 @@ def logout():
     st.rerun()
 
 # --- Autenticação OAuth (com persistência) ---
-if not st.session_state.creds or not st.session_state.creds.valid:
+if os.path.exists(TOKEN_FILE):
+    st.session_state.creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
     if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
         st.session_state.creds.refresh(Request())
-    else:
-        redirect_uri_oob = "urn:ietf:wg:oauth:2.0:oob"
-        flow = InstalledAppFlow.from_client_config(
-            {
-                "installed": {
-                    "client_id": secrets_dict["google_oauth"]["client_id"],
-                    "client_secret": secrets_dict["google_oauth"]["client_secret"],
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            }, SCOPES, redirect_uri=redirect_uri_oob)
-        
-        auth_url, _ = flow.authorization_url(prompt='consent')
-        
-        st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
-        st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
-        
-        authorization_code = st.text_input("Cole o código de autorização aqui:")
-        
-        if authorization_code:
-            try:
-                flow.fetch_token(code=authorization_code)
-                if flow.credentials:
-                    st.session_state.creds = flow.credentials
-                    st.session_state.user_email_oauth = flow.credentials.id_token['email']
-                    st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-                    st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
-                    st.rerun()
-                else:
-                    st.error("Erro: Não foi possível obter as credenciais. Por favor, tente novamente.")
+
+if not st.session_state.creds or not st.session_state.creds.valid:
+    redirect_uri_oob = "urn:ietf:wg:oauth:2.0:oob"
+    flow = InstalledAppFlow.from_client_config(
+        {
+            "installed": {
+                "client_id": secrets_dict["google_oauth"]["client_id"],
+                "client_secret": secrets_dict["google_oauth"]["client_secret"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token"
+            }
+        }, SCOPES, redirect_uri=redirect_uri_oob)
+    
+    auth_url, _ = flow.authorization_url(prompt='consent')
+    
+    st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
+    st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
+    
+    authorization_code = st.text_input("Cole o código de autorização aqui:")
+    
+    if authorization_code:
+        try:
+            flow.fetch_token(code=authorization_code)
+            if flow.credentials:
+                st.session_state.creds = flow.credentials
+                with open(TOKEN_FILE, 'w') as token:
+                    token.write(st.session_state.creds.to_json())
+                st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
+                st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+                st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
+                st.rerun()
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
 
-    # Se a autorização ainda não foi concluída, pare a execução do script
-    if not st.session_state.creds or not st.session_state.creds.valid:
-        st.stop()
+# Se a autorização ainda não foi concluída, pare a execução do script
+if not st.session_state.creds or not st.session_state.creds.valid:
+    st.stop()
 
 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
 st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
