@@ -202,8 +202,9 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
+         valor_formatado = f"{valor:.2f}".replace('.', ',') # Substitui ponto por vírgula para manter o padrão brasileiro
         try:
-            row = [data_formatada, nome, departamento, tipo_despesa, valor, justificativa, status, caminho_recibo, email]
+            row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, caminho_recibo, email]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
