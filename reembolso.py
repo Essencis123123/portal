@@ -185,7 +185,6 @@ def load_usuarios_data():
     if sheet:
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
-        # Padroniza os nomes das colunas para evitar KeyError
         if not df.empty:
             df.columns = df.columns.str.upper()
         return df
@@ -196,6 +195,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
         try:
+            # A ordem das colunas na planilha 'Reembolsos' deve ser: DATA, NOME, DEPARTAMENTO, TIPO_DESPESA, VALOR, JUSTIFICATIVA, STATUS, ID_COMPROVANTE, EMAIL
             row = [data_formatada, nome, departamento, tipo_despesa, valor, justificativa, status, caminho_recibo, email]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
@@ -290,17 +290,20 @@ elif menu == "Cadastrar Novo Usuário":
     st.header("Cadastrar Novo Usuário")
     with st.form("form_cadastro"):
         nome = st.text_input("Nome Completo")
+        matricula = st.text_input("Matrícula")
         email = st.text_input("E-mail Essencis")
         departamento = st.selectbox("Departamento", DEPARTAMENTOS)
         
         submit_cadastro = st.form_submit_button("Cadastrar")
         
         if submit_cadastro:
-            if nome and email and departamento:
+            if nome and matricula and email and departamento:
                 sheet = get_usuarios_sheet()
                 if sheet:
                     try:
-                        row = [nome, email, departamento]
+                        # A ordem das colunas na planilha 'Usuarios' deve ser: NOME, MATRICULA, EMAIL, SENHA, DEPARTAMENTO
+                        # A 'SENHA' não está sendo usada, mas é importante para a ordem da planilha
+                        row = [nome, matricula, email, "", departamento] 
                         sheet.append_row(row)
                         st.success(f"Usuário {nome} cadastrado com sucesso!")
                     except Exception as e:
@@ -313,8 +316,10 @@ elif menu == "Adicionar Reembolso":
     st.header("Adicionar Novo Reembolso")
     
     df_usuarios = load_usuarios_data()
-    if df_usuarios.empty or 'NOME' not in df_usuarios.columns:
-        st.warning("Não há usuários cadastrados. Por favor, cadastre um usuário primeiro.")
+    # Verifica se a planilha de usuários está vazia ou se faltam as colunas necessárias
+    required_cols = ['NOME', 'EMAIL', 'DEPARTAMENTO']
+    if df_usuarios.empty or not all(col in df_usuarios.columns for col in required_cols):
+        st.warning("Não há usuários cadastrados ou a planilha 'Usuarios' não possui as colunas 'NOME', 'EMAIL' e 'DEPARTAMENTO'. Por favor, verifique.")
         st.stop()
     
     usuario_selecionado = st.selectbox(
@@ -322,9 +327,11 @@ elif menu == "Adicionar Reembolso":
         df_usuarios['NOME']
     )
     
+    # Busca as informações do usuário selecionado de forma segura
     df_usuario_info = df_usuarios[df_usuarios['NOME'] == usuario_selecionado].iloc[0]
     nome_funcionario = df_usuario_info['NOME']
     email_funcionario = df_usuario_info['EMAIL']
+    # Agora o departamento é buscado da planilha 'Usuarios'
     departamento_funcionario = df_usuario_info['DEPARTAMENTO']
     
     st.subheader(f"Dados de {nome_funcionario}")
@@ -361,8 +368,9 @@ elif menu == "Meu Histórico":
     st.header("Meu Histórico de Reembolsos")
     
     df_usuarios = load_usuarios_data()
-    if df_usuarios.empty or 'NOME' not in df_usuarios.columns:
-        st.warning("Não há usuários cadastrados. Por favor, cadastre um usuário primeiro.")
+    required_cols = ['NOME', 'EMAIL', 'DEPARTAMENTO']
+    if df_usuarios.empty or not all(col in df_usuarios.columns for col in required_cols):
+        st.warning("Não há usuários cadastrados ou a planilha 'Usuarios' não possui as colunas 'NOME', 'EMAIL' e 'DEPARTAMENTO'. Por favor, verifique.")
         st.stop()
     
     usuario_selecionado = st.selectbox(
