@@ -208,11 +208,8 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
-                # --- CORREÇÃO AQUI ---
-                # Substitui strings vazias, zeros e valores nulos por NaT para evitar o 01/01/1970
                 df[col] = df[col].replace('', np.nan).replace(0, np.nan).replace('0', np.nan)
                 df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
-                # --- FIM DA CORREÇÃO ---
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
@@ -237,7 +234,6 @@ def salvar_dados_almoxarifado(df):
 
         df_copy = df.copy()
 
-        # Mapeia as colunas do DataFrame para os nomes exatos da planilha
         df_copy = df_copy.rename(columns={
             "REGISTRO_ADICIONAL": "OBSERVACAO",
             "V. TOTAL NF": "V. TOTAL NF",
@@ -250,15 +246,12 @@ def salvar_dados_almoxarifado(df):
             "STATUS_FINANCEIRO": "STATUS_FINANCEIRO",
         }, errors='ignore')
         
-        # Formata colunas de data/hora para o formato de string antes de salvar
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
 
-        # Remove colunas duplicadas e de visualização
         df_copy = df_copy.loc[:,~df_copy.columns.duplicated()]
         
-        # Limpa a planilha e escreve os novos dados
         worksheet.clear()
         set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
@@ -558,10 +551,10 @@ def render_registrar_nf_page():
         }
         
         # Filtra apenas as colunas que existem no DataFrame
-        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns or f'{col}_VISUAL' in df_ultimas_nfs.columns]
-        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols or f'{k}_VISUAL' in df_ultimas_nfs.columns}
+        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns]
+        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols}
         
-        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map_filtered)
+        df_ultimas_nfs_display = df_ultimas_nfs[available_cols].rename(columns=col_map_filtered)
         
         def colorir_status_display(status):
             cores = {
