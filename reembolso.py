@@ -18,8 +18,12 @@ import re
 import mimetypes
 from supabase import create_client, Client
 import toml
+from streamlit_option_menu import option_menu
 
-# Carrega os segredos do arquivo secrets.toml
+# --- Configuração do Layout e Tema ---
+st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
+
+# --- Carrega os segredos do arquivo secrets.toml ---
 try:
     with open(".streamlit/secrets.toml", "r") as f:
         secrets_dict = toml.load(f)
@@ -60,10 +64,12 @@ TIPOS_DESPESA = [
     "Outros"
 ]
 
-# --- Configuração do Layout e Tema ---
-st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
+# --- Gerenciamento de Estado da Sessão ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
 
-# --- Configuração de Dados e Lógica de Backend (Google Sheets e APIs) ---
+# --- Conexão com Google Sheets e APIs ---
 SHEET_ID = secrets_dict["gcp_service_account"]["sheet_id"]
 
 @st.cache_resource(ttl=3600)
@@ -168,8 +174,7 @@ def get_signed_url(file_path, bucket_name="reembolsos-anexos"):
         st.error(f"Ocorreu um erro ao tentar gerar a URL: {e}")
         return None
 
-# --- Funções do Aplicativo ---
-
+# --- Funções de Carregamento de Dados ---
 def load_reembolsos_data():
     sheet = get_reembolsos_sheet()
     if sheet:
@@ -190,12 +195,12 @@ def load_usuarios_data():
         return df
     return pd.DataFrame()
 
+# --- Funções de Adicionar Reembolso e Cadastro ---
 def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justificativa, caminho_recibo, status="Pendente"):
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
         try:
-            # A ordem das colunas na planilha 'Reembolsos' deve ser: DATA, NOME, DEPARTAMENTO, TIPO_DESPESA, VALOR, JUSTIFICATIVA, STATUS, ID_COMPROVANTE, EMAIL
             row = [data_formatada, nome, departamento, tipo_despesa, valor, justificativa, status, caminho_recibo, email]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
@@ -250,143 +255,170 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
         except Exception as e:
             st.error(f"Erro ao adicionar reembolso: {e}")
 
-# --- Interface do Usuário (Streamlit) ---
+# --- Funções de Autenticação ---
+def login(email, password):
+    df_usuarios = load_usuarios_data()
+    if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and 'SENHA' in df_usuarios.columns:
+        user_data = df_usuarios[(df_usuarios['EMAIL'].str.lower() == email.lower()) & (df_usuarios['SENHA'] == password)]
+        if not user_data.empty:
+            st.session_state.logged_in = True
+            st.session_state.current_user = user_data.iloc[0]
+            st.success("Login bem-sucedido!")
+            st.rerun()
+        else:
+            st.error("E-mail ou senha incorretos.")
+    else:
+        st.error("Não foi possível carregar os dados de usuário. Verifique a planilha 'Usuarios'.")
+
+def logout():
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
+    st.info("Você foi desconectado.")
+    st.rerun()
+
+# --- Layout do Aplicativo ---
 st.title("💰 Gestão de Reembolsos Essencis")
 
-menu = st.sidebar.selectbox("Menu Principal", ["Dashboard", "Cadastrar Novo Usuário", "Adicionar Reembolso", "Meu Histórico"])
-
-# --- Seção do Dashboard ---
-if menu == "Dashboard":
-    st.header("Resumo dos Reembolsos")
-    st.info("O dashboard para o usuário é um resumo geral e não exibe dados individuais.")
-    df_reembolsos = load_reembolsos_data()
-    
-    if not df_reembolsos.empty:
-        if 'STATUS' in df_reembolsos.columns:
-            fig_status = px.bar(df_reembolsos['STATUS'].value_counts(),
-                                 title="Total de Reembolsos por Status",
-                                 labels={'index': 'STATUS', 'value': 'Quantidade'})
-            st.plotly_chart(fig_status)
-        else:
-            st.warning("Coluna 'STATUS' não encontrada nos dados.")
-        
-        st.subheader("Estatísticas")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total de Reembolsos", len(df_reembolsos))
-        with col2:
-            if 'VALOR' in df_reembolsos.columns:
-                total_valor = df_reembolsos['VALOR'].sum()
-                st.metric("Valor Total", f"R$ {total_valor:,.2f}")
-        with col3:
-            if 'STATUS' in df_reembolsos.columns:
-                pendentes = df_reembolsos[df_reembolsos['STATUS'] == 'Pendente'].shape[0]
-                st.metric("Pendentes", pendentes)
-    else:
-        st.warning("Não há dados de reembolso para exibir.")
-
-# --- Seção de Cadastro de Usuário ---
-elif menu == "Cadastrar Novo Usuário":
-    st.header("Cadastrar Novo Usuário")
-    with st.form("form_cadastro"):
-        nome = st.text_input("Nome Completo")
-        matricula = st.text_input("Matrícula")
-        email = st.text_input("E-mail Essencis")
-        departamento = st.selectbox("Departamento", DEPARTAMENTOS)
-        
-        submit_cadastro = st.form_submit_button("Cadastrar")
-        
-        if submit_cadastro:
-            if nome and matricula and email and departamento:
-                sheet = get_usuarios_sheet()
-                if sheet:
-                    try:
-                        # A ordem das colunas na planilha 'Usuarios' deve ser: NOME, MATRICULA, EMAIL, SENHA, DEPARTAMENTO
-                        # A 'SENHA' não está sendo usada, mas é importante para a ordem da planilha
-                        row = [nome, matricula, email, "", departamento] 
-                        sheet.append_row(row)
-                        st.success(f"Usuário {nome} cadastrado com sucesso!")
-                    except Exception as e:
-                        st.error(f"Erro ao cadastrar usuário: {e}")
-            else:
-                st.error("Por favor, preencha todos os campos.")
-
-# --- Seção de Adicionar Reembolso ---
-elif menu == "Adicionar Reembolso":
-    st.header("Adicionar Novo Reembolso")
-    
-    df_usuarios = load_usuarios_data()
-    # Verifica se a planilha de usuários está vazia ou se faltam as colunas necessárias
-    required_cols = ['NOME', 'EMAIL', 'DEPARTAMENTO']
-    if df_usuarios.empty or not all(col in df_usuarios.columns for col in required_cols):
-        st.warning("Não há usuários cadastrados ou a planilha 'Usuarios' não possui as colunas 'NOME', 'EMAIL' e 'DEPARTAMENTO'. Por favor, verifique.")
-        st.stop()
-    
-    usuario_selecionado = st.selectbox(
-        "Selecione o Usuário",
-        df_usuarios['NOME']
+if not st.session_state.logged_in:
+    # --- Seção de Login e Cadastro (Pré-Autenticação) ---
+    selected_page = option_menu(
+        menu_title=None,
+        options=["Login", "Cadastre-se"],
+        icons=["box-arrow-in-right", "person-add"],
+        menu_icon="cast",
+        default_index=0,
+        orientation="horizontal",
     )
-    
-    # Busca as informações do usuário selecionado de forma segura
-    df_usuario_info = df_usuarios[df_usuarios['NOME'] == usuario_selecionado].iloc[0]
-    nome_funcionario = df_usuario_info['NOME']
-    email_funcionario = df_usuario_info['EMAIL']
-    # Agora o departamento é buscado da planilha 'Usuarios'
-    departamento_funcionario = df_usuario_info['DEPARTAMENTO']
-    
-    st.subheader(f"Dados de {nome_funcionario}")
-    st.info(f"E-mail: {email_funcionario} | Departamento: {departamento_funcionario}")
-    
-    num_reembolsos = st.number_input("Quantos reembolsos deseja adicionar?", min_value=1, step=1)
-    
-    for i in range(int(num_reembolsos)):
-        st.markdown(f"### Reembolso #{i + 1}")
-        with st.form(f"form_reembolso_{i}"):
-            tipo_despesa_selecionada = st.selectbox(f"Tipo de Despesa", TIPOS_DESPESA, key=f"tipo_despesa_{i}")
-            valor_reembolso = st.number_input(f"Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
-            justificativa = st.text_area(f"Justificativa", key=f"justificativa_{i}")
-            data_reembolso = st.date_input(f"Data", value=datetime.date.today(), key=f"data_{i}")
-            recibo_anexo = st.file_uploader(f"Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"], key=f"recibo_{i}")
+
+    if selected_page == "Login":
+        st.header("Login")
+        with st.form("login_form"):
+            email_login = st.text_input("E-mail")
+            password_login = st.text_input("Senha", type="password")
+            submitted = st.form_submit_button("Entrar")
+            if submitted:
+                login(email_login, password_login)
+
+    elif selected_page == "Cadastre-se":
+        st.header("Cadastrar Novo Usuário")
+        with st.form("cadastro_form"):
+            nome = st.text_input("Nome Completo")
+            matricula = st.text_input("Matrícula")
+            email = st.text_input("E-mail Essencis")
+            password_cad = st.text_input("Crie uma Senha", type="password")
+            departamento = st.selectbox("Departamento", DEPARTAMENTOS)
             
-            submit_button = st.form_submit_button("Salvar Este Reembolso")
-            
-            if submit_button:
-                if valor_reembolso and data_reembolso and justificativa:
-                    caminho_recibo = None
-                    if recibo_anexo:
-                        caminho_recibo = upload_to_supabase(recibo_anexo)
-                        if not caminho_recibo:
-                            st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
-                    
-                    add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_funcionario, 
-                                  tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
+            submitted_cad = st.form_submit_button("Cadastrar")
+            if submitted_cad:
+                if nome and matricula and email and password_cad and departamento:
+                    df_usuarios = load_usuarios_data()
+                    if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and (df_usuarios['EMAIL'].str.lower() == email.lower()).any():
+                        st.error("Este e-mail já está cadastrado.")
+                    else:
+                        sheet = get_usuarios_sheet()
+                        if sheet:
+                            try:
+                                # A ordem das colunas na planilha 'Usuarios' deve ser: NOME, MATRICULA, EMAIL, SENHA, DEPARTAMENTO
+                                row = [nome, matricula, email, password_cad, departamento]
+                                sheet.append_row(row)
+                                st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
+                            except Exception as e:
+                                st.error(f"Erro ao cadastrar usuário: {e}")
                 else:
-                    st.error("Por favor, preencha todos os campos obrigatórios.")
-    
-# --- Seção Meu Histórico ---
-elif menu == "Meu Histórico":
-    st.header("Meu Histórico de Reembolsos")
-    
-    df_usuarios = load_usuarios_data()
-    required_cols = ['NOME', 'EMAIL', 'DEPARTAMENTO']
-    if df_usuarios.empty or not all(col in df_usuarios.columns for col in required_cols):
-        st.warning("Não há usuários cadastrados ou a planilha 'Usuarios' não possui as colunas 'NOME', 'EMAIL' e 'DEPARTAMENTO'. Por favor, verifique.")
-        st.stop()
-    
-    usuario_selecionado = st.selectbox(
-        "Selecione o seu Nome para ver o histórico:",
-        df_usuarios['NOME']
+                    st.error("Por favor, preencha todos os campos.")
+
+else:
+    # --- Seções do Aplicativo (Pós-Autenticação) ---
+    st.sidebar.header(f"Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!")
+    st.sidebar.button("Sair", on_click=logout)
+
+    menu = option_menu(
+        menu_title=None,
+        options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
+        icons=["house", "cash-stack", "clock-history"],
+        menu_icon="cast",
+        default_index=0,
+        orientation="horizontal",
     )
-    
-    if usuario_selecionado:
+
+    if menu == "Dashboard":
+        st.header("Resumo dos Reembolsos")
         df_reembolsos = load_reembolsos_data()
         
-        if not df_reembolsos.empty and 'NOME' in df_reembolsos.columns:
-            df_usuario = df_reembolsos[df_reembolsos['NOME'].str.lower() == usuario_selecionado.lower()]
+        if not df_reembolsos.empty:
+            if 'STATUS' in df_reembolsos.columns:
+                fig_status = px.bar(df_reembolsos['STATUS'].value_counts(),
+                                    title="Total de Reembolsos por Status",
+                                    labels={'index': 'STATUS', 'value': 'Quantidade'})
+                st.plotly_chart(fig_status)
+            else:
+                st.warning("Coluna 'STATUS' não encontrada nos dados.")
+            
+            st.subheader("Estatísticas")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total de Reembolsos", len(df_reembolsos))
+            with col2:
+                if 'VALOR' in df_reembolsos.columns:
+                    total_valor = df_reembolsos['VALOR'].sum()
+                    st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+            with col3:
+                if 'STATUS' in df_reembolsos.columns:
+                    pendentes = df_reembolsos[df_reembolsos['STATUS'] == 'Pendente'].shape[0]
+                    st.metric("Pendentes", pendentes)
+        else:
+            st.warning("Não há dados de reembolso para exibir.")
+
+    elif menu == "Adicionar Reembolso":
+        st.header("Adicionar Novo Reembolso")
+        
+        user_info = st.session_state.current_user
+        nome_funcionario = user_info['NOME']
+        email_funcionario = user_info['EMAIL']
+        departamento_funcionario = user_info['DEPARTAMENTO']
+        
+        st.subheader(f"Dados do Solicitante:")
+        st.info(f"**Nome:** {nome_funcionario} | **E-mail:** {email_funcionario} | **Departamento:** {departamento_funcionario}")
+        
+        num_reembolsos = st.number_input("Quantos reembolsos deseja adicionar?", min_value=1, step=1)
+        
+        for i in range(int(num_reembolsos)):
+            st.markdown(f"### Reembolso #{i + 1}")
+            with st.form(f"form_reembolso_{i}"):
+                tipo_despesa_selecionada = st.selectbox(f"Tipo de Despesa", TIPOS_DESPESA, key=f"tipo_despesa_{i}")
+                valor_reembolso = st.number_input(f"Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
+                justificativa = st.text_area(f"Justificativa", key=f"justificativa_{i}")
+                data_reembolso = st.date_input(f"Data", value=datetime.date.today(), key=f"data_{i}")
+                recibo_anexo = st.file_uploader(f"Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"], key=f"recibo_{i}")
+                
+                submit_button = st.form_submit_button("Salvar Este Reembolso")
+                
+                if submit_button:
+                    if valor_reembolso and data_reembolso and justificativa:
+                        caminho_recibo = None
+                        if recibo_anexo:
+                            caminho_recibo = upload_to_supabase(recibo_anexo)
+                            if not caminho_recibo:
+                                st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
+                        
+                        add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_funcionario, 
+                                    tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
+                    else:
+                        st.error("Por favor, preencha todos os campos obrigatórios.")
+
+    elif menu == "Meu Histórico":
+        st.header("Meu Histórico de Reembolsos")
+        
+        user_email = st.session_state.current_user['EMAIL']
+        
+        df_reembolsos = load_reembolsos_data()
+        
+        if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
+            df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             
             if not df_usuario.empty:
                 st.write(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
             else:
-                st.info("Nenhum reembolso encontrado para este nome.")
+                st.info("Nenhum reembolso encontrado para este e-mail.")
         else:
             st.warning("Não foi possível carregar os dados de reembolso.")
