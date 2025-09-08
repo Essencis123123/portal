@@ -213,10 +213,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
-            # --- E-mail de remetente fixo ---
             sender_email = st.session_state.user_email_oauth
             
-            # Gerar link do comprovante (se existir)
             recibo_url = None
             if caminho_recibo:
                 recibo_url = get_signed_url(caminho_recibo)
@@ -321,16 +319,15 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                 st.session_state.creds = flow.credentials
                 with open(TOKEN_FILE, 'w') as token:
                     token.write(st.session_state.creds.to_json())
-                st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
+                st.session_state.user_email_oauth = flow.credentials.id_token['email']
                 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
                 st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
 
-# Se a autorização ainda não foi concluída, pare a execução do script
-if not st.session_state.creds or not st.session_state.creds.valid:
-    st.stop()
+    if not st.session_state.creds or not st.session_state.creds.valid:
+        st.stop()
 
 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
 st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
@@ -449,21 +446,31 @@ else:
         for i in range(int(num_reembolsos)):
             st.markdown(f"### Reembolso #{i + 1}")
             with st.form(f"form_reembolso_{i}"):
-                departamento_selecionado = st.selectbox(
-                    f"Departamento", 
-                    DEPARTAMENTOS, 
-                    key=f"departamento_{i}"
-                )
-                tipo_despesa_selecionada = st.selectbox(
-                    f"Tipo de Despesa", 
-                    TIPOS_DESPESA, 
-                    key=f"tipo_despesa_{i}"
-                )
-                valor_reembolso = st.number_input(f"Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
-                justificativa = st.text_area(f"Justificativa", key=f"justificativa_{i}")
-                data_reembolso = st.date_input(f"Data", value=datetime.date.today(), key=f"data_{i}")
-                recibo_anexo = st.file_uploader(f"Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"], key=f"recibo_{i}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    departamento_selecionado = st.selectbox(
+                        "Departamento", 
+                        DEPARTAMENTOS, 
+                        key=f"depto_{i}"
+                    )
+                with col2:
+                    tipo_despesa_selecionada = st.selectbox(
+                        "Tipo de Despesa", 
+                        TIPOS_DESPESA, 
+                        key=f"despesa_{i}"
+                    )
+                
+                col1_val, col2_date = st.columns(2)
+                with col1_val:
+                    valor_reembolso = st.number_input("Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
+                with col2_date:
+                    data_reembolso = st.date_input("Data", value=datetime.date.today(), key=f"data_{i}")
+                
+                justificativa = st.text_area("Justificativa", key=f"justificativa_{i}")
+                recibo_anexo = st.file_uploader("Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"], key=f"recibo_{i}")
+                
                 submit_button = st.form_submit_button("Salvar Este Reembolso")
+                
                 if submit_button:
                     if valor_reembolso and data_reembolso and justificativa:
                         caminho_recibo = None
@@ -471,6 +478,7 @@ else:
                             caminho_recibo = upload_to_supabase(recibo_anexo)
                             if not caminho_recibo:
                                 st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
+                        
                         add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado, 
                                     tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
                     else:
