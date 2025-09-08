@@ -64,8 +64,6 @@ TIPOS_DESPESA = [
     "Outros"
 ]
 
-TODOS_OS_CUSTOS = DEPARTAMENTOS + TIPOS_DESPESA
-
 # --- Gerenciamento de Estado da Sessão ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -182,8 +180,13 @@ def load_reembolsos_data():
     if sheet:
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
-        if not df.empty and 'DATA' in df.columns:
-            df['DATA'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce').dt.date
+        if not df.empty:
+            df.columns = df.columns.str.upper()
+            if 'DATA' in df.columns:
+                df['DATA'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce').dt.date
+            if 'VALOR' in df.columns:
+                df['VALOR'] = df['VALOR'].astype(str).str.replace(',', '.', regex=False)
+                df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce')
         return df
     return pd.DataFrame()
 
@@ -202,7 +205,6 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
-        # Formata o valor com duas casas decimais
         valor_formatado = f"{valor:.2f}".replace('.', ',')
         try:
             row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, caminho_recibo, email]
@@ -322,7 +324,6 @@ if not st.session_state.logged_in:
                         sheet = get_usuarios_sheet()
                         if sheet:
                             try:
-                                # A ordem das colunas na planilha 'Usuarios' deve ser: NOME, MATRICULA, EMAIL, SENHA
                                 row = [nome, matricula, email, password_cad]
                                 sheet.append_row(row)
                                 st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
@@ -341,7 +342,7 @@ else:
         options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
         icons=["house", "cash-stack", "clock-history"],
         menu_icon="cast",
-        default_index=1, # AQUI O CÓDIGO FOI ALTERADO PARA COMEÇAR EM 'ADICIONAR REEMBOLSO'
+        default_index=1,
         orientation="horizontal",
     )
 
@@ -350,7 +351,6 @@ else:
         df_reembolsos = load_reembolsos_data()
         
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
-            # Filtra os dados de reembolso para o usuário logado
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == st.session_state.current_user['EMAIL'].lower()]
 
             if not df_usuario.empty:
@@ -377,7 +377,6 @@ else:
         else:
             st.warning("Não foi possível carregar os dados de reembolso ou a coluna 'EMAIL' não existe na planilha 'Reembolsos'.")
 
-
     elif menu == "Adicionar Reembolso":
         st.header("Adicionar Novo Reembolso")
         
@@ -393,10 +392,15 @@ else:
         for i in range(int(num_reembolsos)):
             st.markdown(f"### Reembolso #{i + 1}")
             with st.form(f"form_reembolso_{i}"):
-                custo_departamento = st.selectbox(
-                    f"Custo / Departamento", 
-                    TODOS_OS_CUSTOS, 
-                    key=f"custo_departamento_{i}"
+                departamento_selecionado = st.selectbox(
+                    f"Departamento", 
+                    DEPARTAMENTOS, 
+                    key=f"departamento_{i}"
+                )
+                tipo_despesa_selecionada = st.selectbox(
+                    f"Tipo de Despesa", 
+                    TIPOS_DESPESA, 
+                    key=f"tipo_despesa_{i}"
                 )
                 valor_reembolso = st.number_input(f"Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
                 justificativa = st.text_area(f"Justificativa", key=f"justificativa_{i}")
@@ -413,15 +417,6 @@ else:
                             if not caminho_recibo:
                                 st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
                         
-                        departamento_selecionado = ""
-                        tipo_despesa_selecionada = ""
-                        if custo_departamento in DEPARTAMENTOS:
-                            departamento_selecionado = custo_departamento
-                            tipo_despesa_selecionada = "N/A" # Sem tipo de despesa, pois é um departamento
-                        elif custo_departamento in TIPOS_DESPESA:
-                            departamento_selecionado = "N/A" # Sem departamento, pois é um tipo de despesa
-                            tipo_despesa_selecionada = custo_departamento
-
                         add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado, 
                                     tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
                     else:
@@ -438,7 +433,9 @@ else:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             
             if not df_usuario.empty:
-                st.write(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
+                # Formata a coluna VALOR para exibir duas casas decimais
+                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}" if pd.notnull(x) else "")
+                st.dataframe(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
             else:
                 st.info("Nenhum reembolso encontrado para este e-mail.")
         else:
