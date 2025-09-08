@@ -86,16 +86,25 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-# --- FUNÇÃO ATUALIZADA PARA OAUTH 2.0 ---
-@st.cache_resource
-def get_gmail_service_oauth():
+# --- FUNÇÃO ATUALIZADA PARA OAUTH 2.0 (sem widget) ---
+def get_gmail_service_oauth(creds_file='token.json'):
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if os.path.exists(creds_file):
+        creds = Credentials.from_authorized_user_file(creds_file, SCOPES)
     
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+        return None
+    
+    return build('gmail', 'v1', credentials=creds)
+
+# --- Instância do cliente gspread ---
+gs_client = get_gspread_client()
+
+# --- Funções de Autenticação para e-mail (agora fora do cache) ---
+def auth_gmail_api():
+    if 'creds' not in st.session_state or not st.session_state.creds or not st.session_state.creds.valid:
+        if 'creds' in st.session_state and st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
+            st.session_state.creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_config(
                 {
@@ -108,24 +117,29 @@ def get_gmail_service_oauth():
                     }
                 }, SCOPES)
             auth_url, _ = flow.authorization_url(prompt='consent')
+            st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
             st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
             code = st.text_input("Cole o código de autorização aqui:")
             if code:
-                flow.fetch_token(code=code)
-                creds = flow.credentials
-                with open('token.json', 'w') as token:
-                    token.write(creds.to_json())
-            else:
-                st.stop()
+                try:
+                    flow.fetch_token(code=code)
+                    st.session_state.creds = flow.credentials
+                    st.success("Autorização bem-sucedida! Por favor, reinicie a página.")
+                    st.stop()
+                except Exception as e:
+                    st.error(f"Erro ao obter o token: {e}")
+                    st.stop()
     
-    return build('gmail', 'v1', credentials=creds)
+    return build('gmail', 'v1', credentials=st.session_state.creds)
 
 # --- Instância do serviço do Gmail (OAuth) ---
 gmail_service = get_gmail_service_oauth()
+if not gmail_service:
+    auth_gmail_api()
 
 def get_reembolsos_sheet():
     try:
-        spreadsheet = get_gspread_client().open_by_key(SHEET_ID)
+        spreadsheet = gs_client.open_by_key(SHEET_ID)
         sheet = spreadsheet.worksheet("Reembolsos")
         return sheet
     except gspread.exceptions.APIError as e:
@@ -137,7 +151,7 @@ def get_reembolsos_sheet():
 
 def get_usuarios_sheet():
     try:
-        spreadsheet = get_gspread_client().open_by_key(SHEET_ID)
+        spreadsheet = gs_client.open_by_key(SHEET_ID)
         sheet = spreadsheet.worksheet("Usuarios")
         return sheet
     except gspread.exceptions.WorksheetNotFound:
