@@ -81,6 +81,7 @@ if 'gmail_service' not in st.session_state:
 # --- Conexão com Google Sheets e APIs ---
 SHEET_ID = secrets_dict["gcp_service_account"]["sheet_id"]
 SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+TOKEN_FILE = 'token.json'
 
 @st.cache_resource(ttl=3600)
 def get_gspread_client():
@@ -286,7 +287,10 @@ def logout():
     st.info("Você foi desconectado.")
     st.rerun()
 
-# --- Autenticação OAuth (agora um bloco único) ---
+# --- Autenticação OAuth (com persistência) ---
+if os.path.exists(TOKEN_FILE):
+    st.session_state.creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+
 if not st.session_state.creds or not st.session_state.creds.valid:
     if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
         st.session_state.creds.refresh(Request())
@@ -312,17 +316,16 @@ if not st.session_state.creds or not st.session_state.creds.valid:
         if authorization_code:
             try:
                 flow.fetch_token(code=authorization_code)
-                if flow.credentials: # Verifica se as credenciais foram obtidas
-                    st.session_state.creds = flow.credentials
-                    st.session_state.user_email_oauth = flow.credentials.id_token['email']
-                    st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-                    st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
-                    st.rerun()
-                else:
-                    st.error("Erro: Não foi possível obter as credenciais. Por favor, tente novamente.")
+                st.session_state.creds = flow.credentials
+                with open(TOKEN_FILE, 'w') as token:
+                    token.write(st.session_state.creds.to_json())
+                st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
+                st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+                st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
+                st.rerun()
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
-
+    
     # Se a autorização ainda não foi concluída, pare a execução do script
     if not st.session_state.creds or not st.session_state.creds.valid:
         st.stop()
