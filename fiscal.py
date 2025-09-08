@@ -438,7 +438,7 @@ else:
 
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
-            # --- CORREÇÃO DO ERRO .dt ACCESSOR ---
+            # --- CORREÇÃO AQUI ---
             # Converte as colunas de data/hora para datetime, tratando erros, antes de formatar para exibição
             df_display['REGISTRO_ENVIO'] = pd.to_datetime(df_display['REGISTRO_ENVIO'], errors='coerce')
             df_display['REGISTRO_LANCAMENTO'] = pd.to_datetime(df_display['REGISTRO_LANCAMENTO'], errors='coerce')
@@ -466,7 +466,7 @@ else:
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
                     "REGISTRO_ENVIO_VISUAL": st.column_config.TextColumn("Reg. Envio (Almox.)", disabled=True),
-                    "REGISTRO_LANCAMENTO_VISUAL": st.column_config.TextColumn("Reg. Lançamento (Fin.)", disabled=True),
+                    "REGISTRO_LANCAMENTO_VISUAL": st.column_config.TextColumn("Reg. Lançamento (Fin.)"), # EDITÁVEL
                 },
                 column_order=[
                     "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO_VISUAL",
