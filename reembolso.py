@@ -212,7 +212,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
-            # --- Envio de E-mail usando o token OAuth do usuário ---
+            # --- E-mail de remetente fixo ---
             sender_email = st.session_state.user_email_oauth
             
             # 1. Envia e-mail para o usuário
@@ -291,23 +291,24 @@ if not st.session_state.creds or not st.session_state.creds.valid:
     if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
         st.session_state.creds.refresh(Request())
     else:
-        redirect_uri = secrets_dict["google_oauth"]["redirect_uri_app"]
+        redirect_uri_oob = "urn:ietf:wg:oauth:2.0:oob"
         flow = InstalledAppFlow.from_client_config(
             {
-                "installed": { # O tipo 'installed' é o correto para o InstalledAppFlow
+                "installed": {
                     "client_id": secrets_dict["google_oauth"]["client_id"],
                     "client_secret": secrets_dict["google_oauth"]["client_secret"],
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
-            }, SCOPES, redirect_uri=redirect_uri)
+            }, SCOPES, redirect_uri=redirect_uri_oob)
         
         auth_url, _ = flow.authorization_url(prompt='consent')
         
         st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
         st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
         
-        authorization_code = st.query_params.get("code")
+        authorization_code = st.text_input("Cole o código de autorização aqui:")
+        
         if authorization_code:
             try:
                 flow.fetch_token(code=authorization_code)
@@ -321,7 +322,7 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                 st.error(f"Erro ao obter o token: {e}")
                 st.stop()
         st.stop()
-        
+
 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
 
 # --- Layout do Aplicativo ---
