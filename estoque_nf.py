@@ -832,4 +832,8 @@ def render_configuracoes_page():
 if 'logado' not in st.session_state or not st.session_state['logado']:
     render_login_page()
 else:
+<<<<<<< HEAD
     render_main_app()
+=======
+    render_main_app()
+>>>>>>> b60e7ce1cd42713e8091a476beecbc9649d1b70a

@@ -1,6 +1,11 @@
-streamlit
-pandas
-plotly
-requests
 gspread
 oauth2client
+gspread_dataframe
+pandas
+streamlit
+plotly
+requests
+Pillow
+openpyxl
+google-api-python-client
+supabase

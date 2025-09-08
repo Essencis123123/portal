@@ -492,4 +492,8 @@ st.download_button(
     file_name=f"pedidos_consulta_{datetime.date.today()}.csv",
     mime="text/csv",
     help="Clique para baixar os dados da tabela filtrada."
+<<<<<<< HEAD
 )
+=======
+)
+>>>>>>> b60e7ce1cd42713e8091a476beecbc9649d1b70a
