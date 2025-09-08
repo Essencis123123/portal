@@ -502,7 +502,8 @@ def render_registrar_nf_page():
                             "STATUS_FINANCEIRO": "EM ANDAMENTO",
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
-                            "ORDEM_COMPRA": ordem_compra_nf
+                            "ORDEM_COMPRA": ordem_compra_nf,
+                            "REGISTRO_ENVIO": datetime.datetime.now() # Adiciona o timestamp
                         }
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
