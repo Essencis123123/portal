@@ -71,6 +71,8 @@ TIPOS_DESPESA = [
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.current_user = None
+if 'creds' not in st.session_state:
+    st.session_state.creds = None
 
 # --- Conexão com Google Sheets e APIs ---
 SHEET_ID = secrets_dict["gcp_service_account"]["sheet_id"]
@@ -206,6 +208,9 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
+            # --- Envio de E-mail usando o token OAuth do usuário ---
+            sender_email = st.session_state.user_email_oauth
+            
             # 1. Envia e-mail para o usuário
             subject_user = "Confirmação de Envio de Reembolso"
             body_user = f"""
@@ -225,8 +230,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             Atenciosamente,
             Equipe de Reembolsos Essencis
             """
-            message_user = create_message(st.session_state.creds.client_id, email, subject_user, body_user)
-            send_message(gmail_service, 'me', message_user)
+            message_user = create_message(sender_email, email, subject_user, body_user)
+            send_message(st.session_state.gmail_service, 'me', message_user)
 
             # 2. Envia e-mail para o administrador
             admin_email = "earaujo@essencis.com.br"
@@ -250,13 +255,13 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             Atenciosamente,
             Sistema de Reembolsos
             """
-            message_admin = create_message(st.session_state.creds.client_id, admin_email, subject_admin, body_admin)
-            send_message(gmail_service, 'me', message_admin)
+            message_admin = create_message(sender_email, admin_email, subject_admin, body_admin)
+            send_message(st.session_state.gmail_service, 'me', message_admin)
 
         except Exception as e:
             st.error(f"Erro ao adicionar reembolso: {e}")
 
-# --- Funções de Autenticação ---
+# --- Funções de Autenticação de Login ---
 def login(email, password):
     df_usuarios = load_usuarios_data()
     if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and 'SENHA' in df_usuarios.columns:
@@ -278,37 +283,45 @@ def logout():
     st.rerun()
 
 # --- Autenticação OAuth (fora do cache) ---
-if "creds" not in st.session_state:
+if 'creds' not in st.session_state:
     st.session_state.creds = None
+
 if not st.session_state.creds or not st.session_state.creds.valid:
     if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
         st.session_state.creds.refresh(Request())
     else:
         flow = InstalledAppFlow.from_client_config(
             {
-                "installed": {
+                "web": {
                     "client_id": secrets_dict["google_oauth"]["client_id"],
                     "client_secret": secrets_dict["google_oauth"]["client_secret"],
-                    "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"],
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
-            }, SCOPES)
+            }, SCOPES, redirect_uri="http://localhost:8501")
+        
         auth_url, _ = flow.authorization_url(prompt='consent')
+        
         st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
         st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
         code = st.text_input("Cole o código de autorização aqui:")
+        
         if code:
             try:
                 flow.fetch_token(code=code)
                 st.session_state.creds = flow.credentials
+                # Salva o email do usuário que autorizou para usar como remetente
+                st.session_state.user_email_oauth = flow.credentials.id_token['email']
+                st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
                 st.success("Autorização bem-sucedida! Por favor, reinicie a página.")
                 st.stop()
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
                 st.stop()
         st.stop()
-gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+
+# Conecta ao Gmail Service após a autenticação
+st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
 
 # --- Layout do Aplicativo ---
 st.title("💰 Gestão de Reembolsos Essencis")
@@ -395,7 +408,6 @@ else:
                 st.info("Você ainda não tem reembolsos para exibir.")
         else:
             st.warning("Não foi possível carregar os dados de reembolso ou a coluna 'EMAIL' não existe na planilha 'Reembolsos'.")
-
     elif menu == "Adicionar Reembolso":
         st.header("Adicionar Novo Reembolso")
         user_info = st.session_state.current_user
