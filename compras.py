@@ -208,6 +208,15 @@ def formatar_data_brasil_hifen(data):
     except:
         return str(data)
 
+def criar_dataframe_pedidos_vazio():
+    """Cria um DataFrame de pedidos vazio com a estrutura correta."""
+    return pd.DataFrame(columns=[
+        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
+        "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
+    ])
+
+@st.cache_data(show_spinner=False)
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
@@ -266,14 +275,6 @@ def carregar_dados_pedidos():
         st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
         return criar_dataframe_pedidos_vazio()
 
-def criar_dataframe_pedidos_vazio():
-    """Cria um DataFrame de pedidos vazio com a estrutura correta."""
-    return pd.DataFrame(columns=[
-        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
-        "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
-    ])
-
 def formatar_numero_brasileiro(valor, casas_decimais=2):
     """Formata número no padrão brasileiro (vírgula como separador decimal)"""
     if pd.isna(valor) or valor == 0:
@@ -321,6 +322,10 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
 
+def criar_dataframe_solicitantes_vazio():
+    """Cria um DataFrame de solicitantes vazio."""
+    return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
+
 @st.cache_data(show_spinner="Carregando dados de solicitantes...")
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
@@ -339,10 +344,6 @@ def carregar_dados_solicitantes():
     except Exception as e:
         st.error(f"Erro ao carregar dados de solicitantes do Google Sheets: {e}")
         return criar_dataframe_solicitantes_vazio()
-
-def criar_dataframe_solicitantes_vazio():
-    """Cria um DataFrame de solicitantes vazio."""
-    return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
 def salvar_dados_solicitantes(df):
     """Salva o DataFrame de solicitantes no Google Sheets."""
@@ -448,9 +449,18 @@ def fazer_login(email, senha):
         st.error("E-mail ou senha incorretos.")
 
 # --- INTERFACE PRINCIPAL ---
-if 'logado' not in st.session_state or not st.session_state.logado:
-    render_login_page()
-else:
+# Movido a lógica de renderização para fora das funções para evitar o erro de ordem de execução.
+def render_login_page():
+    """Exibe a página de login."""
+    st.title("Login - Painel do Comprador")
+    with st.form("login_form"):
+        email = st.text_input("E-mail")
+        senha = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar"):
+            fazer_login(email, senha)
+
+def render_main_app():
+    """Exibe a interface principal da aplicação após o login."""
     logo_img = load_logo(logo_url)
 
     if 'df_pedidos' not in st.session_state:
@@ -1350,26 +1360,11 @@ else:
         else:
             st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
     
-    elif menu == "📊 Performance ":
-        # Código para a página de Performance (já parece estar no código que você enviou, mas está duplicado)
-        # O código que você enviou tinha a seção "📊 Performance " duplicada. Vou ignorar o segundo bloco.
-        pass
-        
-    def render_login_page():
-        """Exibe a página de login."""
-        st.title("👨‍💼 Login do Comprador")
-        with st.form("login_form"):
-            email = st.text_input("E-mail")
-            senha = st.text_input("Senha", type="password")
-            if st.form_submit_button("Entrar"):
-                fazer_login(email, senha)
+    # A duplicidade do código "📊 Performance " foi removida
+    pass
 
-    def render_main_app():
-        # ... O código da render_main_app está acima, dentro do else
-        pass
-    
-    # Renderiza a página de login ou a principal, dependendo do estado da sessão
-    if 'logado' not in st.session_state or not st.session_state.logado:
-        render_login_page()
-    else:
-        render_main_app()
+# Lógica de execução principal
+if 'logado' not in st.session_state or not st.session_state.logado:
+    render_login_page()
+else:
+    render_main_app()
