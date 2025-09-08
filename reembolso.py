@@ -286,11 +286,13 @@ def logout():
     st.info("Você foi desconectado.")
     st.rerun()
 
-# --- Autenticação OAuth (fora do cache) ---
+# --- Autenticação OAuth (agora um bloco único) ---
 if not st.session_state.creds or not st.session_state.creds.valid:
     if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
         st.session_state.creds.refresh(Request())
     else:
+        # A URL 'urn:ietf:wg:oauth:2.0:oob' é o padrão para o fluxo de "copiar e colar"
+        # O tipo de cliente OAuth no Google Cloud precisa ser 'Aplicativo para computador'
         redirect_uri_oob = "urn:ietf:wg:oauth:2.0:oob"
         flow = InstalledAppFlow.from_client_config(
             {
@@ -313,16 +315,17 @@ if not st.session_state.creds or not st.session_state.creds.valid:
             try:
                 flow.fetch_token(code=authorization_code)
                 st.session_state.creds = flow.credentials
-                # Salva o email do usuário que autorizou para usar como remetente
                 st.session_state.user_email_oauth = flow.credentials.id_token['email']
                 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
                 st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
-                st.stop()
-        st.stop()
 
+    # Se a autorização ainda não foi concluída, pare a execução do script
+    if not st.session_state.creds or not st.session_state.creds.valid:
+        st.stop()
+        
 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
 
 # --- Layout do Aplicativo ---
