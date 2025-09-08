@@ -341,7 +341,7 @@ else:
         options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
         icons=["house", "cash-stack", "clock-history"],
         menu_icon="cast",
-        default_index=0,
+        default_index=1, # AQUI O CÓDIGO FOI ALTERADO PARA COMEÇAR EM 'ADICIONAR REEMBOLSO'
         orientation="horizontal",
     )
 
