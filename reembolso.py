@@ -64,6 +64,8 @@ TIPOS_DESPESA = [
     "Outros"
 ]
 
+TODOS_OS_CUSTOS = DEPARTAMENTOS + TIPOS_DESPESA
+
 # --- Gerenciamento de Estado da Sessão ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -301,16 +303,16 @@ if not st.session_state.logged_in:
 
     elif selected_page == "Cadastre-se":
         st.header("Cadastrar Novo Usuário")
+        st.warning("A sua planilha 'Usuarios' deve ter as colunas: NOME, MATRICULA, EMAIL, SENHA.")
         with st.form("cadastro_form"):
             nome = st.text_input("Nome Completo")
             matricula = st.text_input("Matrícula")
             email = st.text_input("E-mail Essencis")
             password_cad = st.text_input("Crie uma Senha", type="password")
-            departamento = st.selectbox("Departamento", DEPARTAMENTOS)
             
             submitted_cad = st.form_submit_button("Cadastrar")
             if submitted_cad:
-                if nome and matricula and email and password_cad and departamento:
+                if nome and matricula and email and password_cad:
                     df_usuarios = load_usuarios_data()
                     if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and (df_usuarios['EMAIL'].str.lower() == email.lower()).any():
                         st.error("Este e-mail já está cadastrado.")
@@ -318,8 +320,8 @@ if not st.session_state.logged_in:
                         sheet = get_usuarios_sheet()
                         if sheet:
                             try:
-                                # A ordem das colunas na planilha 'Usuarios' deve ser: NOME, MATRICULA, EMAIL, SENHA, DEPARTAMENTO
-                                row = [nome, matricula, email, password_cad, departamento]
+                                # A ordem das colunas na planilha 'Usuarios' deve ser: NOME, MATRICULA, EMAIL, SENHA
+                                row = [nome, matricula, email, password_cad]
                                 sheet.append_row(row)
                                 st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
                             except Exception as e:
@@ -375,17 +377,20 @@ else:
         user_info = st.session_state.current_user
         nome_funcionario = user_info['NOME']
         email_funcionario = user_info['EMAIL']
-        departamento_funcionario = user_info['DEPARTAMENTO']
         
         st.subheader(f"Dados do Solicitante:")
-        st.info(f"**Nome:** {nome_funcionario} | **E-mail:** {email_funcionario} | **Departamento:** {departamento_funcionario}")
+        st.info(f"**Nome:** {nome_funcionario} | **E-mail:** {email_funcionario}")
         
         num_reembolsos = st.number_input("Quantos reembolsos deseja adicionar?", min_value=1, step=1)
         
         for i in range(int(num_reembolsos)):
             st.markdown(f"### Reembolso #{i + 1}")
             with st.form(f"form_reembolso_{i}"):
-                tipo_despesa_selecionada = st.selectbox(f"Tipo de Despesa", TIPOS_DESPESA, key=f"tipo_despesa_{i}")
+                custo_departamento = st.selectbox(
+                    f"Custo / Departamento", 
+                    TODOS_OS_CUSTOS, 
+                    key=f"custo_departamento_{i}"
+                )
                 valor_reembolso = st.number_input(f"Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
                 justificativa = st.text_area(f"Justificativa", key=f"justificativa_{i}")
                 data_reembolso = st.date_input(f"Data", value=datetime.date.today(), key=f"data_{i}")
@@ -401,7 +406,16 @@ else:
                             if not caminho_recibo:
                                 st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
                         
-                        add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_funcionario, 
+                        departamento_selecionado = ""
+                        tipo_despesa_selecionada = ""
+                        if custo_departamento in DEPARTAMENTOS:
+                            departamento_selecionado = custo_departamento
+                            tipo_despesa_selecionada = "N/A" # Sem tipo de despesa, pois é um departamento
+                        elif custo_departamento in TIPOS_DESPESA:
+                            departamento_selecionado = "N/A" # Sem departamento, pois é um tipo de despesa
+                            tipo_despesa_selecionada = custo_departamento
+
+                        add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado, 
                                     tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
                     else:
                         st.error("Por favor, preencha todos os campos obrigatórios.")
