@@ -121,7 +121,7 @@ def create_message(sender, to, subject, message_text):
     message['to'] = to
     message['from'] = sender
     message['subject'] = subject
-    msg = MIMEText(message_text)
+    msg = MIMEText(message_text, 'html')
     message.attach(msg)
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
     return {'raw': raw}
@@ -166,7 +166,7 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
 
 def get_signed_url(file_path, bucket_name="reembolsos-anexos"):
     try:
-        response = supabase_client.storage.from_(bucket_name).create_signed_url(file_path, 60)
+        response = supabase_client.storage.from_(bucket_name).create_signed_url(file_path, 604800) 
         if 'signedURL' in response:
             return response['signedURL']
         else:
@@ -213,28 +213,30 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
-            # --- E-mail de remetente fixo ---
             sender_email = st.session_state.user_email_oauth
+            
+            recibo_url = None
+            if caminho_recibo:
+                recibo_url = get_signed_url(caminho_recibo)
             
             # 1. Envia e-mail para o usuário
             subject_user = "Confirmação de Envio de Reembolso"
             body_user = f"""
-            Olá, {nome}!
-            
-            Seu pedido de reembolso foi enviado com sucesso e está em análise.
-            
-            Detalhes do Reembolso:
-            - Data: {data_formatada}
-            - Departamento: {departamento}
-            - Tipo de Despesa: {tipo_despesa}
-            - Valor: R$ {valor_formatado}
-            - Justificativa: {justificativa}
-            
-            Em breve, você receberá uma notificação sobre o status do seu pedido.
-            
-            Atenciosamente,
-            Equipe de Reembolsos Essencis
+            <p>Olá, {nome}!</p>
+            <p>Seu pedido de reembolso foi enviado com sucesso e está em análise.</p>
+            <p><b>Detalhes do Reembolso:</b></p>
+            <ul>
+                <li><b>Data:</b> {data_formatada}</li>
+                <li><b>Departamento:</b> {departamento}</li>
+                <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
+                <li><b>Valor:</b> R$ {valor_formatado}</li>
+                <li><b>Justificativa:</b> {justificativa}</li>
+            </ul>
             """
+            if recibo_url:
+                body_user += f"<p>Clique aqui para baixar o comprovante: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
+            body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Reembolsos Essencis</p>"
+            
             message_user = create_message(sender_email, email, subject_user, body_user)
             send_message(st.session_state.gmail_service, 'me', message_user)
 
@@ -242,24 +244,22 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             admin_email = "earaujo@essencis.com.br"
             subject_admin = f"Novo Reembolso Pendente de {nome}"
             body_admin = f"""
-            Olá, Administrador(a)!
-            
-            Um novo pedido de reembolso foi submetido e está aguardando sua aprovação.
-            
-            Detalhes do Reembolso:
-            - Solicitante: {nome}
-            - Data: {data_formatada}
-            - Departamento: {departamento}
-            - Tipo de Despesa: {tipo_despesa}
-            - Valor: R$ {valor_formatado}
-            - Justificativa: {justificativa}
-            - ID do Anexo: {caminho_recibo}
-            
-            Por favor, acesse o painel de gerenciamento para analisar este pedido.
-            
-            Atenciosamente,
-            Sistema de Reembolsos
+            <p>Olá, Administrador(a)!</p>
+            <p>Um novo pedido de reembolso foi submetido e está aguardando sua aprovação.</p>
+            <p><b>Detalhes do Reembolso:</b></p>
+            <ul>
+                <li><b>Solicitante:</b> {nome}</li>
+                <li><b>Data:</b> {data_formatada}</li>
+                <li><b>Departamento:</b> {departamento}</li>
+                <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
+                <li><b>Valor:</b> R$ {valor_formatado}</li>
+                <li><b>Justificativa:</b> {justificativa}</li>
+            </ul>
             """
+            if recibo_url:
+                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
+            body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
+
             message_admin = create_message(sender_email, admin_email, subject_admin, body_admin)
             send_message(st.session_state.gmail_service, 'me', message_admin)
 
@@ -288,6 +288,7 @@ def logout():
     st.rerun()
 
 # --- Autenticação OAuth (com persistência) ---
+TOKEN_FILE = 'token.json'
 if os.path.exists(TOKEN_FILE):
     st.session_state.creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
 
@@ -317,12 +318,15 @@ if not st.session_state.creds or not st.session_state.creds.valid:
             try:
                 flow.fetch_token(code=authorization_code)
                 st.session_state.creds = flow.credentials
-                with open(TOKEN_FILE, 'w') as token:
-                    token.write(st.session_state.creds.to_json())
-                st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
-                st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-                st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
-                st.rerun()
+                if st.session_state.creds:
+                    with open(TOKEN_FILE, 'w') as token:
+                        token.write(st.session_state.creds.to_json())
+                    st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
+                    st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+                    st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
+                    st.rerun()
+                else:
+                    st.error("Erro: Não foi possível obter as credenciais. Por favor, tente novamente.")
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
     
@@ -331,6 +335,8 @@ if not st.session_state.creds or not st.session_state.creds.valid:
         st.stop()
 
 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
+
 
 # --- Layout do Aplicativo ---
 st.title("💰 Gestão de Reembolsos Essencis")
@@ -408,6 +414,23 @@ else:
                     if 'STATUS' in df_usuario.columns:
                         pendentes = df_usuario[df_usuario['STATUS'] == 'Pendente'].shape[0]
                         st.metric("Pendentes", pendentes)
+                
+                st.subheader("Custo por Departamento (Seus Reembolsos)")
+                if 'DEPARTAMENTO' in df_usuario.columns and 'VALOR' in df_usuario.columns:
+                    df_depto = df_usuario.groupby('DEPARTAMENTO')['VALOR'].sum().reset_index()
+                    fig_depto = px.bar(df_depto, x='DEPARTAMENTO', y='VALOR', 
+                                       title="Custo por Departamento",
+                                       labels={'VALOR': 'Valor (R$)', 'DEPARTAMENTO': 'Departamento'})
+                    st.plotly_chart(fig_depto, use_container_width=True)
+
+                st.subheader("Custo por Tipo de Despesa (Seus Reembolsos)")
+                if 'TIPO_DESPESA' in df_usuario.columns and 'VALOR' in df_usuario.columns:
+                    df_despesa = df_usuario.groupby('TIPO_DESPESA')['VALOR'].sum().reset_index()
+                    fig_despesa = px.bar(df_despesa, x='TIPO_DESPESA', y='VALOR', 
+                                         title="Custo por Tipo de Despesa",
+                                         labels={'VALOR': 'Valor (R$)', 'TIPO_DESPESA': 'Tipo de Despesa'})
+                    st.plotly_chart(fig_despesa, use_container_width=True)
+                
                 if 'STATUS' in df_usuario.columns:
                     fig_status = px.bar(df_usuario['STATUS'].value_counts(),
                                         title="Seus Reembolsos por Status",
@@ -461,7 +484,9 @@ else:
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             if not df_usuario.empty:
-                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}" if pd.notnull(x) else "")
+                df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
+                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notnull(x) else "")
+                
                 st.dataframe(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
             else:
                 st.info("Nenhum reembolso encontrado para este e-mail.")
