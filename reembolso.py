@@ -213,8 +213,10 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
+            # --- E-mail de remetente fixo ---
             sender_email = st.session_state.user_email_oauth
             
+            # Gerar link do comprovante (se existir)
             recibo_url = None
             if caminho_recibo:
                 recibo_url = get_signed_url(caminho_recibo)
@@ -288,10 +290,6 @@ def logout():
     st.rerun()
 
 # --- Autenticação OAuth (com persistência) ---
-TOKEN_FILE = 'token.json'
-if os.path.exists(TOKEN_FILE):
-    st.session_state.creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-
 if not st.session_state.creds or not st.session_state.creds.valid:
     if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
         st.session_state.creds.refresh(Request())
@@ -317,11 +315,9 @@ if not st.session_state.creds or not st.session_state.creds.valid:
         if authorization_code:
             try:
                 flow.fetch_token(code=authorization_code)
-                st.session_state.creds = flow.credentials
-                if st.session_state.creds:
-                    with open(TOKEN_FILE, 'w') as token:
-                        token.write(st.session_state.creds.to_json())
-                    st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
+                if flow.credentials:
+                    st.session_state.creds = flow.credentials
+                    st.session_state.user_email_oauth = flow.credentials.id_token['email']
                     st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
                     st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
                     st.rerun()
@@ -329,7 +325,7 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                     st.error("Erro: Não foi possível obter as credenciais. Por favor, tente novamente.")
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
-    
+
     # Se a autorização ainda não foi concluída, pare a execução do script
     if not st.session_state.creds or not st.session_state.creds.valid:
         st.stop()
