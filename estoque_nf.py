@@ -208,7 +208,9 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
-                df[col] = _to_datetime(df[col], dayfirst=True)
+                # Converte explicitamente a coluna para string antes de converter para datetime,
+                # para evitar erros com tipos mistos.
+                df[col] = pd.to_datetime(df[col].astype(str), errors='coerce', dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
@@ -507,8 +509,8 @@ def render_registrar_nf_page():
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
+                            "REGISTRO_ENVIO": "",
                             "REGISTRO_LANCAMENTO": agora, # Agora registra a hora correta
-                            "REGISTRO_ENVIO": "" # Esta coluna não será mais usada para este fim
                         }
                         # --- FIM DA CORREÇÃO ---
                         st.session_state['divergencia_oc'] = divergencia
