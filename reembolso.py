@@ -18,6 +18,7 @@ import re
 import mimetypes
 from supabase import create_client, Client
 import toml
+import hashlib
 
 # Carrega os segredos do arquivo secrets.toml
 try:
@@ -42,22 +43,10 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-# Conexão com Gmail API (mantida para envio de e-mails)
-@st.cache_resource(ttl=3600)
-def get_google_api_service():
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        secrets_dict["gcp_service_account"],
-        ['https://www.googleapis.com/auth/gmail.send']
-    )
-    gmail_service = build('gmail', 'v1', credentials=creds)
-    return gmail_service
-
 gs_client = get_gspread_client()
-gmail_service = get_google_api_service()
 
 def get_reembolsos_sheet():
     try:
-        # Acessa a planilha e seleciona a aba "Reembolsos"
         spreadsheet = gs_client.open_by_key(SHEET_ID)
         sheet = spreadsheet.worksheet("Reembolsos")
         return sheet
@@ -70,7 +59,6 @@ def get_reembolsos_sheet():
 
 def get_usuarios_sheet():
     try:
-        # Acessa a planilha e seleciona a aba "Usuarios"
         spreadsheet = gs_client.open_by_key(SHEET_ID)
         sheet = spreadsheet.worksheet("Usuarios")
         return sheet
@@ -78,22 +66,62 @@ def get_usuarios_sheet():
         st.error("A aba 'Usuarios' não foi encontrada na planilha.")
         return None
 
-def send_email_with_attachment(to, subject, body, attachment_path=None):
-    # ... (Seu código de envio de e-mail) ...
-    pass
-
 # --- Supabase Integration ---
 supabase_url = secrets_dict["supabase"]["url"]
-# USE A SERVICE ROLE KEY PARA BYPASS DO RLS
 supabase_key = secrets_dict["supabase"]["service_role_key"]
 supabase_client: Client = create_client(supabase_url, supabase_key)
 
-# Debug: Verifique se está usando a chave correta
-st.sidebar.write("🔐 Usando Service Role Key")
-st.sidebar.write(f"URL: {supabase_url}")
-st.sidebar.write(f"Key: {supabase_key[:20]}...")
+# --- Sistema de Autenticação ---
+def check_password():
+    """Retorna True se o usuário está autenticado corretamente."""
+    
+    def password_entered():
+        """Verifica se a senha está correta."""
+        if st.session_state["username"] in st.secrets["passwords"]:
+            password_hash = hashlib.sha256(st.session_state["password"].encode()).hexdigest()
+            if password_hash == st.secrets["passwords"][st.session_state["username"]]:
+                st.session_state["password_correct"] = True
+                st.session_state["user_role"] = st.session_state["username"]
+                del st.session_state["password"]
+                del st.session_state["username"]
+            else:
+                st.session_state["password_correct"] = False
+        else:
+            st.session_state["password_correct"] = False
 
-# Função para fazer upload para o Supabase Storage
+    if "password_correct" not in st.session_state:
+        st.text_input("Usuário", key="username", on_change=password_entered)
+        st.text_input("Senha", type="password", key="password", on_change=password_entered)
+        st.write("")
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.button("Entrar", on_click=password_entered)
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input("Usuário", key="username", on_change=password_entered)
+        st.text_input("Senha", type="password", key="password", on_change=password_entered)
+        st.error("😕 Usuário ou senha incorretos")
+        st.write("")
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.button("Entrar", on_click=password_entered)
+        return False
+    else:
+        return True
+
+def is_admin():
+    """Verifica se o usuário logado é o administrador."""
+    return st.session_state.get("user_role") == "admin"
+
+# --- Logo e Header ---
+def show_header():
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image("https://via.placeholder.com/300x100/007bff/ffffff?text=Sistema+Reembolsos", 
+                use_column_width=True)
+        st.markdown("---")
+
+# --- Funções do Aplicativo ---
 def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
     if file_uploader is not None:
         try:
@@ -101,11 +129,6 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
             unique_file_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file_name}"
             file_bytes = file_uploader.read()
             
-            # Debug info
-            st.write(f"📤 Iniciando upload para bucket: {bucket_name}")
-            st.write(f"📄 Arquivo: {file_uploader.name}")
-            
-            # Faz o upload usando a service role key
             response = supabase_client.storage.from_(bucket_name).upload(
                 path=unique_file_name, 
                 file=file_bytes, 
@@ -113,36 +136,26 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
             )
             
             if response:
-                st.success("✅ Arquivo enviado com sucesso para o Supabase!")
+                st.success("✅ Arquivo enviado com sucesso!")
                 return unique_file_name
             else:
                 st.error("❌ Falha ao enviar o arquivo")
                 return None
-                
         except Exception as e:
-            st.error(f"❌ Ocorreu um erro no upload: {str(e)}")
-            # Log detalhado para debugging
-            import traceback
-            st.error(f"Traceback completo: {traceback.format_exc()}")
+            st.error(f"❌ Erro no upload: {str(e)}")
             return None
     return None
 
-# Função para obter URL assinada de um arquivo privado
 def get_signed_url(file_path, bucket_name="reembolsos-anexos"):
     try:
-        response = supabase_client.storage.from_(bucket_name).create_signed_url(file_path, 60) # 60s de validade
+        response = supabase_client.storage.from_(bucket_name).create_signed_url(file_path, 60)
         if 'signedURL' in response:
             return response['signedURL']
         else:
-            st.error(f"Erro ao gerar URL assinada: {response}")
             return None
-    except Exception as e:
-        st.error(f"Ocorreu um erro ao tentar gerar a URL: {e}")
+    except Exception:
         return None
 
-# --- Funções do Aplicativo ---
-
-# Função para carregar dados do Google Sheets
 def load_reembolsos_data():
     sheet = get_reembolsos_sheet()
     if sheet:
@@ -153,156 +166,141 @@ def load_reembolsos_data():
         return df
     return pd.DataFrame()
 
-# Função para adicionar novo reembolso
 def add_reembolso(data, nome, departamento, tipo_despesa, valor, justificativa, caminho_recibo, status="Pendente"):
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
         try:
-            # A ordem dos dados deve ser a mesma das colunas na planilha "Reembolsos"
             row = [data_formatada, nome, departamento, tipo_despesa, valor, justificativa, status, caminho_recibo]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
         except Exception as e:
             st.error(f"Erro ao adicionar reembolso: {e}")
 
-# --- Interface do Usuário (Streamlit) ---
-st.title("💰 Gestão de Reembolsos")
-
-menu = st.sidebar.selectbox("Menu Principal", ["Dashboard", "Adicionar Reembolso", "Gerenciar Reembolsos"])
-
-# --- Seção do Dashboard ---
-if menu == "Dashboard":
-    st.header("Resumo dos Reembolsos")
-    df_reembolsos = load_reembolsos_data()
+# --- Aplicação Principal ---
+def main():
+    show_header()
     
-    if not df_reembolsos.empty:
-        # Verifica se a coluna STATUS existe antes de tentar acessá-la
-        if 'STATUS' in df_reembolsos.columns:
-            # Gráfico de status
-            fig_status = px.bar(df_reembolsos['STATUS'].value_counts(),
-                                title="Total de Reembolsos por Status",
-                                labels={'index': 'STATUS', 'value': 'Quantidade'})
-            st.plotly_chart(fig_status)
-        else:
-            st.warning("Coluna 'STATUS' não encontrada nos dados.")
-            
-        # Mostra estatísticas básicas
-        st.subheader("Estatísticas")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total de Reembolsos", len(df_reembolsos))
-        with col2:
-            if 'VALOR' in df_reembolsos.columns:
-                total_valor = df_reembolsos['VALOR'].sum()
-                st.metric("Valor Total", f"R$ {total_valor:,.2f}")
-        with col3:
-            if 'STATUS' in df_reembolsos.columns:
-                pendentes = df_reembolsos[df_reembolsos['STATUS'] == 'Pendente'].shape[0]
-                st.metric("Pendentes", pendentes)
+    if not check_password():
+        st.stop()
+    
+    # Menu baseado no tipo de usuário
+    if is_admin():
+        menu_options = ["Dashboard", "Adicionar Reembolso", "Gerenciar Reembolsos"]
+        user_role = "Administrador"
     else:
-        st.warning("Não há dados de reembolso para exibir.")
-
-# --- Seção de Adicionar Reembolso ---
-elif menu == "Adicionar Reembolso":
-    st.header("Adicionar Novo Reembolso")
+        menu_options = ["Dashboard", "Adicionar Reembolso"]
+        user_role = "Usuário"
     
-    with st.form("form_reembolso"):
-        nome_funcionario = st.text_input("NOME")
-        departamento = st.text_input("DEPARTAMENTO")
-        tipo_despesa = st.text_input("TIPO_DESPESA")
-        valor_reembolso = st.number_input("VALOR", min_value=0.01, format="%.2f")
-        justificativa = st.text_area("JUSTIFICATIVA")
-        data_reembolso = st.date_input("DATA", value=datetime.date.today())
+    st.sidebar.write(f"👤 Logado como: **{user_role}**")
+    st.sidebar.write("---")
+    
+    menu = st.sidebar.selectbox("Menu Principal", menu_options)
+    
+    # Logout button
+    if st.sidebar.button("🚪 Sair"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+    
+    # --- Seção do Dashboard ---
+    if menu == "Dashboard":
+        st.header("📊 Dashboard de Reembolsos")
+        df_reembolsos = load_reembolsos_data()
         
-        # Campo para o anexo do recibo
-        recibo_anexo = st.file_uploader("ID_COMPROVANTE", type=["jpg", "jpeg", "png", "pdf"])
+        if not df_reembolsos.empty:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                total = len(df_reembolsos)
+                st.metric("Total de Reembolsos", total)
+            with col2:
+                if 'VALOR' in df_reembolsos.columns:
+                    total_valor = df_reembolsos['VALOR'].sum()
+                    st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+            with col3:
+                if 'STATUS' in df_reembolsos.columns:
+                    pendentes = df_reembolsos[df_reembolsos['STATUS'] == 'Pendente'].shape[0]
+                    st.metric("Pendentes", pendentes)
+            
+            if 'STATUS' in df_reembolsos.columns:
+                fig_status = px.bar(df_reembolsos['STATUS'].value_counts(),
+                                    title="Distribuição por Status",
+                                    labels={'index': 'Status', 'value': 'Quantidade'})
+                st.plotly_chart(fig_status)
+        else:
+            st.warning("Não há dados de reembolso para exibir.")
+
+    # --- Seção de Adicionar Reembolso ---
+    elif menu == "Adicionar Reembolso":
+        st.header("📝 Adicionar Novo Reembolso")
         
-        submit_button = st.form_submit_button("Salvar Reembolso")
-        
-        if submit_button:
-            if nome_funcionario and valor_reembolso and data_reembolso and departamento and tipo_despesa and justificativa:
-                # 1. Tenta fazer o upload do arquivo
-                caminho_recibo = None
-                if recibo_anexo:
-                    try:
+        with st.form("form_reembolso"):
+            nome_funcionario = st.text_input("Nome do Funcionário *")
+            departamento = st.text_input("Departamento *")
+            tipo_despesa = st.text_input("Tipo de Despesa *")
+            valor_reembolso = st.number_input("Valor (R$) *", min_value=0.01, format="%.2f")
+            justificativa = st.text_area("Justificativa *")
+            data_reembolso = st.date_input("Data *", value=datetime.date.today())
+            
+            recibo_anexo = st.file_uploader("Comprovante (opcional)", type=["jpg", "jpeg", "png", "pdf"])
+            
+            submit_button = st.form_submit_button("✅ Salvar Reembolso")
+            
+            if submit_button:
+                required_fields = [nome_funcionario, departamento, tipo_despesa, valor_reembolso, justificativa]
+                if all(required_fields):
+                    caminho_recibo = None
+                    if recibo_anexo:
                         caminho_recibo = upload_to_supabase(recibo_anexo)
-                        if not caminho_recibo:
-                            st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
-                    except Exception as e:
-                        st.warning(f"Erro no upload: {e}. O reembolso será salvo sem anexo.")
-                
-                # 2. Salva os dados no Google Sheets (com ou sem anexo)
-                add_reembolso(data_reembolso, nome_funcionario, departamento, tipo_despesa, 
-                             valor_reembolso, justificativa, caminho_recibo)
-                
-            else:
-                st.error("Por favor, preencha todos os campos obrigatórios.")
+                    
+                    add_reembolso(data_reembolso, nome_funcionario, departamento, tipo_despesa, 
+                                 valor_reembolso, justificativa, caminho_recibo)
+                else:
+                    st.error("Por favor, preencha todos os campos obrigatórios (*).")
 
-# --- Seção de Gerenciar Reembolsos (com visualização do recibo) ---
-elif menu == "Gerenciar Reembolsos":
-    st.header("Gerenciar Reembolsos")
-    
-    df_reembolsos = load_reembolsos_data()
+    # --- Seção de Gerenciar Reembolsos (APENAS ADMIN) ---
+    elif menu == "Gerenciar Reembolsos" and is_admin():
+        st.header("⚙️ Gerenciar Reembolsos")
+        
+        df_reembolsos = load_reembolsos_data()
 
-    if not df_reembolsos.empty:
-        # Verifica se a coluna ID_COMPROVANTE existe
-        if 'ID_COMPROVANTE' in df_reembolsos.columns:
-            # Cria uma cópia para exibição
-            df_display = df_reembolsos.copy()
-            
-            # Cria a coluna "Ver Recibo" com links clicáveis
-            df_display['Ver Recibo'] = df_display['ID_COMPROVANTE'].apply(
-                lambda x: "🔗 Ver Recibo" if x and str(x).strip() != "" else "📝 Sem Anexo"
-            )
-            
-            colunas_para_exibir = ['DATA', 'NOME', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS', 'Ver Recibo']
-            
-            # Filtra apenas as colunas que existem no DataFrame
-            colunas_existentes = [col for col in colunas_para_exibir if col in df_display.columns]
-            
-            # Exibe a tabela
-            for idx, row in df_display.iterrows():
-                col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+        if not df_reembolsos.empty and 'ID_COMPROVANTE' in df_reembolsos.columns:
+            for idx, row in df_reembolsos.iterrows():
+                col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1,1,1,1,1,2,1,1])
                 
                 with col1:
-                    st.write(row['DATA'] if 'DATA' in row else '')
+                    st.write(row.get('DATA', ''))
                 with col2:
-                    st.write(row['NOME'] if 'NOME' in row else '')
+                    st.write(row.get('NOME', ''))
                 with col3:
-                    st.write(row['DEPARTAMENTO'] if 'DEPARTAMENTO' in row else '')
+                    st.write(row.get('DEPARTAMENTO', ''))
                 with col4:
-                    st.write(row['TIPO_DESPESA'] if 'TIPO_DESPESA' in row else '')
+                    st.write(row.get('TIPO_DESPESA', ''))
                 with col5:
-                    st.write(f"R$ {row['VALOR']:,.2f}" if 'VALOR' in row else '')
+                    st.write(f"R$ {row.get('VALOR', 0):.2f}")
                 with col6:
-                    st.write(row['JUSTIFICATIVA'] if 'JUSTIFICATIVA' in row else '')
+                    st.write(row.get('JUSTIFICATIVA', ''))
                 with col7:
-                    st.write(row['STATUS'] if 'STATUS' in row else '')
+                    status = st.selectbox(
+                        "Status",
+                        ["Pendente", "Aprovado", "Rejeitado"],
+                        index=0 if row.get('STATUS') == "Pendente" else 1 if row.get('STATUS') == "Aprovado" else 2,
+                        key=f"status_{idx}"
+                    )
                 with col8:
-                    if row['Ver Recibo'] == "🔗 Ver Recibo" and row['ID_COMPROVANTE']:
-                        if st.button("🔗 Ver Recibo", key=f"btn_{idx}"):
+                    if row.get('ID_COMPROVANTE') and pd.notna(row.get('ID_COMPROVANTE')):
+                        if st.button("👁️ Ver", key=f"view_{idx}"):
                             caminho_recibo = row['ID_COMPROVANTE']
-                            st.subheader(f"Recibo para {row['NOME']}")
-                            
-                            # Gera a URL assinada
                             url_recibo = get_signed_url(caminho_recibo)
                             if url_recibo:
-                                # Verifica se é uma imagem ou PDF
                                 if caminho_recibo.lower().endswith(('.png', '.jpg', '.jpeg')):
-                                    st.image(url_recibo, caption="Recibo do Reembolso", width=300)
-                                elif caminho_recibo.lower().endswith('.pdf'):
-                                    st.markdown(f"[📄 Abrir PDF]({url_recibo})", unsafe_allow_html=True)
+                                    st.image(url_recibo, width=300)
                                 else:
-                                    st.markdown(f"[📎 Baixar Arquivo]({url_recibo})", unsafe_allow_html=True)
-                            else:
-                                st.error("Não foi possível carregar o recibo.")
-                    else:
-                        st.write("📝 Sem Anexo")
-                
+                                    st.markdown(f"[📎 Abrir arquivo]({url_recibo})")
                 st.divider()
-                
         else:
-            st.warning("Coluna 'ID_COMPROVANTE' não encontrada nos dados.")
-    else:
-        st.warning("Não há dados de reembolso para exibir.")
+            st.warning("Não há dados de reembolso para exibir.")
+
+# Executa a aplicação
+if __name__ == "__main__":
+    main()
