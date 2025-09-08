@@ -84,8 +84,14 @@ def send_email_with_attachment(to, subject, body, attachment_path=None):
 
 # --- Supabase Integration ---
 supabase_url = secrets_dict["supabase"]["url"]
-supabase_key = secrets_dict["supabase"]["key"]
+# USE A SERVICE ROLE KEY PARA BYPASS DO RLS
+supabase_key = secrets_dict["supabase"]["service_role_key"]
 supabase_client: Client = create_client(supabase_url, supabase_key)
+
+# Debug: Verifique se está usando a chave correta
+st.sidebar.write("🔐 Usando Service Role Key")
+st.sidebar.write(f"URL: {supabase_url}")
+st.sidebar.write(f"Key: {supabase_key[:20]}...")
 
 # Função para fazer upload para o Supabase Storage
 def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
@@ -95,16 +101,29 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
             unique_file_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file_name}"
             file_bytes = file_uploader.read()
             
-            response = supabase_client.storage.from_(bucket_name).upload(path=unique_file_name, file=file_bytes, file_options={"content-type": file_uploader.type})
+            # Debug info
+            st.write(f"📤 Iniciando upload para bucket: {bucket_name}")
+            st.write(f"📄 Arquivo: {file_uploader.name}")
             
-            if response.status_code == 200:
-                st.success("Arquivo enviado com sucesso para o Supabase!")
+            # Faz o upload usando a service role key
+            response = supabase_client.storage.from_(bucket_name).upload(
+                path=unique_file_name, 
+                file=file_bytes, 
+                file_options={"content-type": file_uploader.type}
+            )
+            
+            if response:
+                st.success("✅ Arquivo enviado com sucesso para o Supabase!")
                 return unique_file_name
             else:
-                st.error(f"Falha ao enviar o arquivo: {response.text}")
+                st.error("❌ Falha ao enviar o arquivo")
                 return None
+                
         except Exception as e:
-            st.error(f"Ocorreu um erro no upload: {e}")
+            st.error(f"❌ Ocorreu um erro no upload: {str(e)}")
+            # Log detalhado para debugging
+            import traceback
+            st.error(f"Traceback completo: {traceback.format_exc()}")
             return None
     return None
 
@@ -203,17 +222,20 @@ elif menu == "Adicionar Reembolso":
         
         if submit_button:
             if nome_funcionario and valor_reembolso and data_reembolso and departamento and tipo_despesa and justificativa:
-                # 1. Faz o upload do arquivo para o Supabase Storage
+                # 1. Tenta fazer o upload do arquivo
                 caminho_recibo = None
                 if recibo_anexo:
-                    caminho_recibo = upload_to_supabase(recibo_anexo)
+                    try:
+                        caminho_recibo = upload_to_supabase(recibo_anexo)
+                        if not caminho_recibo:
+                            st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
+                    except Exception as e:
+                        st.warning(f"Erro no upload: {e}. O reembolso será salvo sem anexo.")
                 
-                # 2. Salva os dados no Google Sheets
-                if caminho_recibo or not recibo_anexo:
-                    add_reembolso(data_reembolso, nome_funcionario, departamento, tipo_despesa, 
-                                 valor_reembolso, justificativa, caminho_recibo)
-                else:
-                    st.warning("O reembolso não foi salvo pois o upload do arquivo falhou.")
+                # 2. Salva os dados no Google Sheets (com ou sem anexo)
+                add_reembolso(data_reembolso, nome_funcionario, departamento, tipo_despesa, 
+                             valor_reembolso, justificativa, caminho_recibo)
+                
             else:
                 st.error("Por favor, preencha todos os campos obrigatórios.")
 
@@ -226,52 +248,60 @@ elif menu == "Gerenciar Reembolsos":
     if not df_reembolsos.empty:
         # Verifica se a coluna ID_COMPROVANTE existe
         if 'ID_COMPROVANTE' in df_reembolsos.columns:
-            # Renomeia as colunas para melhor exibição no Streamlit, mantendo o original para a lógica
-            df_reembolsos.rename(columns={'ID_COMPROVANTE': 'Caminho_Recibo_Original'}, inplace=True)
+            # Cria uma cópia para exibição
+            df_display = df_reembolsos.copy()
             
-            # Cria a coluna "Ver Recibo"
-            df_reembolsos['Ver Recibo'] = df_reembolsos['Caminho_Recibo_Original'].apply(lambda x: "Ver Recibo" if x and str(x).strip() != "" else "N/A")
+            # Cria a coluna "Ver Recibo" com links clicáveis
+            df_display['Ver Recibo'] = df_display['ID_COMPROVANTE'].apply(
+                lambda x: "🔗 Ver Recibo" if x and str(x).strip() != "" else "📝 Sem Anexo"
+            )
             
             colunas_para_exibir = ['DATA', 'NOME', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS', 'Ver Recibo']
             
             # Filtra apenas as colunas que existem no DataFrame
-            colunas_existentes = [col for col in colunas_para_exibir if col in df_reembolsos.columns]
+            colunas_existentes = [col for col in colunas_para_exibir if col in df_display.columns]
             
-            st.data_editor(
-                df_reembolsos[colunas_existentes],
-                column_config={
-                    "VALOR": st.column_config.NumberColumn(format="R$ %.2f"),
-                    "Ver Recibo": st.column_config.LinkColumn("Ver Recibo", display_text="Clique aqui", help="Clique para ver o recibo.")
-                },
-                hide_index=True,
-                key="reembolsos_editor"
-            )
-
-            # Lógica para mostrar o recibo quando o usuário interage
-            if 'reembolsos_editor' in st.session_state:
-                edited_df = st.session_state.reembolsos_editor
-                # Verifica se houve interação com a coluna "Ver Recibo"
-                for idx, row in edited_df.iterrows():
-                    if 'Ver Recibo' in row and row['Ver Recibo'] == "Clique aqui":
-                        caminho_recibo = df_reembolsos.iloc[idx]['Caminho_Recibo_Original']
-                        
-                        if caminho_recibo and str(caminho_recibo).strip() != "":
-                            st.subheader(f"Recibo para {df_reembolsos.iloc[idx]['NOME']}")
-                            # Gera a URL assinada e exibe a imagem
+            # Exibe a tabela
+            for idx, row in df_display.iterrows():
+                col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+                
+                with col1:
+                    st.write(row['DATA'] if 'DATA' in row else '')
+                with col2:
+                    st.write(row['NOME'] if 'NOME' in row else '')
+                with col3:
+                    st.write(row['DEPARTAMENTO'] if 'DEPARTAMENTO' in row else '')
+                with col4:
+                    st.write(row['TIPO_DESPESA'] if 'TIPO_DESPESA' in row else '')
+                with col5:
+                    st.write(f"R$ {row['VALOR']:,.2f}" if 'VALOR' in row else '')
+                with col6:
+                    st.write(row['JUSTIFICATIVA'] if 'JUSTIFICATIVA' in row else '')
+                with col7:
+                    st.write(row['STATUS'] if 'STATUS' in row else '')
+                with col8:
+                    if row['Ver Recibo'] == "🔗 Ver Recibo" and row['ID_COMPROVANTE']:
+                        if st.button("🔗 Ver Recibo", key=f"btn_{idx}"):
+                            caminho_recibo = row['ID_COMPROVANTE']
+                            st.subheader(f"Recibo para {row['NOME']}")
+                            
+                            # Gera a URL assinada
                             url_recibo = get_signed_url(caminho_recibo)
                             if url_recibo:
                                 # Verifica se é uma imagem ou PDF
                                 if caminho_recibo.lower().endswith(('.png', '.jpg', '.jpeg')):
-                                    st.image(url_recibo, caption="Recibo do Reembolso")
+                                    st.image(url_recibo, caption="Recibo do Reembolso", width=300)
                                 elif caminho_recibo.lower().endswith('.pdf'):
-                                    st.markdown(f"[Abrir PDF]({url_recibo})", unsafe_allow_html=True)
+                                    st.markdown(f"[📄 Abrir PDF]({url_recibo})", unsafe_allow_html=True)
                                 else:
-                                    st.markdown(f"[Baixar Arquivo]({url_recibo})", unsafe_allow_html=True)
+                                    st.markdown(f"[📎 Baixar Arquivo]({url_recibo})", unsafe_allow_html=True)
                             else:
                                 st.error("Não foi possível carregar o recibo.")
-                        else:
-                            st.warning("Não há recibo anexado para este reembolso.")
-                        break
+                    else:
+                        st.write("📝 Sem Anexo")
+                
+                st.divider()
+                
         else:
             st.warning("Coluna 'ID_COMPROVANTE' não encontrada nos dados.")
     else:
