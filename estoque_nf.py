@@ -17,6 +17,7 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
 import re
+import pytz
 
 # ==============================================================================
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
@@ -198,14 +199,15 @@ def carregar_dados_almoxarifado():
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
-            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA"
+            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA",
+            "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ]
         
         for col in colunas_essenciais:
             if col not in df.columns:
                 df[col] = ''
             
-        for col in ['DATA', 'VENCIMENTO']:
+        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
                 df[col] = _to_datetime(df[col], dayfirst=True)
         
@@ -220,7 +222,7 @@ def carregar_dados_almoxarifado():
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
-            "ORDEM_COMPRA"
+            "ORDEM_COMPRA", "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ])
 
 def salvar_dados_almoxarifado(df):
@@ -231,9 +233,31 @@ def salvar_dados_almoxarifado(df):
         worksheet = spreadsheet.get_worksheet(2)
 
         df_copy = df.copy()
+
+        # Mapeia as colunas do DataFrame para os nomes exatos da planilha
+        df_copy = df_copy.rename(columns={
+            "REGISTRO_ADICIONAL": "OBSERVACAO",
+            "V. TOTAL NF": "V. TOTAL NF",
+            "DOC NF": "DOC NF",
+            "CONDICAO FRETE": "CONDICAO FRETE",
+            "VALOR FRETE": "VALOR FRETE",
+            "FORNECEDOR_NF": "FORNECEDOR_NF",
+            "REGISTRO_LANCAMENTO": "REGISTRO_LANCAMENTO",
+            "REGISTRO_ENVIO": "REGISTRO_ENVIO",
+            "STATUS_FINANCEIRO": "STATUS_FINANCEIRO",
+        }, errors='ignore')
+        
+        # Formata colunas de data/hora para o formato de string antes de salvar
         for col in ['DATA', 'VENCIMENTO']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        
+        for col in ['REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
+
+        # Remove colunas duplicadas e de visualização
+        df_copy = df_copy.loc[:,~df_copy.columns.duplicated()]
         
         set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
@@ -409,6 +433,10 @@ def render_registrar_nf_page():
         with st.form("formulario_nota", clear_on_submit=True):
             col1_form, col2_form, col3_form = st.columns(3)
             
+            # Obtém a hora de Brasília para o registro
+            brasilia_tz = pytz.timezone('America/Sao_Paulo')
+            agora = datetime.datetime.now(brasilia_tz)
+            
             with col1_form:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
@@ -469,7 +497,7 @@ def render_registrar_nf_page():
                         st.session_state['novo_registro_nf'] = {
                             "DATA": data_recebimento,
                             "RECEBEDOR": recebedor,
-                            "FORNECEDOR_NF": fornecedor_selecionado, 
+                            "FORNECEDOR_NF": fornecedor_selecionado,    
                             "NF": nf_numero,
                             "VOLUME": volume_nf,
                             "V. TOTAL NF": valor_total_float,
@@ -481,7 +509,9 @@ def render_registrar_nf_page():
                             "STATUS_FINANCEIRO": "EM ANDAMENTO",
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
-                            "ORDEM_COMPRA": ordem_compra_nf
+                            "ORDEM_COMPRA": ordem_compra_nf,
+                            "REGISTRO_ENVIO": agora,
+                            "REGISTRO_LANCAMENTO": ''
                         }
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
@@ -504,9 +534,29 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
-        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
-        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+        # --- CORREÇÃO AQUI: Garante que as colunas de data/hora sejam do tipo datetime antes de formatar. ---
+        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
+            if col in df_ultimas_nfs.columns:
+                df_ultimas_nfs[col] = pd.to_datetime(df_ultimas_nfs[col], errors='coerce')
+        # --- FIM DA CORREÇÃO ---
+
+        # Agora, a formatação de data/hora funcionará corretamente
+        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].apply(
+            lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+        )
         
+        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].apply(
+            lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+        )
+
+        df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].apply(
+            lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else ''
+        )
+        
+        df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].apply(
+            lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else ''
+        )
+
         col_map = {
             'DATA': 'Data',
             'FORNECEDOR_NF': 'Fornecedor',
@@ -515,32 +565,42 @@ def render_registrar_nf_page():
             'VOLUME': 'Volume',
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
-            'DOC NF': 'Anexo NF'
+            'DOC NF': 'Anexo NF',
+            'REGISTRO_ENVIO_VISUAL': 'Reg. Envio',
+            'REGISTRO_LANCAMENTO_VISUAL': 'Reg. Lançamento'
         }
-        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map)
+        
+        # Filtra apenas as colunas que existem no DataFrame
+        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns or f'{col}_VISUAL' in df_ultimas_nfs.columns]
+        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols or f'{k}_VISUAL' in df_ultimas_nfs.columns}
+        
+        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map_filtered)
         
         def colorir_status_display(status):
             cores = {
                 "EM ANDAMENTO": "🟡",
                 "NF PROBLEMA": "🔴",
-                "CAPTURADO": "🟠",
+                "CAPTURADO": "🟣",
                 "FINALIZADO": "🟢"
             }
             return f"{cores.get(status, '⚪')} {status}"
         
-        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
+        if 'Status Financeiro' in df_ultimas_nfs_display.columns:
+            df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
         
         st.dataframe(
             df_ultimas_nfs_display,
             use_container_width=True,
             column_config={
-                "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                "Data": st.column_config.TextColumn("Data"),
                 "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
                 "Anexo NF": st.column_config.LinkColumn(
                     "Anexo NF",
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
-                )
+                ),
+                "Reg. Envio": st.column_config.TextColumn("Registro de Envio"),
+                "Reg. Lançamento": st.column_config.TextColumn("Registro de Lançamento")
             },
             hide_index=True
         )
@@ -549,8 +609,11 @@ def render_registrar_nf_page():
 
 def salvar_nota_fiscal(novo_registro_nf):
     """Função para salvar a nota fiscal e atualizar os pedidos relacionados."""
+    
+    # Adiciona o registro à planilha do almoxarifado
     st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
     
+    # Localiza e atualiza o status do pedido na planilha de pedidos
     pedidos_relacionados = st.session_state.df_pedidos[
         st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == novo_registro_nf['ORDEM_COMPRA'].strip().upper()
     ]
@@ -559,6 +622,7 @@ def salvar_nota_fiscal(novo_registro_nf):
     st.session_state.df_pedidos.loc[indices_a_atualizar, 'DATA_ENTREGA'] = pd.to_datetime(novo_registro_nf['DATA'])
     st.session_state.df_pedidos.loc[indices_a_atualizar, 'DOC NF'] = novo_registro_nf['DOC NF']
     
+    # Salva as alterações em ambas as planilhas
     salvar_dados_pedidos(st.session_state.df_pedidos)
     
     if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
@@ -666,6 +730,8 @@ def render_consultar_nfs_page():
             status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
             status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
             
+            df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
+            
             data_minima = df['DATA'].min().date() if pd.notna(df['DATA'].min()) else datetime.date.today()
             data_maxima = df['DATA'].max().date() if pd.notna(df['DATA'].max()) else datetime.date.today()
             
@@ -679,10 +745,11 @@ def render_consultar_nfs_page():
         if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
         if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
         
-        df_consulta = df_consulta[
-            (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
-            (df_consulta['DATA'].dt.date <= data_fim_consulta)
-        ]
+        if not df_consulta.empty and pd.api.types.is_datetime64_any_dtype(df_consulta['DATA']):
+            df_consulta = df_consulta[
+                (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
+                (df_consulta['DATA'].dt.date <= data_fim_consulta)
+            ]
         
         st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
         
@@ -696,7 +763,7 @@ def render_consultar_nfs_page():
                 cores = {
                     "EM ANDAMENTO": "🟡",
                     "NF PROBLEMA": "🔴",
-                    "CAPTURADO": "🟠",
+                    "CAPTURADO": "🟣",
                     "FINALIZADO": "🟢"
                 }
                 return f"{cores.get(status, '⚪')} {status}"
@@ -754,7 +821,11 @@ def render_configuracoes_page():
     with col1:
         st.info("**Informações do Sistema**")
         st.write(f"Total de notas cadastradas: **{len(df)}**")
-        st.write(f"Última atualização: **{datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}**")
+        
+        # Obtém a hora de Brasília para exibir a última atualização
+        brasilia_tz = pytz.timezone('America/Sao_Paulo')
+        agora_brasilia = datetime.datetime.now(brasilia_tz).strftime('%d/%m/%Y %H:%M')
+        st.write(f"Última atualização: **{agora_brasilia}**")
         
         if st.button("🔄 Recarregar Dados"):
             st.session_state.df_pedidos = carregar_dados_pedidos()
