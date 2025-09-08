@@ -23,7 +23,7 @@ import pytz
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
 # ==============================================================================
 # Configuração da página com layout wide e ícone
-st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
+st.set_page_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
 # CSS personalizado para o tema Essencis
 st.markdown(
@@ -430,6 +430,10 @@ def render_registrar_nf_page():
         with st.form("formulario_nota", clear_on_submit=True):
             col1_form, col2_form, col3_form = st.columns(3)
             
+            # Obtém a hora de Brasília para o registro de lançamento
+            brasilia_tz = pytz.timezone('America/Sao_Paulo')
+            agora = datetime.datetime.now(brasilia_tz)
+            
             with col1_form:
                 data_recebimento = st.date_input("Data do Recebimento*", datetime.date.today())
                 
@@ -503,7 +507,7 @@ def render_registrar_nf_page():
                             "CONDICAO_PROBLEMA": "N/A",
                             "REGISTRO_ADICIONAL": "",
                             "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_ENVIO": datetime.datetime.now() # Adiciona o timestamp
+                            "REGISTRO_LANCAMENTO": agora  # REGISTRO DE LANÇAMENTO AGORA É A HORA DO ENVIO
                         }
                         st.session_state['divergencia_oc'] = divergencia
                         st.session_state['valor_oc_total'] = valor_oc_total
@@ -526,17 +530,16 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
-        # --- CORREÇÃO AQUI ---
         # Converte as colunas de data para datetime, tratando erros
-        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
+        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_LANCAMENTO']:
             if col in df_ultimas_nfs.columns:
                 df_ultimas_nfs[col] = pd.to_datetime(df_ultimas_nfs[col], errors='coerce', dayfirst=True)
         
         # Agora, a formatação de data/hora funcionará corretamente
         df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y').fillna('')
         df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y').fillna('')
-
-        df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
+        
+        # Formata a coluna REGISTRO_LANCAMENTO para exibição
         df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
 
         col_map = {
@@ -548,15 +551,14 @@ def render_registrar_nf_page():
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
-            'REGISTRO_ENVIO_VISUAL': 'Reg. Envio',
-            'REGISTRO_LANCAMENTO_VISUAL': 'Reg. Lançamento'
+            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Envio' # Nome da coluna alterado
         }
         
         # Filtra apenas as colunas que existem no DataFrame
-        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns or f'{col}_VISUAL' in df_ultimas_nfs.columns]
-        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols or f'{k}_VISUAL' in df_ultimas_nfs.columns}
+        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns]
+        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols}
         
-        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map_filtered)
+        df_ultimas_nfs_display = df_ultimas_nfs[available_cols].rename(columns=col_map_filtered)
         
         def colorir_status_display(status):
             cores = {
@@ -581,8 +583,7 @@ def render_registrar_nf_page():
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
                 ),
-                "Reg. Envio": st.column_config.TextColumn("Registro de Envio"),
-                "Reg. Lançamento": st.column_config.TextColumn("Registro de Lançamento")
+                "Registro de Envio": st.column_config.TextColumn("Registro de Envio")
             },
             hide_index=True
         )
