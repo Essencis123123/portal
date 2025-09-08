@@ -208,9 +208,7 @@ def carregar_dados_almoxarifado():
             
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
-                # Converte explicitamente a coluna para string antes de converter para datetime,
-                # para evitar erros com tipos mistos.
-                df[col] = pd.to_datetime(df[col].astype(str), errors='coerce', dayfirst=True)
+                df[col] = _to_datetime(df[col], dayfirst=True)
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
@@ -553,7 +551,7 @@ def render_registrar_nf_page():
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
-            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Envio' # Nome da coluna alterado
+            'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Envio'
         }
         
         # Filtra apenas as colunas que existem no DataFrame
