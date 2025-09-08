@@ -73,6 +73,10 @@ if "logged_in" not in st.session_state:
     st.session_state.current_user = None
 if 'creds' not in st.session_state:
     st.session_state.creds = None
+if 'user_email_oauth' not in st.session_state:
+    st.session_state.user_email_oauth = None
+if 'gmail_service' not in st.session_state:
+    st.session_state.gmail_service = None
 
 # --- Conexão com Google Sheets e APIs ---
 SHEET_ID = secrets_dict["gcp_service_account"]["sheet_id"]
@@ -283,13 +287,11 @@ def logout():
     st.rerun()
 
 # --- Autenticação OAuth (fora do cache) ---
-if 'creds' not in st.session_state:
-    st.session_state.creds = None
-
 if not st.session_state.creds or not st.session_state.creds.valid:
     if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
         st.session_state.creds.refresh(Request())
     else:
+        redirect_uri = secrets_dict["google_oauth"]["redirect_uri_app"]
         flow = InstalledAppFlow.from_client_config(
             {
                 "web": {
@@ -298,23 +300,23 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
-            }, SCOPES, redirect_uri="http://localhost:8501")
+            }, SCOPES, redirect_uri=redirect_uri)
         
         auth_url, _ = flow.authorization_url(prompt='consent')
         
         st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
         st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
-        code = st.text_input("Cole o código de autorização aqui:")
         
-        if code:
+        authorization_code = st.query_params.get("code")
+        if authorization_code:
             try:
-                flow.fetch_token(code=code)
+                flow.fetch_token(code=authorization_code)
                 st.session_state.creds = flow.credentials
                 # Salva o email do usuário que autorizou para usar como remetente
                 st.session_state.user_email_oauth = flow.credentials.id_token['email']
                 st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-                st.success("Autorização bem-sucedida! Por favor, reinicie a página.")
-                st.stop()
+                st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
+                st.rerun()
             except Exception as e:
                 st.error(f"Erro ao obter o token: {e}")
                 st.stop()
