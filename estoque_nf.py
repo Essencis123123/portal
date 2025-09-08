@@ -525,9 +525,19 @@ def render_registrar_nf_page():
     if not st.session_state.df_almoxarifado.empty:
         df_ultimas_nfs = st.session_state.df_almoxarifado[st.session_state.df_almoxarifado['NF'].astype(str) != ''].tail(10).copy()
         
-        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y')
-        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y')
+        # --- CORREÇÃO AQUI ---
+        # Converte as colunas de data para datetime, tratando erros
+        for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
+            if col in df_ultimas_nfs.columns:
+                df_ultimas_nfs[col] = pd.to_datetime(df_ultimas_nfs[col], errors='coerce', dayfirst=True)
         
+        # Agora, a formatação de data/hora funcionará corretamente
+        df_ultimas_nfs['DATA'] = df_ultimas_nfs['DATA'].dt.strftime('%d/%m/%Y').fillna('')
+        df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y').fillna('')
+
+        df_ultimas_nfs['REGISTRO_ENVIO_VISUAL'] = df_ultimas_nfs['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
+        df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
+
         col_map = {
             'DATA': 'Data',
             'FORNECEDOR_NF': 'Fornecedor',
@@ -536,32 +546,42 @@ def render_registrar_nf_page():
             'VOLUME': 'Volume',
             'V. TOTAL NF': 'Valor Total NF',
             'STATUS_FINANCEIRO': 'Status Financeiro',
-            'DOC NF': 'Anexo NF'
+            'DOC NF': 'Anexo NF',
+            'REGISTRO_ENVIO_VISUAL': 'Reg. Envio',
+            'REGISTRO_LANCAMENTO_VISUAL': 'Reg. Lançamento'
         }
-        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map)
+        
+        # Filtra apenas as colunas que existem no DataFrame
+        available_cols = [col for col in col_map.keys() if col in df_ultimas_nfs.columns or f'{col}_VISUAL' in df_ultimas_nfs.columns]
+        col_map_filtered = {k: v for k, v in col_map.items() if k in available_cols or f'{k}_VISUAL' in df_ultimas_nfs.columns}
+        
+        df_ultimas_nfs_display = df_ultimas_nfs.rename(columns=col_map_filtered)
         
         def colorir_status_display(status):
             cores = {
                 "EM ANDAMENTO": "🟡",
                 "NF PROBLEMA": "🔴",
-                "CAPTURADO": "🟠",
+                "CAPTURADO": "🟣",
                 "FINALIZADO": "🟢"
             }
             return f"{cores.get(status, '⚪')} {status}"
         
-        df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
+        if 'Status Financeiro' in df_ultimas_nfs_display.columns:
+            df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
         
         st.dataframe(
             df_ultimas_nfs_display,
             use_container_width=True,
             column_config={
-                "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                "Data": st.column_config.TextColumn("Data"),
                 "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
                 "Anexo NF": st.column_config.LinkColumn(
                     "Anexo NF",
                     help="Clique para abrir a nota fiscal.",
                     display_text="📥 Abrir NF"
-                )
+                ),
+                "Reg. Envio": st.column_config.TextColumn("Registro de Envio"),
+                "Reg. Lançamento": st.column_config.TextColumn("Registro de Lançamento")
             },
             hide_index=True
         )
