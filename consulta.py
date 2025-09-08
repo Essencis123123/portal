@@ -196,9 +196,12 @@ def parse_date_from_editor(date_value):
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
+        # CORREÇÃO: Garante que o cliente de conexão é obtido
         gc = get_gspread_client()
+        if gc is None:
+            return pd.DataFrame()
         
-        sheet = client.open("dados_pedido")
+        spreadsheet = gc.open_by_key(st.secrets["sheet_id"])
         worksheet = spreadsheet.get_worksheet(0)
         
         # Use UNFORMATTED_VALUE para obter os valores brutos
