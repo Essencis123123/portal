@@ -220,11 +220,11 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 recibo_url = get_signed_url(caminho_recibo)
             
             # 1. Envia e-mail para o usuário
-            subject_user = "Confirmação de Envio de Reembolso"
+            subject_user = "CONFIRMACAO DE ENVIO - PEDIDO DE REEMBOLSO"
             body_user = f"""
             <p>Olá, {nome}!</p>
             <p>Seu pedido de reembolso foi enviado com sucesso e está em análise.</p>
-            <p><b>Detalhes do Reembolso:</b></p>
+            <p><b>Detalhes do Pedido:</b></p>
             <ul>
                 <li><b>Data:</b> {data_formatada}</li>
                 <li><b>Departamento:</b> {departamento}</li>
@@ -234,8 +234,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             </ul>
             """
             if recibo_url:
-                body_user += f"<p>Clique aqui para baixar o comprovante: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
-            body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Reembolsos Essencis</p>"
+                body_user += f"<p>Clique aqui para baixar a notinha: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
+            body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
             
             message_user = create_message(sender_email, email, subject_user, body_user)
             send_message(st.session_state.gmail_service, 'me', message_user)
