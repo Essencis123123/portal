@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 import json
 import re
 
-# Configuração da página com layout wide e ícone
+# Configuração da página com layout wide và ícone
 st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
 
 # --- CSS Personalizado para o Tema Essencis ---
@@ -180,12 +180,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ... (o restante do código permanece igual)
-
 # Carregar a imagem do logo a partir da URL
-@st.cache_data(show_spinner=False)
 def load_logo(url):
-    """Carrega a imagem de um URL e armazena em cache."""
+    """Carrega a imagem de um URL."""
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -198,7 +195,6 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Conexão e Carregamento de Dados ---
-@st.cache_resource(show_spinner=False)
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -214,8 +210,6 @@ def get_gspread_client():
     creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     client = gspread.authorize(creds)
     return client
-
-
 
 # Funções auxiliares para formatação e parsing de datas
 def parse_date_from_editor(date_value):
@@ -239,7 +233,7 @@ def parse_date_from_editor(date_value):
             except ValueError:
                 try:
                     # Tenta formato YYYY-MM-DD (padrão ISO)
-                    return datetime.datetime.strptime(date_value, '%Y-%m-%d')
+                    return datetime.datetime.strptime(date_value, '%Y-%m-%Y')
                 except ValueError:
                     # Tenta parse automático
                     return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
@@ -270,7 +264,6 @@ def criar_dataframe_pedidos_vazio():
         "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
     ])
 
-@st.cache_data(show_spinner=False)
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
@@ -300,7 +293,7 @@ def carregar_dados_pedidos():
                 df[col] = df[col].apply(parse_date_from_editor)
         
         # Converte colunas numéricas (elas já virão como float do Google Sheets)
-        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO"]
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -380,7 +373,6 @@ def criar_dataframe_solicitantes_vazio():
     """Cria um DataFrame de solicitantes vazio."""
     return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
-@st.cache_data(show_spinner="Carregando dados de solicitantes...")
 def carregar_dados_solicitantes():
     """Carrega o DataFrame de solicitantes do Google Sheets."""
     try:
@@ -418,7 +410,6 @@ def salvar_dados_solicitantes(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
-@st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
     """Carrega dados do almoxarifado para preencher a nota fiscal."""
     try:
@@ -439,7 +430,6 @@ def carregar_dados_almoxarifado():
         st.warning(f"Aviso: Não foi possível carregar dados do Almoxarifado para preencher a nota fiscal. Verifique a aba 'Almoxarifado' da planilha. {e}")
         return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
 
-@st.cache_data(show_spinner=False)
 def carregar_dados_materiais():
     """Carrega o DataFrame de materiais do Google Sheets."""
     try:
@@ -503,7 +493,6 @@ def fazer_login(email, senha):
         st.error("E-mail ou senha incorretos.")
 
 # --- INTERFACE PRINCIPAL ---
-# Movido a lógica de renderização para fora das funções para evitar o erro de ordem de execução.
 def render_login_page():
     """Exibe a página de login."""
     st.title("Login - Painel do Comprador")
@@ -683,6 +672,115 @@ def render_main_app():
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
             st.stop()
         
+        df_almox = st.session_state.df_almoxarifado.copy()
+        if not df_almox.empty:
+            df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
+            pedidos_pendentes_oc = pedidos_pendentes_oc.merge(df_almox_oc, on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc['DOC NF'])
+            pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+
+        data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
+        for col in data_cols_to_convert:
+            if col in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
+                    lambda x: x.date() if pd.notna(x) else None
+                )
+        
+        cols_para_editar = [
+            "REQUISICAO", "DATA", "SOLICITANTE", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+            "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+            "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
+        ]
+        
+        df_editavel = pedidos_pendentes_oc[cols_para_editar].copy()
+        
+        with st.form(key="form_atualizar_pedidos"):
+            edited_df = st.data_editor(
+                df_editavel,
+                use_container_width=True,
+                hide_index=True,
+                column_order=cols_para_editar,
+                column_config={
+                    "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
+                    "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
+                    "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+                    "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
+                    "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
+                    "UN": st.column_config.TextColumn("UN", disabled=True),
+                    "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
+                    "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
+                    "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
+                    "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
+                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
+                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
+                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD-MM-YYYY"),
+                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
+                }
+            )
+            
+            submitted = st.form_submit_button("Salvar Atualizações")
+
+        if submitted:
+            st.info("Detectando alterações...")
+            
+            # Converte as colunas de data do editor para datetime
+            for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+                edited_df[col] = edited_df[col].apply(parse_date_from_editor)
+                
+            # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
+            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                # Converte para string, remove pontos de milhar e substitui vírgula por ponto
+                edited_df[col_val] = edited_df[col_val].astype(str).str.replace(r'\.(?=.*\d,)', '', regex=True).str.replace(',', '.', regex=False)
+                # Converte para numérico
+                edited_df[col_val] = pd.to_numeric(edited_df[col_val], errors='coerce').fillna(0)
+            
+            edited_df['DIAS_EMISSAO'] = edited_df.apply(
+                lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
+                axis=1
+            )
+            
+            for index, edited_row in edited_df.iterrows():
+                original_index = st.session_state.df_pedidos[
+                    (st.session_state.df_pedidos['REQUISICAO'] == edited_row['REQUISICAO']) & 
+                    (st.session_state.df_pedidos['MATERIAL'] == edited_row['MATERIAL'])
+                ].index
+                
+                if not original_index.empty:
+                    original_index = original_index[0]
+                    st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
+                    st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
+                    st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_df.loc[index, 'VALOR_ITEM']
+                    st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
+                    st.session_state.df_pedidos.loc[original_index, 'PREVISAO_ENTREGA'] = edited_row['PREVISAO_ENTREGA']
+                    st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
+                    st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
+                    st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = edited_row['DIAS_EMISSAO']
+            
+            salvar_dados_pedidos(st.session_state.df_pedidos)
+            st.success("Dados atualizados com sucesso!")
+            st.rerun()
+
+    elif menu == "📜 Histórico ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
+                <p>Gerencie e Edite os Registros Anteriores</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.header("📜 Visualização e Edição do Histórico")
+        st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
+
+        df_history = st.session_state.df_pedidos.copy()
+        
+        # Uso da nova função auxiliar para garantir que as datas estejam no formato correto
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
+            df_history[col] = df_history[col].apply(parse_date_from_editor)
+        
+        # Recalcula o VALOR_TOTAL com os valores limpos
+        df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
+        df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)
+    
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
             df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
