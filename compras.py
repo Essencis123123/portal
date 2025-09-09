@@ -179,9 +179,8 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-    """,
-    unsafe_allow_html=True
-)
+
+# ... (o restante do código permanece igual)
 
 # Carregar a imagem do logo a partir da URL
 @st.cache_data(show_spinner=False)
@@ -215,6 +214,8 @@ def get_gspread_client():
     creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     client = gspread.authorize(creds)
     return client
+
+
 
 # Funções auxiliares para formatação e parsing de datas
 def parse_date_from_editor(date_value):
