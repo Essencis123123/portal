@@ -35,11 +35,26 @@ custom_css = """
     [data-testid="stSidebar"] {
         background-color: #0E1117; /* Cor de fundo da sidebar */
     }
-    .css-pkzbrp { /* Este seletor pode mudar, mas tenta pegar o container do option_menu */
-        background-color: #0E1117 !important; 
+    /* Ajustes para o option_menu */
+    .st-emotion-cache-16txt4v { /* Tenta pegar o container principal do option_menu */
+        background-color: #0E1117 !important;
     }
-    .st-emotion-cache-16txt4v { /* Este seletor é para o texto "Navegação" ou "Acesso" */
-        color: white; 
+    .st-emotion-cache-16txt4v button[data-testid="stSidebarNav"] ul li a {
+        color: white !important; /* Cor do texto dos links */
+    }
+    .st-emotion-cache-16txt4v button[data-testid="stSidebarNav"] ul li a:hover {
+        background-color: #262730 !important; /* Cor ao passar o mouse */
+    }
+    .st-emotion-cache-16txt4v button[data-testid="stSidebarNav"] ul li span {
+        color: white !important; /* Cor dos ícones */
+    }
+    .st-emotion-cache-16txt4v button[data-testid="stSidebarNav"] ul li.st-emotion-cache-14g7ou a { /* Estilo do item selecionado */
+        background-color: #1C4D86 !important; /* Cor de fundo do item selecionado */
+        color: white !important; /* Cor do texto do item selecionado */
+    }
+    /* Título do menu da sidebar */
+    .st-emotion-cache-16txt4v div[role="menu"] p {
+        color: white !important;
     }
 </style>
 """
@@ -384,19 +399,23 @@ with st.sidebar:
     # Adicionar a logo no topo da sidebar
     # Certifique-se de que 'logo.png' está na mesma pasta ou ajuste o caminho
     try:
-        logo = Image.open("logo.png") # OU Image.open("assets/logo.png")
+        # Tente carregar a logo. Ajuste o caminho se necessário.
+        logo = Image.open("logo.png") # Exemplo: se a logo estiver na pasta 'assets', use "assets/logo.png"
         st.image(logo, use_column_width=True)
     except FileNotFoundError:
-        st.warning("Logo não encontrada. Verifique o caminho 'logo.png'.")
+        st.warning("Logo não encontrada. Verifique se o arquivo 'logo.png' está no caminho correto.")
 
     st.markdown("---") # Linha divisória
 
     if st.session_state.logged_in:
-        st.markdown(f"<h3 style='color:white;'>Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!</h3>", unsafe_allow_html=True)
+        # Tenta exibir o nome do usuário em branco, caso contrário usa um placeholder
+        user_nome_display = st.session_state.current_user.get('NOME', '').split()[0] if st.session_state.current_user and 'NOME' in st.session_state.current_user else "Usuário"
+        st.markdown(f"<h3 style='color:white;'>Bem-vindo, {user_nome_display}!</h3>", unsafe_allow_html=True)
         st.button("Sair", on_click=logout)
     else:
         # Se não estiver logado, mostra apenas o título e a opção de sair se houver credenciais salvas
         if os.path.exists(TOKEN_FILE):
+            # Limpa o token e recarrega a página
             st.button("Sair (Autorização)", on_click=lambda: os.remove(TOKEN_FILE) or st.rerun())
 
     st.markdown("---")
@@ -410,10 +429,10 @@ with st.sidebar:
             menu_icon="cast",
             default_index=1,
             styles={
-                "container": {"padding": "5!important", "background-color": "#0E1117"}, # Cor de fundo do container do menu
+                "container": {"padding": "5!important", "background-color": "#0E1117"},
                 "icon": {"color": "white", "font-size": "20px"},
-                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#262730", "color": "white"}, # Cor do texto normal
-                "nav-link-selected": {"background-color": "#1C4D86", "color": "white"}, # Cor do item selecionado (azul Essencis)
+                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#262730", "color": "white"},
+                "nav-link-selected": {"background-color": "#1C4D86", "color": "white"},
             }
         )
     else:
