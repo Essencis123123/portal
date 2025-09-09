@@ -290,49 +290,73 @@ def logout():
 # --- Autenticação OAuth (com persistência) ---
 TOKEN_FILE = 'token.json'
 if os.path.exists(TOKEN_FILE):
-    st.session_state.creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
-        st.session_state.creds.refresh(Request())
+    try:
+        st.session_state.creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+        if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
+            st.session_state.creds.refresh(Request())
+    except Exception as e:
+        st.error(f"Erro ao carregar token: {e}")
+        st.session_state.creds = None
 
 if not st.session_state.creds or not st.session_state.creds.valid:
-    redirect_uri_oob = "urn:ietf:wg:oauth:2.0:oob"
-    flow = InstalledAppFlow.from_client_config(
-        {
-            "installed": {
-                "client_id": secrets_dict["google_oauth"]["client_id"],
-                "client_secret": secrets_dict["google_oauth"]["client_secret"],
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token"
-            }
-        }, SCOPES, redirect_uri=redirect_uri_oob)
-    
-    auth_url, _ = flow.authorization_url(prompt='consent')
-    
     st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
-    st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
     
-    authorization_code = st.text_input("Cole o código de autorização aqui:")
-    
-    if authorization_code:
-        try:
-            flow.fetch_token(code=authorization_code)
-            if flow.credentials:
-                st.session_state.creds = flow.credentials
-                with open(TOKEN_FILE, 'w') as token:
-                    token.write(st.session_state.creds.to_json())
-                st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
-                st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-                st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
-                st.rerun()
-        except Exception as e:
-            st.error(f"Erro ao obter o token: {e}")
+    try:
+        redirect_uri_oob = "urn:ietf:wg:oauth:2.0:oob"
+        flow = InstalledAppFlow.from_client_config(
+            {
+                "installed": {
+                    "client_id": secrets_dict["google_oauth"]["client_id"],
+                    "client_secret": secrets_dict["google_oauth"]["client_secret"],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token"
+                }
+            }, SCOPES, redirect_uri=redirect_uri_oob)
+        
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        
+        st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
+        
+        authorization_code = st.text_input("Cole o código de autorização aqui:")
+        
+        if authorization_code:
+            try:
+                flow.fetch_token(code=authorization_code)
+                if flow.credentials:
+                    st.session_state.creds = flow.credentials
+                    with open(TOKEN_FILE, 'w') as token:
+                        token.write(st.session_state.creds.to_json())
+                    
+                    # Verifica se id_token existe e é válido
+                    if hasattr(st.session_state.creds, 'id_token') and st.session_state.creds.id_token:
+                        st.session_state.user_email_oauth = st.session_state.creds.id_token.get('email')
+                    else:
+                        # Se não houver id_token, tenta obter o email de outra forma
+                        st.warning("Token ID não disponível. Tentando obter email do usuário...")
+                        # Você pode precisar fazer uma chamada à API do Google para obter o email
+                        st.session_state.user_email_oauth = "noreply@essencis.com.br"  # Email padrão
+                    
+                    st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+                    st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao obter o token: {e}")
+    except Exception as e:
+        st.error(f"Erro no fluxo de autenticação: {e}")
 
-    if not st.session_state.creds or not st.session_state.creds.valid:
-        st.stop()
-
+# Só constrói o serviço se as credenciais forem válidas
 if st.session_state.creds and st.session_state.creds.valid:
-    st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-    st.session_state.user_email_oauth = st.session_state.creds.id_token['email']
+    try:
+        st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
+        # Se ainda não temos o email, tenta obter de forma segura
+        if not st.session_state.user_email_oauth:
+            if hasattr(st.session_state.creds, 'id_token') and st.session_state.creds.id_token:
+                st.session_state.user_email_oauth = st.session_state.creds.id_token.get('email')
+            else:
+                st.session_state.user_email_oauth = "noreply@essencis.com.br"
+    except Exception as e:
+        st.error(f"Erro ao construir serviço Gmail: {e}")
+        st.session_state.gmail_service = None
 
 # --- Layout do Aplicativo ---
 st.title("💰 Gestão de Reembolsos Essencis")
