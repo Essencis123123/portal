@@ -70,7 +70,7 @@ TIPOS_DESPESA = [
 # --- Gerenciamento de Estado da Sessão ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.current_user = None
+    st.session_state.current_user = {'NOME': 'Admin', 'EMAIL': 'earaujo@essencis.com.br'} # Define o usuário padrão
 if 'creds' not in st.session_state:
     st.session_state.creds = None
 if 'user_email_oauth' not in st.session_state:
@@ -177,6 +177,7 @@ def get_signed_url(file_path, bucket_name="reembolsos-anexos"):
         return None
 
 # --- Funções de Carregamento de Dados ---
+@st.cache_data(ttl=300)
 def load_reembolsos_data():
     sheet = get_reembolsos_sheet()
     if sheet:
@@ -192,101 +193,6 @@ def load_reembolsos_data():
         return df
     return pd.DataFrame()
 
-def load_usuarios_data():
-    sheet = get_usuarios_sheet()
-    if sheet:
-        data = sheet.get_all_records()
-        df = pd.DataFrame(data)
-        if not df.empty:
-            df.columns = df.columns.str.upper()
-        return df
-    return pd.DataFrame()
-
-# --- Funções de Adicionar Reembolso e Cadastro ---
-def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justificativa, caminho_recibo, status="Pendente"):
-    sheet = get_reembolsos_sheet()
-    if sheet:
-        data_formatada = data.strftime('%d/%m/%Y')
-        valor_formatado = f"{valor:.2f}".replace('.', ',')
-        try:
-            row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, caminho_recibo, email]
-            sheet.append_row(row)
-            st.success("Reembolso adicionado com sucesso!")
-            
-            sender_email = st.session_state.user_email_oauth
-            
-            recibo_url = None
-            if caminho_recibo:
-                recibo_url = get_signed_url(caminho_recibo)
-            
-            # 1. Envia e-mail para o usuário
-            subject_user = "Confirmação de Envio de Reembolso"
-            body_user = f"""
-            <p>Olá, {nome}!</p>
-            <p>Seu pedido de reembolso foi enviado com sucesso e está em análise.</p>
-            <p><b>Detalhes do Reembolso:</b></p>
-            <ul>
-                <li><b>Data:</b> {data_formatada}</li>
-                <li><b>Departamento:</b> {departamento}</li>
-                <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
-                <li><b>Valor:</b> R$ {valor_formatado}</li>
-                <li><b>Justificativa:</b> {justificativa}</li>
-            </ul>
-            """
-            if recibo_url:
-                body_user += f"<p>Clique aqui para baixar o comprovante: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
-            body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Reembolsos Essencis</p>"
-            
-            message_user = create_message(sender_email, email, subject_user, body_user)
-            send_message(st.session_state.gmail_service, 'me', message_user)
-
-            # 2. Envia e-mail para o administrador
-            admin_email = "earaujo@essencis.com.br"
-            subject_admin = f"Novo Reembolso Pendente de {nome}"
-            body_admin = f"""
-            <p>Olá, Administrador(a)!</p>
-            <p>Um novo pedido de reembolso foi submetido e está aguardando sua aprovação.</p>
-            <p><b>Detalhes do Reembolso:</b></p>
-            <ul>
-                <li><b>Solicitante:</b> {nome}</li>
-                <li><b>Data:</b> {data_formatada}</li>
-                <li><b>Departamento:</b> {departamento}</li>
-                <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
-                <li><b>Valor:</b> R$ {valor_formatado}</li>
-                <li><b>Justificativa:</b> {justificativa}</li>
-            </ul>
-            """
-            if recibo_url:
-                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
-            body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
-
-            message_admin = create_message(sender_email, admin_email, subject_admin, body_admin)
-            send_message(st.session_state.gmail_service, 'me', message_admin)
-
-        except Exception as e:
-            st.error(f"Erro ao adicionar reembolso: {e}")
-
-# --- Funções de Autenticação de Login ---
-def login(email, password):
-    df_usuarios = load_usuarios_data()
-    if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and 'SENHA' in df_usuarios.columns:
-        user_data = df_usuarios[(df_usuarios['EMAIL'].str.lower() == email.lower()) & (df_usuarios['SENHA'] == password)]
-        if not user_data.empty:
-            st.session_state.logged_in = True
-            st.session_state.current_user = user_data.iloc[0]
-            st.success("Login bem-sucedido!")
-            st.rerun()
-        else:
-            st.error("E-mail ou senha incorretos.")
-    else:
-        st.error("Não foi possível carregar os dados de usuário. Verifique a planilha 'Usuarios'.")
-
-def logout():
-    st.session_state.logged_in = False
-    st.session_state.current_user = None
-    st.info("Você foi desconectado.")
-    st.rerun()
-
 # --- Funções para Área Administrativa ---
 def update_reembolso_status(index, novo_status, email_usuario, nome_usuario):
     """Atualiza o status do reembolso e envia notificação"""
@@ -297,7 +203,7 @@ def update_reembolso_status(index, novo_status, email_usuario, nome_usuario):
             row_number = index + 2
             
             # Atualiza o status na planilha
-            sheet.update_cell(row_number, 7, novo_status)  # Coluna 7 é STATUS
+            sheet.update_cell(row_number, 7, novo_status) # Coluna 7 é STATUS
             
             st.success(f"Status atualizado para '{novo_status}'!")
             
@@ -358,7 +264,6 @@ def enviar_notificacao_status(email_destinatario, nome, novo_status):
                 """
             
             body += """
-            <p>Acesse a plataforma para mais detalhes.</p>
             <p>Atenciosamente,<br>Departamento Financeiro Essencis</p>
             """
             
@@ -408,7 +313,7 @@ def download_relatorio():
                 
                 # Formatar coluna de valores
                 money_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
-                worksheet.set_column('E:E', 15, money_format)  # Coluna E = VALOR
+                worksheet.set_column('E:E', 15, money_format) # Coluna E = VALOR
                 
             output.seek(0)
             
@@ -463,7 +368,6 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                     with open(TOKEN_FILE, 'w') as token:
                         token.write(st.session_state.creds.to_json())
                     
-                    # Verifica se id_token existe e é válido
                     if hasattr(st.session_state.creds, 'id_token') and st.session_state.creds.id_token:
                         st.session_state.user_email_oauth = st.session_state.creds.id_token.get('email')
                     else:
@@ -494,219 +398,57 @@ if st.session_state.creds and st.session_state.creds.valid:
 # --- Layout do Aplicativo ---
 st.title("💰 Gestão de Reembolsos Essencis")
 
-if not st.session_state.logged_in:
-    selected_page = option_menu(
+# Acesso direto para o admin
+if st.session_state.current_user['EMAIL'].lower() == "earaujo@essencis.com.br":
+    st.sidebar.header(f"Bem-vindo, Administrador!")
+    st.sidebar.button("Sair", on_click=lambda: st.session_state.clear() or st.rerun())
+
+    menu = option_menu(
         menu_title=None,
-        options=["Login", "Cadastre-se"],
-        icons=["box-arrow-in-right", "person-add"],
+        options=["Dashboard", "Área Administrativa"],
+        icons=["house", "gear"],
         menu_icon="cast",
         default_index=0,
         orientation="horizontal",
     )
-    if selected_page == "Login":
-        st.header("Login")
-        with st.form("login_form"):
-            email_login = st.text_input("E-mail")
-            password_login = st.text_input("Senha", type="password")
-            submitted = st.form_submit_button("Entrar")
-            if submitted:
-                login(email_login, password_login)
 
-    elif selected_page == "Cadastre-se":
-        st.header("Cadastrar Novo Usuário")
-        st.warning("A sua planilha 'Usuarios' deve ter as colunas: NOME, MATRICULA, EMAIL, SENHA.")
-        with st.form("cadastro_form"):
-            nome = st.text_input("Nome Completo")
-            matricula = st.text_input("Matrícula")
-            email = st.text_input("E-mail Essencis")
-            password_cad = st.text_input("Crie uma Senha", type="password")
-            submitted_cad = st.form_submit_button("Cadastrar")
-            if submitted_cad:
-                if nome and matricula and email and password_cad:
-                    df_usuarios = load_usuarios_data()
-                    if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and (df_usuarios['EMAIL'].str.lower() == email.lower()).any():
-                        st.error("Este e-mail já está cadastrado.")
-                    else:
-                        sheet = get_usuarios_sheet()
-                        if sheet:
-                            try:
-                                row = [nome, matricula, email, password_cad]
-                                sheet.append_row(row)
-                                st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
-                            except Exception as e:
-                                st.error(f"Erro ao cadastrar usuário: {e}")
-                else:
-                    st.error("Por favor, preencha todos os campos.")
-
-else:
-    st.sidebar.header(f"Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!")
-    st.sidebar.button("Sair", on_click=logout)
-    
-    # Menu principal com todas as opções
-    menu = option_menu(
-        menu_title=None,
-        options=["Dashboard", "Adicionar Reembolso", "Meu Histórico", "Notificações", "Área Administrativa"],
-        icons=["house", "cash-stack", "clock-history", "bell", "gear"],
-        menu_icon="cast",
-        default_index=1,
-        orientation="horizontal",
-    )
-    
     if menu == "Dashboard":
-        st.header("Resumo dos Seus Reembolsos")
+        st.header("Resumo dos Reembolsos da Empresa")
         df_reembolsos = load_reembolsos_data()
-        if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
-            df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == st.session_state.current_user['EMAIL'].lower()]
-            if not df_usuario.empty:
-                st.subheader("Estatísticas")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total de Reembolsos", len(df_usuario))
-                with col2:
-                    if 'VALOR' in df_usuario.columns:
-                        total_valor = df_usuario['VALOR'].sum()
-                        st.metric("Valor Total", f"R$ {total_valor:,.2f}")
-                with col3:
-                    if 'STATUS' in df_usuario.columns:
-                        pendentes = df_usuario[df_usuario['STATUS'] == 'Pendente'].shape[0]
-                        st.metric("Pendentes", pendentes)
-                
-                st.subheader("Custo por Departamento (Seus Reembolsos)")
-                if 'DEPARTAMENTO' in df_usuario.columns and 'VALOR' in df_usuario.columns:
-                    df_depto = df_usuario.groupby('DEPARTAMENTO')['VALOR'].sum().reset_index()
-                    fig_depto = px.bar(df_depto, x='DEPARTAMENTO', y='VALOR', 
-                                       title="Custo por Departamento",
-                                       labels={'VALOR': 'Valor (R$)', 'DEPARTAMENTO': 'Departamento'})
-                    st.plotly_chart(fig_depto, use_container_width=True)
+        if not df_reembolsos.empty:
+            st.subheader("Estatísticas Gerais")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total de Reembolsos", len(df_reembolsos))
+            with col2:
+                total_valor = df_reembolsos['VALOR'].sum()
+                st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+            with col3:
+                pendentes = df_reembolsos[df_reembolsos['STATUS'] == 'Pendente'].shape[0]
+                st.metric("Pendentes", pendentes)
 
-                st.subheader("Custo por Tipo de Despesa (Seus Reembolsos)")
-                if 'TIPO_DESPESA' in df_usuario.columns and 'VALOR' in df_usuario.columns:
-                    df_despesa = df_usuario.groupby('TIPO_DESPESA')['VALOR'].sum().reset_index()
-                    fig_despesa = px.bar(df_despesa, x='TIPO_DESPESA', y='VALOR', 
-                                         title="Custo por Tipo de Despesa",
-                                         labels={'VALOR': 'Valor (R$)', 'TIPO_DESPESA': 'Tipo de Despesa'})
-                    st.plotly_chart(fig_despesa, use_container_width=True)
-                
-                if 'STATUS' in df_usuario.columns:
-                    fig_status = px.bar(df_usuario['STATUS'].value_counts(),
-                                        title="Seus Reembolsos por Status",
-                                        labels={'index': 'STATUS', 'value': 'Quantidade'})
-                    st.plotly_chart(fig_status)
-            else:
-                st.info("Você ainda não tem reembolsos para exibir.")
+            st.subheader("Custo por Departamento")
+            df_depto = df_reembolsos.groupby('DEPARTAMENTO')['VALOR'].sum().reset_index()
+            fig_depto = px.bar(df_depto, x='DEPARTAMENTO', y='VALOR', 
+                               title="Custo por Departamento",
+                               labels={'VALOR': 'Valor (R$)', 'DEPARTAMENTO': 'Departamento'})
+            st.plotly_chart(fig_depto, use_container_width=True)
+
+            st.subheader("Custo por Tipo de Despesa")
+            df_despesa = df_reembolsos.groupby('TIPO_DESPESA')['VALOR'].sum().reset_index()
+            fig_despesa = px.bar(df_despesa, x='TIPO_DESPESA', y='VALOR', 
+                                 title="Custo por Tipo de Despesa",
+                                 labels={'VALOR': 'Valor (R$)', 'TIPO_DESPESA': 'Tipo de Despesa'})
+            st.plotly_chart(fig_despesa, use_container_width=True)
+
+            fig_status = px.bar(df_reembolsos['STATUS'].value_counts(),
+                                 title="Reembolsos por Status",
+                                 labels={'index': 'STATUS', 'value': 'Quantidade'})
+            st.plotly_chart(fig_status)
         else:
-            st.warning("Não foi possível carregar os dados de reembolso ou a coluna 'EMAIL' não existe na planilha 'Reembolsos'.")
-    
-    elif menu == "Adicionar Reembolso":
-        st.header("Adicionar Novo Reembolso")
-        user_info = st.session_state.current_user
-        nome_funcionario = user_info['NOME']
-        email_funcionario = user_info['EMAIL']
-        st.subheader(f"Dados do Solicitante:")
-        st.info(f"**Nome:** {nome_funcionario} | **E-mail:** {email_funcionario}")
-        num_reembolsos = st.number_input("Quantos reembolsos deseja adicionar?", min_value=1, step=1)
-        for i in range(int(num_reembolsos)):
-            st.markdown(f"### Reembolso #{i + 1}")
-            with st.form(f"form_reembolso_{i}"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    departamento_selecionado = st.selectbox(
-                        "Departamento", 
-                        DEPARTAMENTOS, 
-                        key=f"depto_{i}"
-                    )
-                with col2:
-                    tipo_despesa_selecionada = st.selectbox(
-                        "Tipo de Despesa", 
-                        TIPOS_DESPESA, 
-                        key=f"despesa_{i}"
-                    )
-                
-                col1_val, col2_date = st.columns(2)
-                with col1_val:
-                    valor_reembolso = st.number_input(f"Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
-                with col2_date:
-                    data_reembolso = st.date_input(f"Data", value=datetime.date.today(), key=f"data_{i}")
-                
-                justificativa = st.text_area("Justificativa", key=f"justificativa_{i}")
-                recibo_anexo = st.file_uploader("Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"], key=f"recibo_{i}")
-                
-                submit_button = st.form_submit_button("Salvar Este Reembolso")
-                
-                if submit_button:
-                    if valor_reembolso and data_reembolso and justificativa:
-                        caminho_recibo = None
-                        if recibo_anexo:
-                            caminho_recibo = upload_to_supabase(recibo_anexo)
-                            if not caminho_recibo:
-                                st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
-                        
-                        add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado, 
-                                    tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
-                    else:
-                        st.error("Por favor, preencha todos os campos obrigatórios.")
-    
-    elif menu == "Meu Histórico":
-        st.header("Meu Histórico de Reembolsos")
-        user_email = st.session_state.current_user['EMAIL']
-        df_reembolsos = load_reembolsos_data()
-        if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
-            df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
-            if not df_usuario.empty:
-                df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
-                # CORREÇÃO: Formatação correta dos valores (R$ 0,01 em vez de R$ 1,00)
-                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".") if pd.notnull(x) else "")
-                
-                st.dataframe(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
-            else:
-                st.info("Nenhum reembolso encontrado para este e-mail.")
-        else:
-            st.warning("Não foi possível carregar os dados de reembolso.")
-    
-    elif menu == "Notificações":
-        st.header("🔔 Minhas Notificações")
-        
-        user_email = st.session_state.current_user['EMAIL']
-        df_reembolsos = load_reembolsos_data()
-        
-        if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
-            df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
-            
-            if not df_usuario.empty:
-                st.subheader("Últimas Atualizações")
-                
-                for _, row in df_usuario.iterrows():
-                    status_color = {
-                        "Pendente": "🟡",
-                        "Aprovado": "🟢", 
-                        "Pago": "✅",
-                        "Rejeitado": "🔴"
-                    }
-                    
-                    emoji = status_color.get(row['STATUS'], "⚪")
-                    
-                    st.write(f"{emoji} **Reembolso de {row['DATA']}** - {row['STATUS']} - R$ {row['VALOR']:,.2f}")
-                    st.write(f"*{row['TIPO_DESPESA']}*")
-                    st.progress(
-                        {
-                            "Pendente": 0.3,
-                            "Aprovado": 0.6, 
-                            "Pago": 1.0,
-                            "Rejeitado": 0.0
-                        }.get(row['STATUS'], 0.0)
-                    )
-                    st.divider()
-            else:
-                st.info("Nenhum reembolso encontrado.")
-        else:
-            st.warning("Não foi possível carregar os dados.")
+            st.info("Nenhum reembolso encontrado para exibir no dashboard.")
     
     elif menu == "Área Administrativa":
-        # Verificar se o usuário é administrador
-        if st.session_state.current_user['EMAIL'].lower() != "earaujo@essencis.com.br":
-            st.warning("Acesso restrito aos administradores.")
-            st.stop()
-        
         st.header("📊 Área Administrativa - Gestão de Reembolsos")
         
         # Carregar dados
@@ -770,67 +512,69 @@ else:
         # Lista de reembolsos
         st.subheader("📋 Lista de Reembolsos")
         
-        for index, row in filtered_df.iterrows():
-            with st.expander(f"Reembolso #{index+1} - {row['NOME']} - R$ {row['VALOR']:,.2f} - {row['STATUS']}"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write(f"**Solicitante:** {row['NOME']}")
-                    st.write(f"**Email:** {row['EMAIL']}")
-                    st.write(f"**Departamento:** {row['DEPARTAMENTO']}")
-                    st.write(f"**Data:** {row['DATA']}")
-                
-                with col2:
-                    st.write(f"**Tipo de Despesa:** {row['TIPO_DESPESA']}")
-                    st.write(f"**Valor:** R$ {row['VALOR']:,.2f}")
-                    st.write(f"**Status:** {row['STATUS']}")
-                    st.write(f"**Justificativa:** {row['JUSTIFICATIVA']}")
-                
-                # Visualizar comprovante
-                if pd.notna(row['CAMINHO_RECIBO']) and row['CAMINHO_RECIBO'] != '':
-                    st.subheader("📎 Comprovante")
+        if filtered_df.empty:
+            st.info("Nenhum reembolso corresponde aos filtros aplicados.")
+        else:
+            for index, row in filtered_df.iterrows():
+                with st.expander(f"Reembolso #{index+1} - {row['NOME']} - R$ {row['VALOR']:,.2f} - {row['STATUS']}"):
+                    col1, col2 = st.columns(2)
                     
-                    try:
-                        signed_url = get_signed_url(row['CAMINHO_RECIBO'])
-                        if signed_url:
-                            # Verificar tipo de arquivo
-                            if row['CAMINHO_RECIBO'].lower().endswith(('.png', '.jpg', '.jpeg')):
-                                st.image(signed_url, caption="Comprovante", use_column_width=True)
-                            elif row['CAMINHO_RECIBO'].lower().endswith('.pdf'):
-                                st.markdown(f"[📄 Baixar PDF]({signed_url})")
+                    with col1:
+                        st.write(f"**Solicitante:** {row['NOME']}")
+                        st.write(f"**Email:** {row['EMAIL']}")
+                        st.write(f"**Departamento:** {row['DEPARTAMENTO']}")
+                        st.write(f"**Data:** {row['DATA']}")
+                    
+                    with col2:
+                        st.write(f"**Tipo de Despesa:** {row['TIPO_DESPESA']}")
+                        st.write(f"**Valor:** R$ {row['VALOR']:,.2f}")
+                        st.write(f"**Status:** {row['STATUS']}")
+                        st.write(f"**Justificativa:** {row['JUSTIFICATIVA']}")
+                    
+                    # Visualizar comprovante
+                    if pd.notna(row['CAMINHO_RECIBO']) and row['CAMINHO_RECIBO'] != '':
+                        st.subheader("📎 Comprovante")
+                        
+                        try:
+                            signed_url = get_signed_url(row['CAMINHO_RECIBO'])
+                            if signed_url:
+                                if row['CAMINHO_RECIBO'].lower().endswith(('.png', '.jpg', '.jpeg')):
+                                    st.image(signed_url, caption="Comprovante", use_column_width=True)
+                                elif row['CAMINHO_RECIBO'].lower().endswith('.pdf'):
+                                    st.markdown(f"[📄 Baixar PDF]({signed_url})")
+                                else:
+                                    st.markdown(f"[📎 Baixar Arquivo]({signed_url})")
+                                
+                                st.markdown(f"**Link do comprovante:** [{signed_url}]({signed_url})")
                             else:
-                                st.markdown(f"[📎 Baixar Arquivo]({signed_url})")
-                            
-                            st.markdown(f"**Link do comprovante:** [{signed_url}]({signed_url})")
-                        else:
-                            st.warning("Não foi possível gerar o link do comprovante.")
-                    except Exception as e:
-                        st.error(f"Erro ao carregar comprovante: {e}")
-                else:
-                    st.info("Nenhum comprovante anexado.")
-                
-                # Controles administrativos
-                st.subheader("⚙️ Ações Administrativas")
-                
-                col_act1, col_act2, col_act3 = st.columns(3)
-                
-                with col_act1:
-                    if st.button(f"✅ Aprovar", key=f"approve_{index}"):
-                        update_reembolso_status(index, "Aprovado", row['EMAIL'], row['NOME'])
-                
-                with col_act2:
-                    if st.button(f"💰 Marcar como Pago", key=f"pay_{index}"):
-                        update_reembolso_status(index, "Pago", row['EMAIL'], row['NOME'])
-                
-                with col_act3:
-                    if st.button(f"❌ Rejeitar", key=f"reject_{index}"):
-                        update_reembolso_status(index, "Rejeitado", row['EMAIL'], row['NOME'])
-                
-                # Campo para observações
-                observacao = st.text_area("Observações (opcional)", key=f"obs_{index}")
-                
-                if st.button("💾 Salvar Observações", key=f"save_obs_{index}"):
-                    save_observacao(index, observacao, row['EMAIL'], row['NOME'])
+                                st.warning("Não foi possível gerar o link do comprovante.")
+                        except Exception as e:
+                            st.error(f"Erro ao carregar comprovante: {e}")
+                    else:
+                        st.info("Nenhum comprovante anexado.")
+                    
+                    # Controles administrativos
+                    st.subheader("⚙️ Ações Administrativas")
+                    
+                    col_act1, col_act2, col_act3 = st.columns(3)
+                    
+                    with col_act1:
+                        if st.button(f"✅ Aprovar", key=f"approve_{index}"):
+                            update_reembolso_status(index, "Aprovado", row['EMAIL'], row['NOME'])
+                    
+                    with col_act2:
+                        if st.button(f"💰 Marcar como Pago", key=f"pay_{index}"):
+                            update_reembolso_status(index, "Pago", row['EMAIL'], row['NOME'])
+                    
+                    with col_act3:
+                        if st.button(f"❌ Rejeitar", key=f"reject_{index}"):
+                            update_reembolso_status(index, "Rejeitado", row['EMAIL'], row['NOME'])
+                    
+                    # Campo para observações
+                    observacao = st.text_area("Observações (opcional)", key=f"obs_{index}")
+                    
+                    if st.button("💾 Salvar Observações", key=f"save_obs_{index}"):
+                        save_observacao(index, observacao, row['EMAIL'], row['NOME'])
         
         # Ferramentas administrativas
         st.divider()
@@ -844,3 +588,6 @@ else:
         with col_tool2:
             if st.button("🔄 Atualizar Dados"):
                 st.rerun()
+
+else:
+    st.error("Acesso restrito. Este aplicativo é apenas para uso administrativo.")
