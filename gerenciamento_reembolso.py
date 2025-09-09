@@ -532,7 +532,7 @@ if st.session_state.current_user['EMAIL'].lower() == "earaujo@essencis.com.br":
                         st.write(f"**Justificativa:** {row['JUSTIFICATIVA']}")
                     
                     # Visualizar comprovante
-                    if pd.notna(row['CAMINHO_RECIBO']) and row['CAMINHO_RECIBO'] != '':
+                    if pd.notna(row['ID_COMPROVANTE']) and row['ID_COMPROVANTE'] != '':
                         st.subheader("📎 Comprovante")
                         
                         try:
