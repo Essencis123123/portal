@@ -115,7 +115,7 @@ def get_usuarios_sheet():
         st.error("A aba 'Usuarios' não foi encontrada na planilha.")
         return None
 
-# --- Funções para Envio de E-mail ---
+# --- Funções de Envio de E-mail ---
 def create_message(sender, to, subject, message_text):
     message = MIMEMultipart()
     message['to'] = to
@@ -146,13 +146,13 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
             file_name = file_uploader.name
             unique_file_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file_name}"
             file_bytes = file_uploader.read()
-            
+
             response = supabase_client.storage.from_(bucket_name).upload(
-                path=unique_file_name, 
-                file=file_bytes, 
+                path=unique_file_name,
+                file=file_bytes,
                 file_options={"content-type": file_uploader.type}
             )
-            
+
             if response:
                 st.success("✅ Arquivo enviado com sucesso para o Supabase!")
                 return unique_file_name
@@ -166,7 +166,7 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
 
 def get_signed_url(file_path, bucket_name="reembolsos-anexos"):
     try:
-        response = supabase_client.storage.from_(bucket_name).create_signed_url(file_path, 604800) 
+        response = supabase_client.storage.from_(bucket_name).create_signed_url(file_path, 604800)
         if 'signedURL' in response:
             return response['signedURL']
         else:
@@ -190,7 +190,7 @@ def load_reembolsos_data():
             if 'VALOR' in df.columns:
                 df['VALOR'] = df['VALOR'].astype(str).str.replace(',', '.', regex=False)
                 df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce')
-        return df
+            return df
     return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
@@ -201,7 +201,7 @@ def load_usuarios_data():
         df = pd.DataFrame(data)
         if not df.empty:
             df.columns = df.columns.str.upper()
-        return df
+            return df
     return pd.DataFrame()
 
 # --- Funções de Adicionar Reembolso e Cadastro ---
@@ -214,16 +214,16 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, caminho_recibo, email]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
-            
+
             # Limpa o cache para recarregar a tabela com o novo item
             load_reembolsos_data.clear()
 
             sender_email = st.session_state.user_email_oauth
-            
+
             recibo_url = None
             if caminho_recibo:
                 recibo_url = get_signed_url(caminho_recibo)
-            
+
             # 1. Envia e-mail para o usuário
             subject_user = "CONFIRMACAO DE ENVIO - PEDIDO DE REEMBOLSO"
             body_user = f"""
@@ -241,7 +241,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             if recibo_url:
                 body_user += f"<p>Clique aqui para baixar a notinha: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
             body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
-            
+
             message_user = create_message(sender_email, email, subject_user, body_user)
             send_message(st.session_state.gmail_service, 'me', message_user)
 
@@ -305,7 +305,7 @@ if os.path.exists(TOKEN_FILE):
 
 if not st.session_state.creds or not st.session_state.creds.valid:
     st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
-    
+
     try:
         redirect_uri_oob = "urn:ietf:wg:oauth:2.0:oob"
         flow = InstalledAppFlow.from_client_config(
@@ -317,13 +317,13 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
             }, SCOPES, redirect_uri=redirect_uri_oob)
-        
+
         auth_url, _ = flow.authorization_url(prompt='consent')
-        
+
         st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
-        
+
         authorization_code = st.text_input("Cole o código de autorização aqui:")
-        
+
         if authorization_code:
             try:
                 flow.fetch_token(code=authorization_code)
@@ -331,13 +331,13 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                     st.session_state.creds = flow.credentials
                     with open(TOKEN_FILE, 'w') as token:
                         token.write(st.session_state.creds.to_json())
-                    
+
                     if hasattr(st.session_state.creds, 'id_token') and st.session_state.creds.id_token:
                         st.session_state.user_email_oauth = st.session_state.creds.id_token.get('email')
                     else:
                         st.warning("Token ID não disponível. Tentando obter email do usuário...")
-                        st.session_state.user_email_oauth = "noreply@essencis.com.br"  # Email padrão
-                    
+                        st.session_state.user_email_oauth = "noreply@essencis.com.br" # Email padrão
+
                     st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
                     st.success("Autorização bem-sucedida! Você pode usar o aplicativo.")
                     st.rerun()
@@ -359,18 +359,49 @@ if st.session_state.creds and st.session_state.creds.valid:
         st.error(f"Erro ao construir serviço Gmail: {e}")
         st.session_state.gmail_service = None
 
-# --- Layout do Aplicativo ---
-st.title("💰 Gestão de Reembolsos Essencis")
+# --- Sidebar ---
+with st.sidebar:
+    if st.session_state.logged_in:
+        st.header(f"Bem-vindo,")
+        st.subheader(f"{st.session_state.current_user['NOME'].split()[0]}!")
+        st.button("Sair", on_click=logout)
+    else:
+        # Se não estiver logado, mostra apenas o título e a opção de sair se houver credenciais salvas
+        if os.path.exists(TOKEN_FILE):
+            st.button("Sair (Autorização)", on_click=lambda: os.remove(TOKEN_FILE) or st.rerun())
 
+    st.markdown("---")
+
+    # Menu de navegação para usuários logados
+    if st.session_state.logged_in:
+        selected_page = option_menu(
+            menu_title="Navegação",
+            options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
+            icons=["house", "cash-stack", "clock-history"],
+            menu_icon="cast",
+            default_index=1,
+            styles={
+                "nav-link": {"font-size": "18px", "text-align": "left", "padding": "10px 5px"},
+                "nav-link-selected": {"background-color": "#1C4D86"},
+            }
+        )
+    else:
+        # Menu de navegação para a tela de login/cadastro
+        selected_page = option_menu(
+            menu_title="Acesso",
+            options=["Login", "Cadastre-se"],
+            icons=["box-arrow-in-right", "person-add"],
+            menu_icon="cast",
+            default_index=0,
+            orientation="vertical",
+             styles={
+                "nav-link": {"font-size": "18px", "text-align": "left", "padding": "10px 5px"},
+                "nav-link-selected": {"background-color": "#1C4D86"},
+            }
+        )
+
+# --- Layout Principal ---
 if not st.session_state.logged_in:
-    selected_page = option_menu(
-        menu_title=None,
-        options=["Login", "Cadastre-se"],
-        icons=["box-arrow-in-right", "person-add"],
-        menu_icon="cast",
-        default_index=0,
-        orientation="horizontal",
-    )
     if selected_page == "Login":
         st.header("Login")
         with st.form("login_form"):
@@ -406,17 +437,7 @@ if not st.session_state.logged_in:
                     st.error("Por favor, preencha todos os campos.")
 
 else:
-    st.sidebar.header(f"Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!")
-    st.sidebar.button("Sair", on_click=logout)
-    menu = option_menu(
-        menu_title=None,
-        options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
-        icons=["house", "cash-stack", "clock-history"],
-        menu_icon="cast",
-        default_index=1,
-        orientation="horizontal",
-    )
-    if menu == "Dashboard":
+    if selected_page == "Dashboard":
         st.header("Resumo dos Seus Reembolsos")
         df_reembolsos = load_reembolsos_data()
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
@@ -429,16 +450,16 @@ else:
                 with col2:
                     if 'VALOR' in df_usuario.columns:
                         total_valor = df_usuario['VALOR'].sum()
-                        st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+                        st.metric("Valor Total", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 with col3:
                     if 'STATUS' in df_usuario.columns:
                         pendentes = df_usuario[df_usuario['STATUS'] == 'Pendente'].shape[0]
                         st.metric("Pendentes", pendentes)
-                
+
                 st.subheader("Custo por Departamento (Seus Reembolsos)")
                 if 'DEPARTAMENTO' in df_usuario.columns and 'VALOR' in df_usuario.columns:
                     df_depto = df_usuario.groupby('DEPARTAMENTO')['VALOR'].sum().reset_index()
-                    fig_depto = px.bar(df_depto, x='DEPARTAMENTO', y='VALOR', 
+                    fig_depto = px.bar(df_depto, x='DEPARTAMENTO', y='VALOR',
                                        title="Custo por Departamento",
                                        labels={'VALOR': 'Valor (R$)', 'DEPARTAMENTO': 'Departamento'})
                     st.plotly_chart(fig_depto, use_container_width=True)
@@ -446,11 +467,11 @@ else:
                 st.subheader("Custo por Tipo de Despesa (Seus Reembolsos)")
                 if 'TIPO_DESPESA' in df_usuario.columns and 'VALOR' in df_usuario.columns:
                     df_despesa = df_usuario.groupby('TIPO_DESPESA')['VALOR'].sum().reset_index()
-                    fig_despesa = px.bar(df_despesa, x='TIPO_DESPESA', y='VALOR', 
+                    fig_despesa = px.bar(df_despesa, x='TIPO_DESPESA', y='VALOR',
                                          title="Custo por Tipo de Despesa",
                                          labels={'VALOR': 'Valor (R$)', 'TIPO_DESPESA': 'Tipo de Despesa'})
                     st.plotly_chart(fig_despesa, use_container_width=True)
-                
+
                 if 'STATUS' in df_usuario.columns:
                     fig_status = px.bar(df_usuario['STATUS'].value_counts(),
                                          title="Seus Reembolsos por Status",
@@ -460,7 +481,7 @@ else:
                 st.info("Você ainda não tem reembolsos para exibir.")
         else:
             st.warning("Não foi possível carregar os dados de reembolso ou a coluna 'EMAIL' não existe na planilha 'Reembolsos'.")
-    elif menu == "Adicionar Reembolso":
+    elif selected_page == "Adicionar Reembolso":
         st.header("Adicionar Novo Reembolso")
         user_info = st.session_state.current_user
         nome_funcionario = user_info['NOME']
@@ -474,28 +495,28 @@ else:
                 col1, col2 = st.columns(2)
                 with col1:
                     departamento_selecionado = st.selectbox(
-                        "Departamento", 
-                        DEPARTAMENTOS, 
+                        "Departamento",
+                        DEPARTAMENTOS,
                         key=f"depto_{i}"
                     )
                 with col2:
                     tipo_despesa_selecionada = st.selectbox(
-                        "Tipo de Despesa", 
-                        TIPOS_DESPESA, 
+                        "Tipo de Despesa",
+                        TIPOS_DESPESA,
                         key=f"despesa_{i}"
                     )
-                
+
                 col1_val, col2_date = st.columns(2)
                 with col1_val:
                     valor_reembolso = st.number_input(f"Valor", min_value=0.01, format="%.2f", key=f"valor_{i}")
                 with col2_date:
                     data_reembolso = st.date_input(f"Data", value=datetime.date.today(), key=f"data_{i}")
-                
+
                 justificativa = st.text_area("Justificativa", key=f"justificativa_{i}")
                 recibo_anexo = st.file_uploader("Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"], key=f"recibo_{i}")
-                
+
                 submit_button = st.form_submit_button("Salvar Este Reembolso")
-                
+
                 if submit_button:
                     if valor_reembolso and data_reembolso and justificativa:
                         caminho_recibo = None
@@ -503,12 +524,12 @@ else:
                             caminho_recibo = upload_to_supabase(recibo_anexo)
                             if not caminho_recibo:
                                 st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
-                        
-                        add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado, 
-                                     tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
+
+                        add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado,
+                                        tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
                     else:
                         st.error("Por favor, preencha todos os campos obrigatórios.")
-    elif menu == "Meu Histórico":
+    elif selected_page == "Meu Histórico":
         st.header("Meu Histórico de Reembolsos")
         user_email = st.session_state.current_user['EMAIL']
         df_reembolsos = load_reembolsos_data()
@@ -517,9 +538,9 @@ else:
             if not df_usuario.empty:
                 # Corrigindo a formatação do valor
                 df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                
+
                 df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
-                
+
                 st.dataframe(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
             else:
                 st.info("Nenhum reembolso encontrado para este e-mail.")
