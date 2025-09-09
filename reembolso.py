@@ -8,7 +8,7 @@ import os
 from pandas.errors import EmptyDataError
 import plotly.express as px
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from oauth2client.service_accountCredentials import ServiceAccountCredentials
 from googleapiclient.discovery import build
 import base64
 from email.mime.multipart import MIMEMultipart
@@ -26,35 +26,12 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
 
-# --- CSS Personalizado para a Sidebar com gradiente do painel Essencis ---
+# --- CSS Personalizado (Removi os estilos de sidebar específicos da cor/logo) ---
+# Mantenha este bloco se houver outros estilos CSS que você queira aplicar,
+# mas os estilos de background e cor da sidebar foram removidos daqui.
 custom_css = """
 <style>
-    /* Estilo para a sidebar com gradiente do painel Essencis */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
-        color: white;
-    }
-    
-    /* Ajusta a cor do texto para branco na sidebar */
-    .st-emotion-cache-16txt4v {
-        color: white !important;
-    }
-    .st-emotion-cache-1wq59o2 {
-        color: white !important;
-    }
-    .st-emotion-cache-1wb2491 {
-        color: white !important;
-    }
-
-    /* Ajuste para o texto do link "Sair" */
-    .st-emotion-cache-116091v {
-        color: white !important;
-    }
-    
-    /* Estilo para os ícones e texto do option_menu */
-    .st-emotion-cache-pkzbrp {
-        background-color: transparent !important;
-    }
+    /* Adicione aqui outros estilos gerais se necessário */
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -149,7 +126,7 @@ def get_usuarios_sheet():
         st.error("A aba 'Usuarios' não foi encontrada na planilha.")
         return None
 
-# --- Funções para Envio de E-mail ---
+# --- Funções de Envio de E-mail ---
 def create_message(sender, to, subject, message_text):
     message = MIMEMultipart()
     message['to'] = to
@@ -395,13 +372,15 @@ if st.session_state.creds and st.session_state.creds.valid:
 
 # --- Sidebar ---
 with st.sidebar:
-    # Adicionar a logo no topo da sidebar usando o link direto
-    st.image("http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png", use_column_width=True)
-    st.markdown("<h1 style='color:white; text-align: center; font-size: 24px;'>Reembolsos</h1>", unsafe_allow_html=True)
-    st.markdown("---") 
+    # Removemos a imagem da logo daqui para voltar ao padrão
+    # st.image("http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png", use_column_width=True)
+    # st.markdown("<h1 style='color:white; text-align: center; font-size: 24px;'>Reembolsos</h1>", unsafe_allow_html=True)
+    
+    st.markdown("---") # Linha divisória
 
     if st.session_state.logged_in:
-        st.markdown(f"<p style='color:white; text-align: center;'>Bem-vindo, **{st.session_state.current_user['NOME'].split()[0]}!**</p>", unsafe_allow_html=True)
+        # Mantém o texto de boas-vindas, mas sem cor explícita para usar o padrão da sidebar
+        st.markdown(f"<p style='text-align: center;'>Bem-vindo, **{st.session_state.current_user['NOME'].split()[0]}!**</p>", unsafe_allow_html=True)
         st.button("Sair", on_click=logout)
     else:
         # Se não estiver logado, mostra apenas o título e a opção de sair se houver credenciais salvas
@@ -413,31 +392,35 @@ with st.sidebar:
     # Menu de navegação para usuários logados
     if st.session_state.logged_in:
         selected_page = option_menu(
-            menu_title=None,
+            menu_title="Navegação", # Volta ao título original do menu
             options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
             icons=["house", "cash-stack", "clock-history"],
+            menu_icon="cast",
             default_index=1,
-            styles={
-                "container": {"padding": "5!important", "background-color": "transparent"},
-                "icon": {"color": "white", "font-size": "20px"},
-                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#004787", "color": "white"},
-                "nav-link-selected": {"background-color": "#007ea7", "color": "white"},
-            }
+            # Removemos os estilos personalizados para usar os padrões do option_menu
+            # styles={
+            #     "container": {"padding": "5!important", "background-color": "transparent"},
+            #     "icon": {"color": "white", "font-size": "20px"},
+            #     "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#004787", "color": "white"},
+            #     "nav-link-selected": {"background-color": "#007ea7", "color": "white"},
+            # }
         )
     else:
         # Menu de navegação para a tela de login/cadastro
         selected_page = option_menu(
-            menu_title=None,
+            menu_title="Acesso", # Volta ao título original do menu
             options=["Login", "Cadastre-se"],
             icons=["box-arrow-in-right", "person-add"],
+            menu_icon="cast",
             default_index=0,
             orientation="vertical",
-            styles={
-                "container": {"padding": "5!important", "background-color": "transparent"},
-                "icon": {"color": "white", "font-size": "20px"},
-                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#004787", "color": "white"},
-                "nav-link-selected": {"background-color": "#007ea7", "color": "white"},
-            }
+            # Removemos os estilos personalizados para usar os padrões do option_menu
+            # styles={
+            #     "container": {"padding": "5!important", "background-color": "transparent"},
+            #     "icon": {"color": "white", "font-size": "20px"},
+            #     "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#004787", "color": "white"},
+            #     "nav-link-selected": {"background-color": "#007ea7", "color": "white"},
+            # }
         )
 
 # --- Layout Principal ---
