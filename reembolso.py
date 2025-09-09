@@ -26,6 +26,132 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
 
+# --- CSS Personalizado para o Tema Essencis ---
+st.markdown(
+    """
+    <style>
+    /* Aumenta o tamanho da fonte de todo o corpo do aplicativo */
+    html, body, [data-testid="stAppViewContainer"] {
+        font-size: 1.1rem;
+    }
+    
+    /* Cor do menu lateral e texto */
+    [data-testid="stSidebar"] {
+        background-color: #1C4D86;
+        color: white;
+    }
+    
+    /* Regras para garantir que TODO o texto no sidebar seja branco */
+    [data-testid="stSidebar"] *,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data.testid="stSidebar"] h3,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
+    [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
+    .stDownloadButton button p {
+        color: white !important;
+    }
+
+    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
+        color: white !important;
+    }
+    
+    /* Estilo para deixar a letra dos botões preta */
+    .stButton button p {
+        color: black !important;
+    }
+    .stDownloadButton button p {
+        color: white !important;
+    }
+
+    [data-testid="stSidebar"] img {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 80%;
+        border-radius: 10px;
+        padding: 10px 0;
+    }
+
+    /* Estilo para o container principal da página */
+    .main-container {
+        background-color: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        color: #333;
+    }
+    
+    /* Estilo para o cabeçalho principal da página */
+    .header-container {
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: white;
+    }
+    
+    .header-container h1 {
+        color: white;
+        margin: 0;
+    }
+
+    .header-container p {
+        color: white;
+        margin: 5px 0 0 0;
+        font-size: 18px;
+    }
+    
+    /* Estilo para os sub-cabeçalhos dentro da área principal */
+    h2, h3 {
+        color: #1C4D86;
+        font-weight: 600;
+    }
+    
+    /* Estilo para os botões de ação */
+    .stButton button {
+        background-color: #0055a5;
+        color: white;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .stButton button:hover {
+        background-color: #007ea7;
+    }
+    
+    /* Estilo para os cards de métricas */
+    [data-testid="stMetric"] > div {
+        background-color: #f0f2f5;
+        color: #1C4D86;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Carregar a imagem do logo a partir da URL
+@st.cache_data(show_spinner=False)
+def load_logo(url):
+    """Carrega a imagem de um URL e armazena em cache."""
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        img = Image.open(BytesIO(response.content))
+        return img
+    except Exception:
+        return None
+
+logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
+logo_img = load_logo(logo_url)
+
 # --- Carrega os segredos do arquivo secrets.toml ---
 try:
     with open(".streamlit/secrets.toml", "r") as f:
@@ -360,9 +486,19 @@ if st.session_state.creds and st.session_state.creds.valid:
         st.session_state.gmail_service = None
 
 # --- Layout do Aplicativo ---
-st.title("💰 Gestão de Reembolsos Essencis")
+st.markdown("""
+    <div class='header-container'>
+        <h1>💰 Gestão de Reembolsos Essencis</h1>
+        <p>Sistema de Controle e Análise de Reembolsos</p>
+    </div>
+""", unsafe_allow_html=True)
 
 if not st.session_state.logged_in:
+    # Adiciona o logo no sidebar
+    with st.sidebar:
+        if logo_img:
+            st.image(logo_img, use_container_width=True)
+    
     selected_page = option_menu(
         menu_title=None,
         options=["Login", "Cadastre-se"],
@@ -406,8 +542,13 @@ if not st.session_state.logged_in:
                     st.error("Por favor, preencha todos os campos.")
 
 else:
-    st.sidebar.header(f"Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!")
-    st.sidebar.button("Sair", on_click=logout)
+    # Adiciona o logo no sidebar
+    with st.sidebar:
+        if logo_img:
+            st.image(logo_img, use_container_width=True)
+        st.header(f"Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!")
+        st.sidebar.button("Sair", on_click=logout)
+    
     menu = option_menu(
         menu_title=None,
         options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
@@ -449,7 +590,7 @@ else:
                     fig_despesa = px.bar(df_despesa, x='TIPO_DESPESA', y='VALOR',
                                          title="Custo por Tipo de Despesa",
                                          labels={'VALOR': 'Valor (R$)', 'TIPO_DESPESA': 'Tipo de Despesa'})
-                    st.plotly_chart(fig_despesa, use_container_width=True)
+                    st.plotly_chart(fg_despesa, use_container_width=True)
 
                 if 'STATUS' in df_usuario.columns:
                     fig_status = px.bar(df_usuario['STATUS'].value_counts(),
