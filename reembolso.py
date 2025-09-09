@@ -26,6 +26,45 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
 
+# --- Defina a Cor Azul Desejada para a Sidebar (EXEMPLO: Azul Essencis) ---
+COR_AZUL_ESSENCIS = "#1C4D86" # Substitua pelo código HEX da cor desejada
+COR_FUNDO_SIDEBAR = "#0E1117" # Um tom escuro para o fundo da sidebar
+
+# --- CSS Personalizado para a Sidebar ---
+custom_css = f"""
+<style>
+    [data-testid="stSidebar"] {{
+        background-color: {COR_FUNDO_SIDEBAR} !important;
+        color: white;
+    }}
+    .css-pkzbrp {{ /* Seletor para o container do option_menu */
+        background-color: {COR_FUNDO_SIDEBAR} !important;
+    }}
+    .st-emotion-cache-16txt4v {{ /* Seletor para o título do menu */
+        color: white !important;
+    }}
+    /* Estilos para os links do menu */
+    .st-emotion-cache-13o5gk {{ /* Container dos links do menu */
+        padding-top: 5px !important;
+        padding-bottom: 5px !important;
+    }}
+    .st-emotion-cache-1y83wao {{ /* Link individual */
+        color: white !important;
+        font-size: 18px !important;
+        text-align: left !important;
+        margin: 0px !important;
+    }}
+    .st-emotion-cache-1y83wao:hover {{ /* Hover do link */
+        background-color: #262730 !important; /* Um tom de cinza mais escuro */
+    }}
+    .st-emotion-cache-1y83wao[aria-selected="true"] {{ /* Link selecionado */
+        background-color: {COR_AZUL_ESSENCIS} !important;
+        color: white !important;
+    }}
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+
 # --- Carrega os segredos do arquivo secrets.toml ---
 try:
     with open(".streamlit/secrets.toml", "r") as f:
@@ -115,7 +154,7 @@ def get_usuarios_sheet():
         st.error("A aba 'Usuarios' não foi encontrada na planilha.")
         return None
 
-# --- Funções para Envio de E-mail ---
+# --- Funções de Envio de E-mail ---
 def create_message(sender, to, subject, message_text):
     message = MIMEMultipart()
     message['to'] = to
@@ -359,18 +398,66 @@ if st.session_state.creds and st.session_state.creds.valid:
         st.error(f"Erro ao construir serviço Gmail: {e}")
         st.session_state.gmail_service = None
 
-# --- Layout do Aplicativo ---
-st.title("💰 Gestão de Reembolsos Essencis")
+# --- Sidebar ---
+with st.sidebar:
+    # Adicionar a logo no topo da sidebar
+    # CERTIFIQUE-SE DE AJUSTAR O CAMINHO ABAIXO PARA ONDE SEU ARQUIVO DE LOGO ESTÁ
+    try:
+        logo = Image.open("logo_essencis.png") # Exemplo: mude para "assets/logo_essencis.png" se necessário
+        st.image(logo, use_column_width=True)
+    except FileNotFoundError:
+        st.warning("Logo 'logo_essencis.png' não encontrada. Verifique o caminho.")
+    except Exception as e:
+        st.warning(f"Erro ao carregar a logo: {e}")
+
+    st.markdown("---") # Linha divisória
+
+    if st.session_state.logged_in:
+        # A saudação já está estilizada no CSS customizado para ficar branca
+        st.markdown(f"<h3 style='color:white;'>Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!</h3>", unsafe_allow_html=True)
+        st.button("Sair", on_click=logout)
+    else:
+        if os.path.exists(TOKEN_FILE):
+            st.button("Sair (Autorização)", on_click=lambda: os.remove(TOKEN_FILE) or st.rerun())
+
+    st.markdown("---")
+
+    # Menu de navegação para usuários logados
+    if st.session_state.logged_in:
+        selected_page = option_menu(
+            menu_title="Navegação", # Título do menu
+            options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
+            icons=["house", "cash-stack", "clock-history"],
+            menu_icon="cast",
+            default_index=1,
+            styles={
+                "container": {"padding": "5!important", "background-color": COR_FUNDO_SIDEBAR}, # Cor de fundo do container do menu
+                "icon": {"color": "white", "font-size": "20px"},
+                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#262730", "color": "white"}, # Cor do texto normal
+                "nav-link-selected": {"background-color": COR_AZUL_ESSENCIS, "color": "white"}, # Cor do item selecionado (azul Essencis)
+            }
+        )
+    else:
+        # Menu de navegação para a tela de login/cadastro
+        selected_page = option_menu(
+            menu_title="Acesso", # Título do menu
+            options=["Login", "Cadastre-se"],
+            icons=["box-arrow-in-right", "person-add"],
+            menu_icon="cast",
+            default_index=0,
+            orientation="vertical",
+            styles={
+                "container": {"padding": "5!important", "background-color": COR_FUNDO_SIDEBAR},
+                "icon": {"color": "white", "font-size": "20px"},
+                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#262730", "color": "white"},
+                "nav-link-selected": {"background-color": COR_AZUL_ESSENCIS, "color": "white"},
+            }
+        )
+
+# --- Layout Principal ---
+st.title("💰 Gestão de Reembolsos Essencis") # O título principal ainda pode ficar aqui
 
 if not st.session_state.logged_in:
-    selected_page = option_menu(
-        menu_title=None,
-        options=["Login", "Cadastre-se"],
-        icons=["box-arrow-in-right", "person-add"],
-        menu_icon="cast",
-        default_index=0,
-        orientation="horizontal",
-    )
     if selected_page == "Login":
         st.header("Login")
         with st.form("login_form"):
@@ -406,17 +493,7 @@ if not st.session_state.logged_in:
                     st.error("Por favor, preencha todos os campos.")
 
 else:
-    st.sidebar.header(f"Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!")
-    st.sidebar.button("Sair", on_click=logout)
-    menu = option_menu(
-        menu_title=None,
-        options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
-        icons=["house", "cash-stack", "clock-history"],
-        menu_icon="cast",
-        default_index=1,
-        orientation="horizontal",
-    )
-    if menu == "Dashboard":
+    if selected_page == "Dashboard":
         st.header("Resumo dos Seus Reembolsos")
         df_reembolsos = load_reembolsos_data()
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
@@ -429,7 +506,7 @@ else:
                 with col2:
                     if 'VALOR' in df_usuario.columns:
                         total_valor = df_usuario['VALOR'].sum()
-                        st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+                        st.metric("Valor Total", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 with col3:
                     if 'STATUS' in df_usuario.columns:
                         pendentes = df_usuario[df_usuario['STATUS'] == 'Pendente'].shape[0]
@@ -460,7 +537,7 @@ else:
                 st.info("Você ainda não tem reembolsos para exibir.")
         else:
             st.warning("Não foi possível carregar os dados de reembolso ou a coluna 'EMAIL' não existe na planilha 'Reembolsos'.")
-    elif menu == "Adicionar Reembolso":
+    elif selected_page == "Adicionar Reembolso":
         st.header("Adicionar Novo Reembolso")
         user_info = st.session_state.current_user
         nome_funcionario = user_info['NOME']
@@ -508,7 +585,7 @@ else:
                                         tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
                     else:
                         st.error("Por favor, preencha todos os campos obrigatórios.")
-    elif menu == "Meu Histórico":
+    elif selected_page == "Meu Histórico":
         st.header("Meu Histórico de Reembolsos")
         user_email = st.session_state.current_user['EMAIL']
         df_reembolsos = load_reembolsos_data()
@@ -516,7 +593,7 @@ else:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             if not df_usuario.empty:
                 # Corrigindo a formatação do valor
-                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(".", ",").replace(",", "."))
+                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
                 df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
 
