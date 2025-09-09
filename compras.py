@@ -653,97 +653,97 @@ def render_main_app():
             else:
                 st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
 
-elif menu == "✍️ Pedidos (OC)":
-    st.markdown("""
-        <div class='header-container'>
-            <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1>
-            <p>Vincule as Ordens de Compra às Requisições Pendentes</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
-    st.info("Edite os campos diretamente na tabela abaixo para adicionar os dados de Ordem de Compra. Eles serão salvos ao clicar no botão abaixo.")
+    elif menu == "✍️ Pedidos (OC)":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1>
+                <p>Vincule as Ordens de Compra às Requisições Pendentes</p>
+            </div>
+        """, unsafe_allow_html=True)
     
-    # Primeiro, definir pedidos_pendentes_oc
-    pedidos_pendentes_oc = st.session_state.df_pedidos[
-        (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | 
-        (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")
-    ].copy()
-    
-    if pedidos_pendentes_oc.empty:
-        st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
-        st.stop()
-    
-    # Processar datas
-    for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
-        if col in pedidos_pendentes_oc.columns:
-            pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_date_from_editor)
-    
-    # Carregar dados do almoxarifado
-    df_almox = st.session_state.df_almoxarifado.copy()
-    
-    # Só fazer o merge se houver dados no almoxarifado
-    if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
-        df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
+        st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
+        st.info("Edite os campos diretamente na tabela abaixo para adicionar os dados de Ordem de Compra. Eles serão salvos ao clicar no botão abaixo.")
         
-        # Verificar se a coluna ORDEM_COMPRA existe em ambos os DataFrames
-        if 'ORDEM_COMPRA' in pedidos_pendentes_oc.columns:
-            pedidos_pendentes_oc = pedidos_pendentes_oc.merge(
-                df_almox_oc, 
-                on='ORDEM_COMPRA', 
-                how='left', 
-                suffixes=('', '_almox')
+        # Primeiro, definir pedidos_pendentes_oc
+        pedidos_pendentes_oc = st.session_state.df_pedidos[
+            (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | 
+            (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")
+        ].copy()
+        
+        if pedidos_pendentes_oc.empty:
+            st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
+            st.stop()
+        
+        # Processar datas
+        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+            if col in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_date_from_editor)
+        
+        # Carregar dados do almoxarifado
+        df_almox = st.session_state.df_almoxarifado.copy()
+        
+        # Só fazer o merge se houver dados no almoxarifado
+        if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
+            df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
+            
+            # Verificar se a coluna ORDEM_COMPRA existe em ambos os DataFrames
+            if 'ORDEM_COMPRA' in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc = pedidos_pendentes_oc.merge(
+                    df_almox_oc, 
+                    on='ORDEM_COMPRA', 
+                    how='left', 
+                    suffixes=('', '_almox')
+                )
+                
+                # Processar a coluna DOC NF
+                if 'DOC NF_almox' in pedidos_pendentes_oc.columns:
+                    pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
+                    pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+        
+        # Converter datas para formato de exibição
+        data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
+        for col in data_cols_to_convert:
+            if col in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
+                    lambda x: x.date() if pd.notna(x) and hasattr(x, 'date') else None
+                )
+        
+        # Resto do código continua igual...
+        cols_para_editar = [
+            "REQUISICAO", "DATA", "SOLICITANTE", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+            "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+            "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
+        ]
+        
+        # Garantir que as colunas existem
+        cols_disponiveis = [col for col in cols_para_editar if col in pedidos_pendentes_oc.columns]
+        df_editavel = pedidos_pendentes_oc[cols_disponiveis].copy()
+        
+        with st.form(key="form_atualizar_pedidos"):
+            edited_df = st.data_editor(
+                df_editavel,
+                use_container_width=True,
+                hide_index=True,
+                column_order=cols_disponiveis,
+                column_config={
+                    "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
+                    "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
+                    "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+                    "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
+                    "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
+                    "UN": st.column_config.TextColumn("UN", disabled=True),
+                    "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
+                    "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
+                    "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
+                    "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
+                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
+                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
+                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD-MM-YYYY"),
+                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
+                }
             )
             
-            # Processar a coluna DOC NF
-            if 'DOC NF_almox' in pedidos_pendentes_oc.columns:
-                pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
-                pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
-    
-    # Converter datas para formato de exibição
-    data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
-    for col in data_cols_to_convert:
-        if col in pedidos_pendentes_oc.columns:
-            pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
-                lambda x: x.date() if pd.notna(x) and hasattr(x, 'date') else None
-            )
-    
-    # Resto do código continua igual...
-    cols_para_editar = [
-        "REQUISICAO", "DATA", "SOLICITANTE", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
-        "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-        "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
-    ]
-    
-    # Garantir que as colunas existem
-    cols_disponiveis = [col for col in cols_para_editar if col in pedidos_pendentes_oc.columns]
-    df_editavel = pedidos_pendentes_oc[cols_disponiveis].copy()
-    
-    with st.form(key="form_atualizar_pedidos"):
-        edited_df = st.data_editor(
-            df_editavel,
-            use_container_width=True,
-            hide_index=True,
-            column_order=cols_disponiveis,
-            column_config={
-                "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
-                "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
-                "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
-                "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
-                "UN": st.column_config.TextColumn("UN", disabled=True),
-                "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
-                "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
-                "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
-                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
-                "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD-MM-YYYY"),
-                "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
-            }
-        )
-        
-        submitted = st.form_submit_button("Salvar Atualizações")
+            submitted = st.form_submit_button("Salvar Atualizações")
 
         if submitted:
             st.info("Detectando alterações...")
