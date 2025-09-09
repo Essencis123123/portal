@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 import json
 import re
 
-# Configuração da página com layout wide và ícone
+# Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
 
 # --- CSS Personalizado para o Tema Essencis ---
@@ -645,7 +645,17 @@ def render_main_app():
                     }
                     linhas_a_adicionar.append(nova_linha)
                 
-                st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, pd.DataFrame(linhas_a_adicionar)], ignore_index=True)
+                # Converte a lista de dicionários para um DataFrame
+                df_a_adicionar = pd.DataFrame(linhas_a_adicionar)
+                
+                # Converte as colunas de data para o formato correto
+                for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']:
+                    if col in df_a_adicionar.columns:
+                        df_a_adicionar[col] = pd.to_datetime(df_a_adicionar[col], errors='coerce')
+                
+                # Concatena os DataFrames
+                st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_a_adicionar], ignore_index=True)
+                
                 salvar_dados_pedidos(st.session_state.df_pedidos)
                 st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"])
                 st.success("Requisição registrada com sucesso! Vá para 'Atualizar Pedidos' para completar as informações.")
@@ -1165,7 +1175,7 @@ def render_main_app():
         else:
             st.info("Nenhum pedido com valor e departamento registrados no período para esta análise.")
         
-        st.subheader("Evolução Mensal de Pedidos and Entregas")
+        st.subheader("Evolução Mensal de Pedidos e Entregas")
         
         df_com_data_aprovacao = df_filtrado_dash.dropna(subset=['DATA_APROVACAO']).copy()
         if not df_com_data_aprovacao.empty:
@@ -1342,7 +1352,7 @@ def render_main_app():
             with col_filtro_p2:
                 ano_selecionado_p = st.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
-            st.info("Nenhum pedido dengan data válida para análise.")
+            st.info("Nenhum pedido com data válida para análise.")
             st.stop()
 
         if mes_selecionado_p and ano_selecionado_p:
@@ -1368,9 +1378,9 @@ def render_main_app():
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
         df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                    ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                    0)
-                                                    
+                                                 ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                 0)
+                                                 
         df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
         st.subheader("Visão Geral da Performance")
