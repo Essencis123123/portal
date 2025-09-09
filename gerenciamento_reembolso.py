@@ -536,7 +536,7 @@ if st.session_state.current_user['EMAIL'].lower() == "earaujo@essencis.com.br":
                         st.subheader("📎 Comprovante")
                         
                         try:
-                            signed_url = get_signed_url(row['CAMINHO_RECIBO'])
+                            signed_url = get_signed_url(row['ID_COMPROVANE'])
                             if signed_url:
                                 if row['CAMINHO_RECIBO'].lower().endswith(('.png', '.jpg', '.jpeg')):
                                     st.image(signed_url, caption="Comprovante", use_column_width=True)
