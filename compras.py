@@ -39,29 +39,57 @@ st.markdown(
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
-    [data.testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
     [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j,
     .stDownloadButton button p {
         color: white !important;
     }
-        /* Adicione estas regras CSS para o menu do sidebar */
-    [data-testid="stSidebar"] .stRadio div {
+
+    /* ESTILOS ESPECÍFICOS PARA O MENU DE NAVEGAÇÃO */
+    /* Container principal do radio button */
+    [data-testid="stSidebar"] .stRadio {
         background-color: #1C4D86;
     }
     
-    [data-testid="stSidebar"] .stRadio div label {
-        color: white !important;
+    /* Container dos itens do menu */
+    [data-testid="stSidebar"] .stRadio > div {
+        background-color: #1C4D86;
+        border: none;
     }
     
-    [data-testid="stSidebar"] .stRadio div label:hover {
+    /* Labels dos itens do menu */
+    [data-testid="stSidebar"] .stRadio label {
+        color: white !important;
+        font-weight: 500;
+        padding: 8px 12px;
+        border-radius: 4px;
+        margin: 2px 0;
+    }
+    
+    /* Texto dentro das labels */
+    [data-testid="stSidebar"] .stRadio label span {
+        color: white !important;
+        font-size: 16px;
+    }
+    
+    /* Hover dos itens do menu */
+    [data-testid="stSidebar"] .stRadio label:hover {
         color: white !important;
         background-color: #2a5f9e;
     }
     
-    [data-testid="stSidebar"] .stRadio div label:focus {
+    /* Item selecionado */
+    [data-testid="stSidebar"] .stRadio label[data-baseweb="radio"]:has(input:checked) {
+        background-color: #0055a5;
         color: white !important;
+    }
+    
+    /* Foco nos itens */
+    [data-testid="stSidebar"] .stRadio label:focus {
+        color: white !important;
+        outline: none;
     }
     
     /* Garantir que os ícones também fiquem brancos */
@@ -148,6 +176,9 @@ st.markdown(
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     </style>
+    """,
+    unsafe_allow_html=True
+)
     """,
     unsafe_allow_html=True
 )
