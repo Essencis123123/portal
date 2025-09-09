@@ -221,6 +221,10 @@ def parse_date_from_editor(date_value):
     if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
         return date_value
     
+    # Se for date (do datetime.date), converte para datetime
+    if isinstance(date_value, datetime.date):
+        return datetime.datetime.combine(date_value, datetime.time())
+    
     # Se for string, tenta parse nos formatos esperados
     if isinstance(date_value, str):
         try:
@@ -233,13 +237,13 @@ def parse_date_from_editor(date_value):
             except ValueError:
                 try:
                     # Tenta formato YYYY-MM-DD (padrão ISO)
-                    return datetime.datetime.strptime(date_value, '%Y-%m-%Y')
+                    return datetime.datetime.strptime(date_value, '%Y-%m-%d')
                 except ValueError:
                     # Tenta parse automático
                     return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
     
     return pd.to_datetime(date_value, errors='coerce')
-
+    
 def formatar_data_brasil_hifen(data):
     """Formata datetime para exibição no formato DD-MM-YYYY"""
     if pd.isna(data) or data is None:
