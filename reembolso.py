@@ -212,7 +212,7 @@ TIPOS_DESPESA = [
     "Boletos de inscrição (cursos, eventos, concursos)",
     "Taxas públicas (DAE, GRU, cartório, etc.)",
     "Ingressos corporativos ou institucionais",
-    "Manutenção de Máquinas e Equipamentos",
+    "Manutenção de Máquinas y Equipamentos",
     "Materiais de baixo custo (torneiras, lâmpadas, tomadas)",
     "Outros"
 ]
@@ -305,7 +305,13 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
 
             if response:
                 st.success("✅ Arquivo enviado com sucesso para o Supabase!")
-                return unique_file_name # Retorna o nome do arquivo para ser salvo na planilha
+                # Gera a URL assinada e retorna para salvar na planilha
+                signed_url = get_signed_url(unique_file_name, bucket_name)
+                if signed_url:
+                    return signed_url
+                else:
+                    st.warning("Arquivo enviado mas não foi possível gerar URL. Salvando apenas o nome do arquivo.")
+                    return unique_file_name
             else:
                 st.error("❌ Falha ao enviar o arquivo")
                 return None
@@ -376,10 +382,6 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
 
             sender_email = st.session_state.user_email_oauth if st.session_state.user_email_oauth else "noreply@essencis.com.br"
 
-            recibo_url = None
-            if caminho_recibo:
-                recibo_url = get_signed_url(caminho_recibo)
-
             # 1. Envia e-mail para o usuário
             subject_user = "CONFIRMACAO DE ENVIO - PEDIDO DE REEMBOLSO"
             body_user = f"""
@@ -394,8 +396,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 <li><b>Justificativa:</b> {justificativa}</li>
             </ul>
             """
-            if recibo_url:
-                body_user += f"<p>Clique aqui para baixar a notinha: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
+            if caminho_recibo:
+                body_user += f"<p>Clique aqui para baixar a notinha: <a href='{caminho_recibo}'>Baixar Comprovante</a></p>"
             body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
 
             message_user = create_message(sender_email, email, subject_user, body_user)
@@ -420,8 +422,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 <li><b>Justificativa:</b> {justificativa}</li>
             </ul>
             """
-            if recibo_url:
-                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{recibo_url}'>Baixar Comprovante</a></p>"
+            if caminho_recibo:
+                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{caminho_recibo}'>Baixar Comprovante</a></p>"
             body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
 
             message_admin = create_message(sender_email, admin_email, subject_admin, body_admin)
@@ -480,7 +482,8 @@ if os.path.exists(TOKEN_FILE):
         st.error(f"Erro ao carregar token: {e}")
         st.session_state.creds = None
 
-if not st.session_state.creds or not st.session_state.creds.valid:
+# Só solicita autorização OAuth se o usuário estiver logado
+if st.session_state.logged_in and (not st.session_state.creds or not st.session_state.creds.valid):
     st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
 
     try:
