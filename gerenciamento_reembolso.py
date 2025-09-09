@@ -545,7 +545,7 @@ if st.session_state.current_user['EMAIL'].lower() == "earaujo@essencis.com.br":
                                 else:
                                     st.markdown(f"[📎 Baixar Arquivo]({signed_url})")
                                 
-                                st.markdown(f"**Link do comprovante:** [{signed_url}]({signed_url})")
+                                #st.markdown(f"**Link do comprovante:** [{signed_url}]({signed_url})")
                             else:
                                 st.warning("Não foi possível gerar o link do comprovante.")
                         except Exception as e:
