@@ -177,6 +177,7 @@ def get_signed_url(file_path, bucket_name="reembolsos-anexos"):
         return None
 
 # --- Funções de Carregamento de Dados ---
+@st.cache_data(ttl=300)
 def load_reembolsos_data():
     sheet = get_reembolsos_sheet()
     if sheet:
@@ -192,6 +193,7 @@ def load_reembolsos_data():
         return df
     return pd.DataFrame()
 
+@st.cache_data(ttl=3600)
 def load_usuarios_data():
     sheet = get_usuarios_sheet()
     if sheet:
@@ -213,6 +215,9 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             
+            # Limpa o cache para recarregar a tabela com o novo item
+            load_reembolsos_data.clear()
+
             sender_email = st.session_state.user_email_oauth
             
             recibo_url = None
@@ -327,13 +332,10 @@ if not st.session_state.creds or not st.session_state.creds.valid:
                     with open(TOKEN_FILE, 'w') as token:
                         token.write(st.session_state.creds.to_json())
                     
-                    # Verifica se id_token existe e é válido
                     if hasattr(st.session_state.creds, 'id_token') and st.session_state.creds.id_token:
                         st.session_state.user_email_oauth = st.session_state.creds.id_token.get('email')
                     else:
-                        # Se não houver id_token, tenta obter o email de outra forma
                         st.warning("Token ID não disponível. Tentando obter email do usuário...")
-                        # Você pode precisar fazer uma chamada à API do Google para obter o email
                         st.session_state.user_email_oauth = "noreply@essencis.com.br"  # Email padrão
                     
                     st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
@@ -348,7 +350,6 @@ if not st.session_state.creds or not st.session_state.creds.valid:
 if st.session_state.creds and st.session_state.creds.valid:
     try:
         st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-        # Se ainda não temos o email, tenta obter de forma segura
         if not st.session_state.user_email_oauth:
             if hasattr(st.session_state.creds, 'id_token') and st.session_state.creds.id_token:
                 st.session_state.user_email_oauth = st.session_state.creds.id_token.get('email')
@@ -381,7 +382,6 @@ if not st.session_state.logged_in:
 
     elif selected_page == "Cadastre-se":
         st.header("Cadastrar Novo Usuário")
-        st.warning("A sua planilha 'Usuarios' deve ter as colunas: NOME, MATRICULA, EMAIL, SENHA.")
         with st.form("cadastro_form"):
             nome = st.text_input("Nome Completo")
             matricula = st.text_input("Matrícula")
@@ -453,8 +453,8 @@ else:
                 
                 if 'STATUS' in df_usuario.columns:
                     fig_status = px.bar(df_usuario['STATUS'].value_counts(),
-                                        title="Seus Reembolsos por Status",
-                                        labels={'index': 'STATUS', 'value': 'Quantidade'})
+                                         title="Seus Reembolsos por Status",
+                                         labels={'index': 'STATUS', 'value': 'Quantidade'})
                     st.plotly_chart(fig_status)
             else:
                 st.info("Você ainda não tem reembolsos para exibir.")
@@ -505,7 +505,7 @@ else:
                                 st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
                         
                         add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado, 
-                                    tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
+                                     tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
                     else:
                         st.error("Por favor, preencha todos os campos obrigatórios.")
     elif menu == "Meu Histórico":
@@ -515,9 +515,10 @@ else:
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             if not df_usuario.empty:
+                # Corrigindo a formatação do valor
+                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                
                 df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
-                # CORREÇÃO: Formatação correta dos valores (R$ 0,01 em vez de R$ 1,00)
-                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".") if pd.notnull(x) else "")
                 
                 st.dataframe(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
             else:
