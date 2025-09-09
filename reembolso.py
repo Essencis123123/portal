@@ -26,30 +26,34 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
 
-# --- CSS Personalizado para a Sidebar ---
-# Ajustes para a cor de fundo da sidebar e o item selecionado do menu
+# --- CSS Personalizado para a Sidebar com gradiente do painel Essencis ---
 custom_css = """
 <style>
+    /* Estilo para a sidebar com gradiente do painel Essencis */
     [data-testid="stSidebar"] {
-        background-color: #0E1117; /* Cor de fundo da sidebar */
-    }
-    .st-emotion-cache-16txt4v { /* Seletor para o título do menu */
+        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
         color: white;
     }
-    /* Estilos específicos para o option_menu */
-    .st-emotion-cache-1a24kca { /* Container do option_menu */
-        background-color: #0E1117 !important;
-    }
-    .st-emotion-cache-1y1j3g0 { /* Item do menu */
+    
+    /* Ajusta a cor do texto para branco na sidebar */
+    .st-emotion-cache-16txt4v {
         color: white !important;
-        --hover-color: #262730; /* Cor ao passar o mouse */
     }
-    .st-emotion-cache-1y1j3g0:hover {
-        background-color: #262730 !important; /* Cor de hover */
-    }
-    .st-emotion-cache-1y1j3g0.selected { /* Item selecionado */
-        background-color: #1C4D86 !important; /* Azul Essencis */
+    .st-emotion-cache-1wq59o2 {
         color: white !important;
+    }
+    .st-emotion-cache-1wb2491 {
+        color: white !important;
+    }
+
+    /* Ajuste para o texto do link "Sair" */
+    .st-emotion-cache-116091v {
+        color: white !important;
+    }
+    
+    /* Estilo para os ícones e texto do option_menu */
+    .st-emotion-cache-pkzbrp {
+        background-color: transparent !important;
     }
 </style>
 """
@@ -145,7 +149,7 @@ def get_usuarios_sheet():
         st.error("A aba 'Usuarios' não foi encontrada na planilha.")
         return None
 
-# --- Funções de Envio de E-mail ---
+# --- Funções para Envio de E-mail ---
 def create_message(sender, to, subject, message_text):
     message = MIMEMultipart()
     message['to'] = to
@@ -391,16 +395,16 @@ if st.session_state.creds and st.session_state.creds.valid:
 
 # --- Sidebar ---
 with st.sidebar:
-    # Exibe a logo a partir da URL fornecida
-    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-    st.image(logo_url, use_column_width=True, caption="Essencis") # Adicionado caption opcional
-
-    st.markdown("---") # Linha divisória
+    # Adicionar a logo no topo da sidebar usando o link direto
+    st.image("http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png", use_column_width=True)
+    st.markdown("<h1 style='color:white; text-align: center; font-size: 24px;'>Reembolsos</h1>", unsafe_allow_html=True)
+    st.markdown("---") 
 
     if st.session_state.logged_in:
-        st.markdown(f"<h3 style='color:white;'>Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!</h3>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color:white; text-align: center;'>Bem-vindo, **{st.session_state.current_user['NOME'].split()[0]}!**</p>", unsafe_allow_html=True)
         st.button("Sair", on_click=logout)
     else:
+        # Se não estiver logado, mostra apenas o título e a opção de sair se houver credenciais salvas
         if os.path.exists(TOKEN_FILE):
             st.button("Sair (Autorização)", on_click=lambda: os.remove(TOKEN_FILE) or st.rerun())
 
@@ -409,32 +413,30 @@ with st.sidebar:
     # Menu de navegação para usuários logados
     if st.session_state.logged_in:
         selected_page = option_menu(
-            menu_title="Navegação",
+            menu_title=None,
             options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
             icons=["house", "cash-stack", "clock-history"],
-            menu_icon="cast",
             default_index=1,
             styles={
-                "container": {"padding": "5!important", "background-color": "#0E1117"},
+                "container": {"padding": "5!important", "background-color": "transparent"},
                 "icon": {"color": "white", "font-size": "20px"},
-                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#262730", "color": "white"},
-                "nav-link-selected": {"background-color": "#1C4D86", "color": "white"},
+                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#004787", "color": "white"},
+                "nav-link-selected": {"background-color": "#007ea7", "color": "white"},
             }
         )
     else:
         # Menu de navegação para a tela de login/cadastro
         selected_page = option_menu(
-            menu_title="Acesso",
+            menu_title=None,
             options=["Login", "Cadastre-se"],
             icons=["box-arrow-in-right", "person-add"],
-            menu_icon="cast",
             default_index=0,
             orientation="vertical",
             styles={
-                "container": {"padding": "5!important", "background-color": "#0E1117"},
+                "container": {"padding": "5!important", "background-color": "transparent"},
                 "icon": {"color": "white", "font-size": "20px"},
-                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#262730", "color": "white"},
-                "nav-link-selected": {"background-color": "#1C4D86", "color": "white"},
+                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#004787", "color": "white"},
+                "nav-link-selected": {"background-color": "#007ea7", "color": "white"},
             }
         )
 
