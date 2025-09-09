@@ -347,6 +347,9 @@ def load_reembolsos_data():
                 # Converte para string, substitui vírgula por ponto e depois para numérico
                 df['VALOR'] = df['VALOR'].astype(str).str.replace(',', '.', regex=False)
                 df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce')
+            # Remove a coluna 'CAMINHO_RECIBO' se ela existir
+            if 'CAMINHO_RECIBO' in df.columns:
+                df = df.drop(columns=['CAMINHO_RECIBO'])
             return df
     return pd.DataFrame()
 
@@ -717,7 +720,7 @@ else: # Usuário Logado
                                 st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
 
                         add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado,
-                                        tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
+                                      tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
                         # Limpa o formulário atual após submissão bem-sucedida
                         st.rerun()
                     else:
@@ -736,7 +739,7 @@ else: # Usuário Logado
                 df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
 
                 # Seleciona e exibe as colunas desejadas
-                colunas_exibir = ['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS', 'CAMINHO_RECIBO']
+                colunas_exibir = ['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']
                 # Garante que todas as colunas desejadas existam no DataFrame antes de tentar exibi-las
                 colunas_existentes = [col for col in colunas_exibir if col in df_usuario.columns]
 
