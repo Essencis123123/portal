@@ -40,7 +40,7 @@ DEPARTAMENTOS = [
     "1201 - Administração da Manutenção",
     "2302 - Aterro K1",
     "2303 - Aterro K2",
-    "1202 - Manutenção de veículos e equipamentos",
+    "1202 - Manutenção de veículos leves",
     "1203 - Manutenção Eletromecânica",
     "1301 - Balança",
     "1302 - Laboratório",
@@ -132,7 +132,7 @@ def send_message(service, user_id, message):
         st.success(f"E-mail enviado com sucesso!")
         return message
     except Exception as e:
-        st.error(f"Ocorreu um erro ao enviar o e-mail: {e}")
+        st.error(f"Ocorreu um erro ao enviar e-mail: {e}")
         return None
 
 # --- Supabase Integration ---
@@ -516,7 +516,8 @@ else:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             if not df_usuario.empty:
                 df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
-                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notnull(x) else "")
+                # CORREÇÃO: Formatação correta dos valores (R$ 0,01 em vez de R$ 1,00)
+                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".") if pd.notnull(x) else "")
                 
                 st.dataframe(df_usuario[['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']])
             else:
