@@ -46,6 +46,28 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
+        /* Adicione estas regras CSS para o menu do sidebar */
+    [data-testid="stSidebar"] .stRadio div {
+        background-color: #1C4D86;
+    }
+    
+    [data-testid="stSidebar"] .stRadio div label {
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] .stRadio div label:hover {
+        color: white !important;
+        background-color: #2a5f9e;
+    }
+    
+    [data-testid="stSidebar"] .stRadio div label:focus {
+        color: white !important;
+    }
+    
+    /* Garantir que os ícones também fiquem brancos */
+    [data-testid="stSidebar"] .stRadio div label span {
+        color: white !important;
+    }
 
     /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
