@@ -26,6 +26,26 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
 
+# --- CSS Personalizado para a Sidebar ---
+# Você pode ajustar as cores aqui. Ex:
+# --sidebar-background-color: #0E1117; (um cinza bem escuro, quase preto)
+# --accent-color: #1C4D86; (azul Essencis)
+custom_css = """
+<style>
+    [data-testid="stSidebar"] {
+        background-color: #0E1117; /* Cor de fundo da sidebar */
+    }
+    .css-pkzbrp { /* Este seletor pode mudar, mas tenta pegar o container do option_menu */
+        background-color: #0E1117 !important; 
+    }
+    .st-emotion-cache-16txt4v { /* Este seletor é para o texto "Navegação" ou "Acesso" */
+        color: white; 
+    }
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+
+
 # --- Carrega os segredos do arquivo secrets.toml ---
 try:
     with open(".streamlit/secrets.toml", "r") as f:
@@ -361,9 +381,18 @@ if st.session_state.creds and st.session_state.creds.valid:
 
 # --- Sidebar ---
 with st.sidebar:
+    # Adicionar a logo no topo da sidebar
+    # Certifique-se de que 'logo.png' está na mesma pasta ou ajuste o caminho
+    try:
+        logo = Image.open("logo.png") # OU Image.open("assets/logo.png")
+        st.image(logo, use_column_width=True)
+    except FileNotFoundError:
+        st.warning("Logo não encontrada. Verifique o caminho 'logo.png'.")
+
+    st.markdown("---") # Linha divisória
+
     if st.session_state.logged_in:
-        st.header(f"Bem-vindo,")
-        st.subheader(f"{st.session_state.current_user['NOME'].split()[0]}!")
+        st.markdown(f"<h3 style='color:white;'>Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!</h3>", unsafe_allow_html=True)
         st.button("Sair", on_click=logout)
     else:
         # Se não estiver logado, mostra apenas o título e a opção de sair se houver credenciais salvas
@@ -375,32 +404,38 @@ with st.sidebar:
     # Menu de navegação para usuários logados
     if st.session_state.logged_in:
         selected_page = option_menu(
-            menu_title="Navegação",
+            menu_title="Navegação", # Título do menu
             options=["Dashboard", "Adicionar Reembolso", "Meu Histórico"],
             icons=["house", "cash-stack", "clock-history"],
             menu_icon="cast",
             default_index=1,
             styles={
-                "nav-link": {"font-size": "18px", "text-align": "left", "padding": "10px 5px"},
-                "nav-link-selected": {"background-color": "#1C4D86"},
+                "container": {"padding": "5!important", "background-color": "#0E1117"}, # Cor de fundo do container do menu
+                "icon": {"color": "white", "font-size": "20px"},
+                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#262730", "color": "white"}, # Cor do texto normal
+                "nav-link-selected": {"background-color": "#1C4D86", "color": "white"}, # Cor do item selecionado (azul Essencis)
             }
         )
     else:
         # Menu de navegação para a tela de login/cadastro
         selected_page = option_menu(
-            menu_title="Acesso",
+            menu_title="Acesso", # Título do menu
             options=["Login", "Cadastre-se"],
             icons=["box-arrow-in-right", "person-add"],
             menu_icon="cast",
             default_index=0,
             orientation="vertical",
-             styles={
-                "nav-link": {"font-size": "18px", "text-align": "left", "padding": "10px 5px"},
-                "nav-link-selected": {"background-color": "#1C4D86"},
+            styles={
+                "container": {"padding": "5!important", "background-color": "#0E1117"},
+                "icon": {"color": "white", "font-size": "20px"},
+                "nav-link": {"font-size": "18px", "text-align": "left", "margin":"0px", "--hover-color": "#262730", "color": "white"},
+                "nav-link-selected": {"background-color": "#1C4D86", "color": "white"},
             }
         )
 
 # --- Layout Principal ---
+st.title("💰 Gestão de Reembolsos Essencis") # O título principal ainda pode ficar aqui
+
 if not st.session_state.logged_in:
     if selected_page == "Login":
         st.header("Login")
