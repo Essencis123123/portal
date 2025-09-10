@@ -856,7 +856,7 @@ def render_dashboard_page():
             
             # Filtro por número da NF
             if nf_consulta and 'NF' in df_consulta.columns:
-                df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consquisa, case=False, na=False)]
+                df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False, na=False)]
             
             # Filtro por ordem de compra
             if ordem_compra_consulta and 'ORDEM_COMPRA' in df_consulta.columns:
