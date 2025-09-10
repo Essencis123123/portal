@@ -759,8 +759,9 @@ def render_main_app():
             
             # Converte as colunas de data do editor para datetime
             for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
-                edited_df[col] = edited_df[col].apply(parse_date_from_editor)
-                
+                # Converte o valor para datetime, tratando possíveis erros para evitar o 1970-01-01
+                edited_df[col] = pd.to_datetime(edited_df[col], errors='coerce')
+            
             # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                 # Converte para string, remove pontos de milhar e substitui vírgula por ponto
