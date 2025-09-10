@@ -347,9 +347,7 @@ def salvar_dados_pedidos(df):
         # Converte as colunas de data para o formato string com HÍFEN
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
-                df_to_save[col] = df_to_save[col].apply(
-                    lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else ''
-                )
+                df_to_save[col] = df_to_save[col].apply(formatar_data_brasil_hifen)
         
         # Converte valores numéricos para formato brasileiro com 2 casas decimais
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
@@ -759,9 +757,8 @@ def render_main_app():
             
             # Converte as colunas de data do editor para datetime
             for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
-                # Converte o valor para datetime, tratando possíveis erros para evitar o 1970-01-01
-                edited_df[col] = pd.to_datetime(edited_df[col], errors='coerce')
-            
+                edited_df[col] = edited_df[col].apply(parse_date_from_editor)
+                
             # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                 # Converte para string, remove pontos de milhar e substitui vírgula por ponto
@@ -782,6 +779,8 @@ def render_main_app():
                 
                 if not original_index.empty:
                     original_index = original_index[0]
+                    # ATUALIZAÇÃO: Garante que a DATA seja salva corretamente
+                    st.session_state.df_pedidos.loc[original_index, 'DATA'] = edited_row['DATA']
                     st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
                     st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
                     st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_df.loc[index, 'VALOR_ITEM']
