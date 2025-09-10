@@ -251,15 +251,17 @@ def parse_brazilian_date(date_str):
     try:
         # Tenta parse no formato DD-MM-YYYY (formato salvo)
         if isinstance(date_str, str) and '-' in date_str:
-            parts = date_str.split('-')
-            if len(parts) == 3 and len(parts[0]) == 2 and len(parts[1]) == 2 and len(parts[2]) == 4:
+            try:
                 return datetime.datetime.strptime(date_str, '%d-%m-%Y')
+            except:
+                pass
         
         # Tenta parse no formato DD/MM/YYYY
         if isinstance(date_str, str) and '/' in date_str:
-            parts = date_str.split('/')
-            if len(parts) == 3 and len(parts[0]) == 2 and len(parts[1]) == 2 and len(parts[2]) == 4:
+            try:
                 return datetime.datetime.strptime(date_str, '%d/%m/%Y')
+            except:
+                pass
         
         # Tenta parse automático do pandas como fallback
         return pd.to_datetime(date_str, dayfirst=True, errors='coerce')
@@ -437,6 +439,25 @@ def salvar_dados_solicitantes(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
+
+def validar_dados_pedidos(df):
+    """Valida e corrige dados inconsistentes no DataFrame de pedidos"""
+    df = df.copy()
+    
+    # Garantir que colunas numéricas sejam numéricas
+    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    # Garantir que datas sejam datetime
+    date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = df[col].apply(parse_brazilian_date)
+    
+    return df
+
 def carregar_dados_almoxarifado():
     """Carrega dados do almoxarifado para preencher a nota fiscal."""
     try:
@@ -457,7 +478,6 @@ def carregar_dados_almoxarifado():
         st.warning(f"Aviso: Não foi possível carregar dados do Almoxarifado para preencher a nota fiscal. Verifique a aba 'Almoxarifado' da planilha. {e}")
         return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
 
-@st.cache_data(show_spinner=False)
 @st.cache_data(show_spinner=False)
 def carregar_dados_materiais():
     """Carrega dados dos materiais do Google Sheets (terceira aba)."""
