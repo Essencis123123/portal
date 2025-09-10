@@ -635,50 +635,50 @@ def render_main_app():
                 if not material_info.empty:
                     descricao_material = material_info.iloc[0]['DESCRICAO']
             item_material = st.text_input("Descrição do Material", value=descricao_material, disabled=True, key="material_input")
-        with col_item3:
-            unidade_medida = st.selectbox(
-                "Unidade de Medida",
-                [
-                    "UN",  # Unidade
-                    "TB",
-                    "PÇ",  # Peça
-                    "KIT", # Kit
-                    "CX",  # Caixa
-                    "FR",  # Frasco
-                    "GL",  # Galão
-                    "KG",  # Quilograma
-                    "G",   # Grama
-                    "MG",  # Miligrama
-                    "L",   # Litro
-                    "ML",  # Mililitro
-                    "M",   # Metro
-                    "CM",  # Centímetro
-                    "MM",  # Milímetro
-                    "M2",  # Metro quadrado
-                    "M3",  # Metro cúbico
-                    "PCT", # Pacote
-                    "RL",  # Rolo
-                    "BD",  # Bandeja
-                    "AMP", # Ampola
-                    "SC",  # Saco
-                    "T",   # Tonelada
-                    "DZ",  # Dúzia
-                    "CJ",  # Conjunto
-                    "JG",  # Jogo
-                    "PAR", # Par
-                    "CXA", # Caixa com alça
-                    "FAR", # Fardo
-                    "BL",  # Bloco
-                    "CR",  # Cartela
-                    "PL",  # Palete
-                    "TON", # Tonelada
-                    "LT",  # Lata
-                    "S",   # Seringa
-                    "CAP", # Cápsula
-                ],
-                key="unidade_medida_input"
-            )
-    , key="unidade_medida_input")
+            with col_item3:
+                unidade_medida = st.selectbox(
+                    "Unidade de Medida",
+                    [
+                        "UN",  # Unidade
+                        "TB",
+                        "PÇ",  # Peça
+                        "KIT", # Kit
+                        "CX",  # Caixa
+                        "FR",  # Frasco
+                        "GL",  # Galão
+                        "KG",  # Quilograma
+                        "G",   # Grama
+                        "MG",  # Miligrama
+                        "L",   # Litro
+                        "ML",  # Mililitro
+                        "M",   # Metro
+                        "CM",  # Centímetro
+                        "MM",  # Milímetro
+                        "M2",  # Metro quadrado
+                        "M3",  # Metro cúbico
+                        "PCT", # Pacote
+                        "RL",  # Rolo
+                        "BD",  # Bandeja
+                        "AMP", # Ampola
+                        "SC",  # Saco
+                        "T",   # Tonelada
+                        "DZ",  # Dúzia
+                        "CJ",  # Conjunto
+                        "JG",  # Jogo
+                        "PAR", # Par
+                        "CXA", # Caixa com alça
+                        "FAR", # Fardo
+                        "BL",  # Bloco
+                        "CR",  # Cartela
+                        "PL",  # Palete
+                        "TON", # Tonelada
+                        "LT",  # Lata
+                        "S",   # Seringa
+                        "CAP", # Cápsula
+                    ],
+                    key="unidade_medida_input"
+                )
+        , key="unidade_medida_input")
         with col_item4:
             item_quantidade = st.number_input("Quantidade", min_value=1, value=1, key="quantidade_input")
             if st.button("➕ Adicionar Item"):
