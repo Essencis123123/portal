@@ -819,7 +819,7 @@ def render_main_app():
                     on='ORDEM_COMPRA', 
                     how='left', 
                     suffixes=('', '_almox')
-                )
+                
                 if 'DOC NF_almox' in pedidos_pendentes_oc.columns:
                     pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
                     pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
