@@ -428,7 +428,7 @@ def salvar_dados_solicitantes(df):
             return
             
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(1)
+        worksheet = sheet.get_worksheet(3)
 
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
         
@@ -975,7 +975,11 @@ def render_main_app():
     
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty:
-            df_history = pd.merge(df_history, df_almox[['ORDEM_COMPRA', 'DOC NF']], on='ORDEM_COMPRA', how='left', suffixes=('', '_almox'))
+            if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
+            # Criar um dicionário para mapeamento rápido
+            almox_map = df_almox.set_index('ORDEM_COMPRA')['DOC NF'].to_dict()
+            # Aplicar o mapeamento sem fazer merge
+            df_history['DOC NF'] = df_history['ORDEM_COMPRA'].map(almox_map).fillna(df_history['DOC NF'])
             df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
             df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
     
