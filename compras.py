@@ -458,6 +458,7 @@ def carregar_dados_almoxarifado():
         return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
 
 @st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False)
 def carregar_dados_materiais():
     """Carrega dados dos materiais do Google Sheets (terceira aba)."""
     try:
@@ -469,28 +470,22 @@ def carregar_dados_materiais():
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de materiais: {e}")
-        return pd.DataFrame(columns=["MATERIAL", "DESCRICAO", "CATEGORIA", "UNIDADE_MEDIDA"])
+        return pd.DataFrame(columns=["MATERIAL", "DESCRICAO"])
 
 
 def salvar_dados_materiais(df):
-    """Salva o DataFrame de materiais no Google Sheets."""
+    """Salva os dados de materiais no Google Sheets (terceira aba - MATERIAIS)."""
     try:
         gc = get_gspread_client()
-        if gc is None:
-            return
-            
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(2)
-        
-        df_to_save = df.copy()
-        df_to_save = df_to_save.fillna('')
+        worksheet = sheet.get_worksheet(2)  # Terceira aba (índice 2) é MATERIAIS
 
-        data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
-        worksheet.clear()
-        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
-        st.success("Material cadastrado na planilha com sucesso!")
+        df_copy = df.copy()
+        set_with_dataframe(worksheet, df_copy, include_index=False)
+        return True
     except Exception as e:
-        st.error(f"Erro ao salvar dados de materiais no Google Sheets: {e}")
+        st.error(f"Erro ao salvar dados de materiais: {e}")
+        return False
 
 # --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
 USERS = {
