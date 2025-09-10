@@ -736,7 +736,7 @@ def render_main_app():
                 column_order=cols_disponiveis,
                 column_config={
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                    "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
+                    "DATA": st.column_config.DateColumn("Data da Requisição"), # **<<---- ALTERADO AQUI**
                     "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                     "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
