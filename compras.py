@@ -678,7 +678,7 @@ def render_main_app():
                     ],
                     key="unidade_medida_input"
                 )
-        , key="unidade_medida_input")
+
         with col_item4:
             item_quantidade = st.number_input("Quantidade", min_value=1, value=1, key="quantidade_input")
             if st.button("➕ Adicionar Item"):
