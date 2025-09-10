@@ -229,20 +229,43 @@ def parse_date_from_editor(date_value):
     if isinstance(date_value, str):
         try:
             # Tenta formato DD-MM-YYYY (com hífen)
-            return datetime.datetime.strptime(date_value, '%d-%m-%Y')
-        except ValueError:
-            try:
-                # Tenta formato DD/MM/YYYY (com barra)
+            if '-' in date_value and len(date_value.split('-')) == 3:
+                return datetime.datetime.strptime(date_value, '%d-%m-%Y')
+            # Tenta formato DD/MM/YYYY (com barra)
+            elif '/' in date_value and len(date_value.split('/')) == 3:
                 return datetime.datetime.strptime(date_value, '%d/%m/%Y')
-            except ValueError:
-                try:
-                    # Tenta formato YYYY-MM-DD (padrão ISO)
-                    return datetime.datetime.strptime(date_value, '%Y-%m-%d')
-                except ValueError:
-                    # Tenta parse automático
-                    return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+            # Tenta formato YYYY-MM-DD (padrão ISO)
+            elif '-' in date_value and len(date_value.split('-')) == 3:
+                return datetime.datetime.strptime(date_value, '%Y-%m-%d')
+            else:
+                # Tenta parse automático
+                return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+        except ValueError:
+            return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
     
     return pd.to_datetime(date_value, errors='coerce')
+
+# NOVA FUNÇÃO DE PARSE MAIS ROBUSTA
+def parse_brazilian_date(date_str):
+    if pd.isna(date_str) or date_str == '' or date_str is None:
+        return pd.NaT
+    try:
+        # Tenta parse no formato DD-MM-YYYY (formato salvo)
+        if isinstance(date_str, str) and '-' in date_str:
+            parts = date_str.split('-')
+            if len(parts) == 3 and len(parts[0]) == 2 and len(parts[1]) == 2 and len(parts[2]) == 4:
+                return datetime.datetime.strptime(date_str, '%d-%m-%Y')
+        
+        # Tenta parse no formato DD/MM/YYYY
+        if isinstance(date_str, str) and '/' in date_str:
+            parts = date_str.split('/')
+            if len(parts) == 3 and len(parts[0]) == 2 and len(parts[1]) == 2 and len(parts[2]) == 4:
+                return datetime.datetime.strptime(date_str, '%d/%m/%Y')
+        
+        # Tenta parse automático do pandas como fallback
+        return pd.to_datetime(date_str, dayfirst=True, errors='coerce')
+    except:
+        return pd.NaT
 
 def formatar_data_brasil_hifen(data):
     """Formata datetime para exibição no formato DD-MM-YYYY"""
@@ -293,15 +316,19 @@ def carregar_dados_pedidos():
         # Trata colunas de data com formato BRASILEIRO (DD/MM/YYYY)
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
-            if col in df.columns and not df[col].empty:
-                # Usa uma conversão mais robusta
-                df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
+            if col in df.columns:
+                df[col] = df[col].apply(parse_brazilian_date)
         
-        # Converte colunas numéricas (elas já virão como float do Google Sheets)
+        # Converte colunas numéricas
         numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO"]
         for col in numeric_cols:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                # Converte strings com formato brasileiro para float
+                if df[col].dtype == 'object':
+                    df[col] = df[col].apply(lambda x: float(str(x).replace('.', '').replace(',', '.')) 
+                                          if pd.notna(x) and str(x).strip() != '' else 0)
+                else:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
             df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
@@ -348,16 +375,14 @@ def salvar_dados_pedidos(df):
         # Converte as colunas de data para o formato string com HÍFEN
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
-                df_to_save[col] = df_to_save[col].apply(
-                    lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else ''
-                )
+                df_to_save[col] = df_to_save[col].apply(formatar_data_brasil_hifen)
         
-        # Converte valores numéricos para formato brasileiro com 2 casas decimais
+        # CORREÇÃO: Converte valores numéricos para formato de string que o Google Sheets entende
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
-                    lambda x: formatar_numero_brasileiro(x, 2) if pd.notna(x) else ''
+                    lambda x: str(x).replace('.', ',') if pd.notna(x) and x != '' else ''
                 )
         
         # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
@@ -367,6 +392,8 @@ def salvar_dados_pedidos(df):
         # Substitui NaN por string vazia para evitar problemas na gravação
         df_to_save = df_to_save.fillna('')
         
+        # Limpa a planilha e escreve os novos dados
+        worksheet.clear()
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
         st.success("Dados salvos na planilha com sucesso!")
@@ -648,11 +675,6 @@ def render_main_app():
                 
                 # Converte a lista de dicionários para um DataFrame
                 df_a_adicionar = pd.DataFrame(linhas_a_adicionar)
-                
-                # Converte as colunas de data para o formato correto
-                for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']:
-                    if col in df_a_adicionar.columns:
-                        df_a_adicionar[col] = pd.to_datetime(df_a_adicionar[col], errors='coerce')
                 
                 # Concatena os DataFrames
                 st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_a_adicionar], ignore_index=True)
