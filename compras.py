@@ -571,6 +571,8 @@ def render_main_app():
 
 # ... código anterior ...
 
+# ... código anterior ...
+
     if menu == "📝 Requisição":
         st.markdown("""
             <div class='header-container'>
@@ -586,17 +588,32 @@ def render_main_app():
         departamento_selecionado = ""
         filial_selecionada = ""
 
+        # Inicializar estados da sessão se não existirem
+        if 'solicitante_selecionado' not in st.session_state:
+            st.session_state.solicitante_selecionado = ""
+        if 'requisicao_numero' not in st.session_state:
+            st.session_state.requisicao_numero = ""
+        if 'data_requisicao' not in st.session_state:
+            st.session_state.data_requisicao = datetime.date.today()
+        if 'tipo_pedido' not in st.session_state:
+            st.session_state.tipo_pedido = "LOCAL"
+        if 'item_codigo' not in st.session_state:
+            st.session_state.item_codigo = ""
+        if 'item_material' not in st.session_state:
+            st.session_state.item_material = ""
+        if 'unidade_medida' not in st.session_state:
+            st.session_state.unidade_medida = "UN"
+        if 'item_quantidade' not in st.session_state:
+            st.session_state.item_quantidade = 1
+
         # Usando colunas para compactar a primeira linha
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         with col1:
-            # Usar session_state para manter o estado do solicitante
-            if 'solicitante_selecionado' not in st.session_state:
-                st.session_state.solicitante_selecionado = ""
-            
             solicitante_selecionado = st.selectbox(
                 "Solicitante", 
                 solicitantes_nomes,
-                key="select_solicitante"
+                key="select_solicitante",
+                index=solicitantes_nomes.index(st.session_state.solicitante_selecionado) if st.session_state.solicitante_selecionado in solicitantes_nomes else 0
             )
             if solicitante_selecionado:
                 solicitante_info = st.session_state.df_solicitantes[st.session_state.df_solicitantes['NOME'] == solicitante_selecionado].iloc[0]
@@ -610,29 +627,18 @@ def render_main_app():
             st.text_input("Filial", value=filial_selecionada, disabled=True, key="display_filial")
             
         with col4:
-            # Usar session_state para manter o estado da requisição
-            if 'requisicao_numero' not in st.session_state:
-                st.session_state.requisicao_numero = ""
-            
-            requisicao = st.text_input("N° Requisição", key="input_requisicao")
+            requisicao = st.text_input("N° Requisição", key="input_requisicao", value=st.session_state.requisicao_numero)
 
         # Segunda linha para os outros campos
         col5, col6 = st.columns(2)
         with col5:
-            # Usar session_state para manter a data
-            if 'data_requisicao' not in st.session_state:
-                st.session_state.data_requisicao = datetime.date.today()
-            
             data_requisicao = st.date_input("Data da Requisição", st.session_state.data_requisicao, key="input_data")
         with col6:
-            # Usar session_state para manter o tipo de pedido
-            if 'tipo_pedido' not in st.session_state:
-                st.session_state.tipo_pedido = "LOCAL"
-            
             tipo_pedido = st.selectbox(
                 "Tipo de Pedido", 
                 ["LOCAL", "EMERGENCIAL", "PROGRAMADO"],
-                key="select_tipo_pedido"
+                key="select_tipo_pedido",
+                index=["LOCAL", "EMERGENCIAL", "PROGRAMADO"].index(st.session_state.tipo_pedido)
             )
         
         st.markdown("---")
@@ -654,21 +660,13 @@ def render_main_app():
 
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         with col_item1:
-            # Usar session_state para manter o código do material
-            if 'item_codigo' not in st.session_state:
-                st.session_state.item_codigo = ""
-            
-            item_codigo = st.text_input("Código do Material", key="input_codigo_material")
+            item_codigo = st.text_input("Código do Material", key="input_codigo_material", value=st.session_state.item_codigo)
         with col_item2:
             descricao_material = ""
             if item_codigo and not st.session_state.df_materiais.empty:
                 material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
                 if not material_info.empty:
                     descricao_material = material_info.iloc[0]['DESCRICAO']
-            
-            # Usar session_state para manter a descrição do material
-            if 'item_material' not in st.session_state:
-                st.session_state.item_material = ""
             
             item_material = st.text_input(
                 "Descrição do Material", 
@@ -678,10 +676,6 @@ def render_main_app():
             )
         
         with col_item3:
-            # Usar session_state para manter a unidade de medida
-            if 'unidade_medida' not in st.session_state:
-                st.session_state.unidade_medida = "UN"
-            
             unidade_medida = st.selectbox(
                 "Unidade de Medida",
                 [
@@ -690,14 +684,16 @@ def render_main_app():
                     "AMP", "SC", "T", "DZ", "CJ", "JG", "PAR", "CXA", "FAR", 
                     "BL", "CR", "PL", "TON", "LT", "S", "CAP",
                 ],
-                key="select_unidade_medida"
+                key="select_unidade_medida",
+                index=[
+                    "UN", "TB", "PÇ", "KIT", "CX", "FR", "GL", "KG", "G", "MG", 
+                    "L", "ML", "M", "CM", "MM", "M2", "M3", "PCT", "RL", "BD", 
+                    "AMP", "SC", "T", "DZ", "CJ", "JG", "PAR", "CXA", "FAR", 
+                    "BL", "CR", "PL", "TON", "LT", "S", "CAP",
+                ].index(st.session_state.unidade_medida)
             )
 
         with col_item4:
-            # Usar session_state para manter a quantidade
-            if 'item_quantidade' not in st.session_state:
-                st.session_state.item_quantidade = 1
-            
             item_quantidade = st.number_input(
                 "Quantidade", 
                 min_value=1, 
@@ -776,6 +772,8 @@ def render_main_app():
                 st.rerun()
             else:
                 st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
+
+# ... resto do código ...
 
 # ... resto do código ...
 
