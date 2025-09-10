@@ -974,8 +974,7 @@ def render_main_app():
         df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)
     
         df_almox = st.session_state.df_almoxarifado.copy()
-        if not df_almox.empty:
-            if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
+        if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
             # Criar um dicionário para mapeamento rápido
             almox_map = df_almox.set_index('ORDEM_COMPRA')['DOC NF'].to_dict()
             # Aplicar o mapeamento sem fazer merge
