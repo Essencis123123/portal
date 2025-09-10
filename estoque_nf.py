@@ -716,26 +716,47 @@ def render_consultar_nfs_page():
             status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
             status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
             
+            # Converter a coluna DATA para datetime e tratar erros
             df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
             
-            data_minima = df['DATA'].min().date() if pd.notna(df['DATA'].min()) else datetime.date.today()
-            data_maxima = df['DATA'].max().date() if pd.notna(df['DATA'].max()) else datetime.date.today()
+            # Obter datas mínima e máxima válidas (excluindo NaT)
+            datas_validas = df['DATA'].dropna()
+            
+            if not datas_validas.empty:
+                data_minima = datas_validas.min().date()
+                data_maxima = datas_validas.max().date()
+            else:
+                data_minima = datetime.date.today()
+                data_maxima = datetime.date.today()
             
             data_inicio_consulta = st.date_input("Data Início", value=data_minima, min_value=data_minima, max_value=data_maxima)
             data_fim_consulta = st.date_input("Data Fim", value=data_maxima, min_value=data_minima, max_value=data_maxima)
 
         df_consulta = df.copy()
         
-        if nf_consulta: df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False)]
-        if ordem_compra_consulta: df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False)]
-        if fornecedor_consulta != "Todos": df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
-        if "Todos" not in status_consulta: df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
+        if nf_consulta: 
+            df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False)]
+        if ordem_compra_consulta: 
+            df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False)]
+        if fornecedor_consulta != "Todos": 
+            df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
+        if "Todos" not in status_consulta: 
+            df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
         
-        if not df_consulta.empty and pd.api.types.is_datetime64_any_dtype(df_consulta['DATA']):
-            df_consulta = df_consulta[
-                (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
-                (df_consulta['DATA'].dt.date <= data_fim_consulta)
-            ]
+        # Filtrar por data - apenas se houver dados e datas válidas
+        if not df_consulta.empty and 'DATA' in df_consulta.columns:
+            # Garantir que a coluna DATA é datetime
+            df_consulta['DATA'] = pd.to_datetime(df_consulta['DATA'], errors='coerce')
+            
+            # Filtrar apenas registros com datas válidas
+            df_consulta = df_consulta[df_consulta['DATA'].notna()]
+            
+            # Aplicar filtro de data apenas se houver registros com datas válidas
+            if not df_consulta.empty:
+                df_consulta = df_consulta[
+                    (df_consulta['DATA'].dt.date >= data_inicio_consulta) &
+                    (df_consulta['DATA'].dt.date <= data_fim_consulta)
+                ]
         
         st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
         
@@ -744,6 +765,9 @@ def render_consultar_nfs_page():
                 'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
                 'STATUS_FINANCEIRO', 'DOC NF'
             ]].copy()
+            
+            # Formatar a coluna DATA para exibição
+            df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y').fillna('Data inválida')
             
             def colorir_status(status):
                 cores = {
@@ -761,7 +785,7 @@ def render_consultar_nfs_page():
                 use_container_width=True,
                 height=400,
                 column_config={
-                    "DATA": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                    "DATA": st.column_config.TextColumn("Data"),
                     "FORNECEDOR_NF": "Fornecedor",
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
