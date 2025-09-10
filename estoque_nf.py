@@ -545,7 +545,7 @@ def render_registrar_nf_page():
                 
             with col3_form:
                 valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
-                condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB", "RETIRADA",])
+                condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB", "RETIRADA"])
                 valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
                 
                 # Campo para quantidade entregue nesta nota fiscal
