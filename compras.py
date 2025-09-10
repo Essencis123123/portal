@@ -225,7 +225,8 @@ def get_gspread_client():
         
         # Testa a conexão
         try:
-            client.list_spreadsheet_files(limit=1)
+            # CORREÇÃO: Removido o argumento 'limit' que estava causando o erro
+            client.list_spreadsheet_files()
             return client
         except Exception as test_error:
             st.error(f"Erro ao testar conexão com Google Sheets: {test_error}")
