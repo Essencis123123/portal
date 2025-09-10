@@ -491,7 +491,7 @@ def salvar_dados_materiais(df):
             return
             
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(3)
+        worksheet = sheet.get_worksheet(2)
         
         df_to_save = df.copy()
         df_to_save = df_to_save.fillna('')
