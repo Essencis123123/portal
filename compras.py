@@ -245,6 +245,7 @@ def parse_date_from_editor(date_value):
     
     return pd.to_datetime(date_value, errors='coerce')
 
+# NOVA FUNÇÃO DE PARSE MAIS ROBUSTA
 def parse_brazilian_date(date_str):
     if pd.isna(date_str) or date_str == '' or date_str is None:
         return pd.NaT
@@ -496,7 +497,7 @@ def salvar_dados_materiais(df):
         df_to_save = df.copy()
         df_to_save = df_to_save.fillna('')
 
-        data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
+        data_to_write = [df_to_save.columns.values.tolist()] + df.values.tolist()
         worksheet.clear()
         worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         st.success("Material cadastrado na planilha com sucesso!")
