@@ -187,198 +187,198 @@ def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
 
-@st.cache_data(show_spinner=False)
-def carregar_dados_almoxarifado():
-    """Carrega dados da aba de Almoxarifado do arquivo Excel."""
-    try:
-        # Carrega o arquivo Excel
-        df = pd.read_excel("dados_pedido.xlsx", sheet_name="Almoxarifado")
-        
-        if df.empty:
-            return pd.DataFrame()
-        
-        # Garante que todas as colunas esperadas existam
-        colunas_esperadas = [
-            "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
-            "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
-            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "ORDEM_COMPRA", "REGISTRO_ENVIO", 
-            "REGISTRO_LANCAMENTO", "VALOR_JUROS", "VALOR_FRETE", "CONDICAO_FRETE", 
-            "MES_ANO", "ANO", "MES"
-        ]
-        
-        for col in colunas_esperadas:
-            if col not in df.columns:
-                df[col] = ''
-        
-        # Converter colunas de data
-        date_columns = ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']
-        for col in date_columns:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce')
-        
-        # Converter colunas numéricas
-        numeric_cols = ['V. TOTAL NF', 'VALOR FRETE', 'VALOR_JUROS', 'VOLUME']
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
-        # Garantir que colunas críticas sejam strings
-        string_cols = ['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'STATUS_FINANCEIRO']
-        for col in string_cols:
-            if col in df.columns:
-                df[col] = df[col].astype(str).fillna('')
-        
-        return df
-        
-    except Exception as e:
-        st.error(f"Erro ao carregar dados do almoxarifado: {e}")
-        return pd.DataFrame()
-
-def salvar_dados_almoxarifado(df):
-    """Salva os dados do DataFrame no arquivo Excel."""
-    try:
-        # Carrega o arquivo completo
-        with pd.ExcelWriter("dados_pedido.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-            df.to_excel(writer, sheet_name='Almoxarifado', index=False)
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar dados do almoxarifado: {e}")
-        return False
-
-@st.cache_data(show_spinner=False)
-def carregar_dados_pedidos():
-    """Carrega os dados de pedidos do arquivo Excel."""
-    try:
-        # Supondo que os pedidos estão na primeira aba
-        df = pd.read_excel("dados_pedido.xlsx", sheet_name=0)
-        
-        if df.empty:
-            return pd.DataFrame()
-        
-        # Converter colunas de data
-        date_columns = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
-        for col in date_columns:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce')
-        
-        # Converter colunas numéricas
-        numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
-        if 'DOC NF' not in df.columns:
-            df['DOC NF'] = ''
+    @st.cache_data(show_spinner=False)
+    def carregar_dados_almoxarifado():
+        """Carrega dados da aba de Almoxarifado do arquivo Excel."""
+        try:
+            # Carrega o arquivo Excel
+            df = pd.read_excel("dados_pedido.xlsx", sheet_name="Almoxarifado")
             
-        return df
-    except Exception as e:
-        st.error(f"Erro ao carregar dados de pedidos: {e}")
-        return pd.DataFrame()
-
-@st.cache_data(show_spinner=False)
-def carregar_dados_solicitantes():
-    """Carrega dados dos solicitantes do arquivo Excel."""
-    try:
-        # Supondo que os solicitantes estão na segunda aba
-        df = pd.read_excel("dados_pedido.xlsx", sheet_name=1)
-        return df
-    except Exception as e:
-        st.error(f"Erro ao carregar dados de solicitantes: {e}")
-        return pd.DataFrame()
-
-# ==============================================================================
-# FUNÇÃO SALVAR DADOS PEDIDOS (QUE ESTAVA FALTANDO)
-# ==============================================================================
-def salvar_dados_pedidos(df):
-    """Salva os dados de pedidos no arquivo Excel."""
-    try:
-        # Carrega o arquivo completo e substitui apenas a aba de pedidos
-        with pd.ExcelWriter("dados_pedido.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-            df.to_excel(writer, sheet_name='Pedidos', index=False)
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar dados de pedidos: {e}")
-        return False
-
-# ==============================================================================
-# MODIFICAÇÕES NA FUNÇÃO render_registrar_nf_page
-# ==============================================================================
-def render_registrar_nf_page():
-    """Página para registrar novas notas fiscais."""
-    # ... (código anterior mantido)
+            if df.empty:
+                return pd.DataFrame()
+            
+            # Garante que todas as colunas esperadas existam
+            colunas_esperadas = [
+                "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
+                "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+                "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "ORDEM_COMPRA", "REGISTRO_ENVIO", 
+                "REGISTRO_LANCAMENTO", "VALOR_JUROS", "VALOR_FRETE", "CONDICAO_FRETE", 
+                "MES_ANO", "ANO", "MES"
+            ]
+            
+            for col in colunas_esperadas:
+                if col not in df.columns:
+                    df[col] = ''
+            
+            # Converter colunas de data
+            date_columns = ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']
+            for col in date_columns:
+                if col in df.columns:
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
+            
+            # Converter colunas numéricas
+            numeric_cols = ['V. TOTAL NF', 'VALOR FRETE', 'VALOR_JUROS', 'VOLUME']
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+            # Garantir que colunas críticas sejam strings
+            string_cols = ['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'STATUS_FINANCEIRO']
+            for col in string_cols:
+                if col in df.columns:
+                    df[col] = df[col].astype(str).fillna('')
+            
+            return df
+            
+        except Exception as e:
+            st.error(f"Erro ao carregar dados do almoxarifado: {e}")
+            return pd.DataFrame()
     
-    with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
-        with st.form("formulario_nota", clear_on_submit=True):
-            # ... (código anterior mantido)
+    def salvar_dados_almoxarifado(df):
+        """Salva os dados do DataFrame no arquivo Excel."""
+        try:
+            # Carrega o arquivo completo
+            with pd.ExcelWriter("dados_pedido.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df.to_excel(writer, sheet_name='Almoxarifado', index=False)
+            return True
+        except Exception as e:
+            st.error(f"Erro ao salvar dados do almoxarifado: {e}")
+            return False
+    
+    @st.cache_data(show_spinner=False)
+    def carregar_dados_pedidos():
+        """Carrega os dados de pedidos do arquivo Excel."""
+        try:
+            # Supondo que os pedidos estão na primeira aba
+            df = pd.read_excel("dados_pedido.xlsx", sheet_name=0)
             
-            if enviar:
-                campos_validos = all([
-                    fornecedor_selecionado.strip(), 
-                    nf_numero.strip(), 
-                    ordem_compra_nf.strip(),
-                    valor_total_nf.strip() not in ["", "0,00"], 
-                    quantidade_entregue_nf > 0
-                ])
+            if df.empty:
+                return pd.DataFrame()
+            
+            # Converter colunas de data
+            date_columns = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+            for col in date_columns:
+                if col in df.columns:
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
+            
+            # Converter colunas numéricas
+            numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+            if 'DOC NF' not in df.columns:
+                df['DOC NF'] = ''
                 
-                if not campos_validos:
-                    st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
-                else:
-                    try:
-                        valor_total_float = parse_brazil_number(valor_total_nf)
-                        valor_frete_float = parse_brazil_number(valor_frete_nf)
-                        
-                        # CORREÇÃO: Buscar pedidos relacionados corretamente
-                        pedidos_relacionados = st.session_state.df_pedidos[
-                            st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
-                        ]
-                        
-                        valor_oc_total = 0.0
-                        if not pedidos_relacionados.empty:
-                            # Soma todos os valores dos itens relacionados à mesma OC
-                            valor_oc_total = pedidos_relacionados['VALOR_ITEM'].sum()
-                        
-                        divergencia = valor_total_float - valor_oc_total
-                        
-                        # CORREÇÃO: Remover timezone para compatibilidade com Excel
-                        agora = datetime.datetime.now()
-                        
-                        st.session_state['novo_registro_nf'] = {
-                            "DATA": data_recebimento,
-                            "RECEBEDOR": recebedor,
-                            "FORNECEDOR_NF": fornecedor_selecionado,   
-                            "NF": nf_numero,
-                            "VOLUME": volume_nf,
-                            "V. TOTAL NF": valor_total_float,
-                            "CONDICAO FRETE": condicao_frete_nf,
-                            "VALOR FRETE": valor_frete_float,
-                            "OBSERVACAO": observacao,
-                            "DOC NF": doc_nf_link,
-                            "VENCIMENTO": vencimento_nf,
-                            "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                            "CONDICAO_PROBLEMA": "N/A",
-                            "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_ENVIO": agora,
-                            "REGISTRO_LANCAMENTO": agora,
-                            "VALOR_JUROS": 0,
-                            "VALOR_FRETE": valor_frete_float,
-                            "CONDICAO_FRETE": condicao_frete_nf,
-                            "MES_ANO": data_recebimento.strftime('%Y-%m'),
-                            "ANO": data_recebimento.year,
-                            "MES": data_recebimento.month
-                        }
-                        
-                        st.session_state['divergencia_oc'] = divergencia
-                        st.session_state['valor_oc_total'] = valor_oc_total
-                        st.session_state['quantidade_entregue'] = quantidade_entregue_nf
-                        
-                        if abs(divergencia) > 0.01:
-                            st.session_state['mostrar_popup_divergencia'] = True
-                            st.rerun()
-                        else:
-                            salvar_nota_fiscal(st.session_state['novo_registro_nf'])
+            return df
+        except Exception as e:
+            st.error(f"Erro ao carregar dados de pedidos: {e}")
+            return pd.DataFrame()
+    
+    @st.cache_data(show_spinner=False)
+    def carregar_dados_solicitantes():
+        """Carrega dados dos solicitantes do arquivo Excel."""
+        try:
+            # Supondo que os solicitantes estão na segunda aba
+            df = pd.read_excel("dados_pedido.xlsx", sheet_name=1)
+            return df
+        except Exception as e:
+            st.error(f"Erro ao carregar dados de solicitantes: {e}")
+            return pd.DataFrame()
+    
+    # ==============================================================================
+    # FUNÇÃO SALVAR DADOS PEDIDOS (QUE ESTAVA FALTANDO)
+    # ==============================================================================
+    def salvar_dados_pedidos(df):
+        """Salva os dados de pedidos no arquivo Excel."""
+        try:
+            # Carrega o arquivo completo e substitui apenas a aba de pedidos
+            with pd.ExcelWriter("dados_pedido.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df.to_excel(writer, sheet_name='Pedidos', index=False)
+            return True
+        except Exception as e:
+            st.error(f"Erro ao salvar dados de pedidos: {e}")
+            return False
+    
+    # ==============================================================================
+    # MODIFICAÇÕES NA FUNÇÃO render_registrar_nf_page
+    # ==============================================================================
+    def render_registrar_nf_page():
+        """Página para registrar novas notas fiscais."""
+        # ... (código anterior mantido)
+        
+        with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
+            with st.form("formulario_nota", clear_on_submit=True):
+                # ... (código anterior mantido)
+                
+                if enviar:
+                    campos_validos = all([
+                        fornecedor_selecionado.strip(), 
+                        nf_numero.strip(), 
+                        ordem_compra_nf.strip(),
+                        valor_total_nf.strip() not in ["", "0,00"], 
+                        quantidade_entregue_nf > 0
+                    ])
                     
-                    except ValueError:
-                        st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
+                    if not campos_validos:
+                        st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
+                    else:
+                        try:
+                            valor_total_float = parse_brazil_number(valor_total_nf)
+                            valor_frete_float = parse_brazil_number(valor_frete_nf)
+                            
+                            # CORREÇÃO: Buscar pedidos relacionados corretamente
+                            pedidos_relacionados = st.session_state.df_pedidos[
+                                st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                            ]
+                            
+                            valor_oc_total = 0.0
+                            if not pedidos_relacionados.empty:
+                                # Soma todos os valores dos itens relacionados à mesma OC
+                                valor_oc_total = pedidos_relacionados['VALOR_ITEM'].sum()
+                            
+                            divergencia = valor_total_float - valor_oc_total
+                            
+                            # CORREÇÃO: Remover timezone para compatibilidade com Excel
+                            agora = datetime.datetime.now()
+                            
+                            st.session_state['novo_registro_nf'] = {
+                                "DATA": data_recebimento,
+                                "RECEBEDOR": recebedor,
+                                "FORNECEDOR_NF": fornecedor_selecionado,   
+                                "NF": nf_numero,
+                                "VOLUME": volume_nf,
+                                "V. TOTAL NF": valor_total_float,
+                                "CONDICAO FRETE": condicao_frete_nf,
+                                "VALOR FRETE": valor_frete_float,
+                                "OBSERVACAO": observacao,
+                                "DOC NF": doc_nf_link,
+                                "VENCIMENTO": vencimento_nf,
+                                "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                                "CONDICAO_PROBLEMA": "N/A",
+                                "ORDEM_COMPRA": ordem_compra_nf,
+                                "REGISTRO_ENVIO": agora,
+                                "REGISTRO_LANCAMENTO": agora,
+                                "VALOR_JUROS": 0,
+                                "VALOR_FRETE": valor_frete_float,
+                                "CONDICAO_FRETE": condicao_frete_nf,
+                                "MES_ANO": data_recebimento.strftime('%Y-%m'),
+                                "ANO": data_recebimento.year,
+                                "MES": data_recebimento.month
+                            }
+                            
+                            st.session_state['divergencia_oc'] = divergencia
+                            st.session_state['valor_oc_total'] = valor_oc_total
+                            st.session_state['quantidade_entregue'] = quantidade_entregue_nf
+                            
+                            if abs(divergencia) > 0.01:
+                                st.session_state['mostrar_popup_divergencia'] = True
+                                st.rerun()
+                            else:
+                                salvar_nota_fiscal(st.session_state['novo_registro_nf'])
+                        
+                        except ValueError:
+                            st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
     
     # Lógica do Pop-up de Validação
     if st.session_state.get('mostrar_popup_divergencia'):
