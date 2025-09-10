@@ -245,7 +245,6 @@ def parse_date_from_editor(date_value):
     
     return pd.to_datetime(date_value, errors='coerce')
 
-# NOVA FUNÇÃO DE PARSE MAIS ROBUSTA
 def parse_brazilian_date(date_str):
     if pd.isna(date_str) or date_str == '' or date_str is None:
         return pd.NaT
@@ -497,7 +496,7 @@ def salvar_dados_materiais(df):
         df_to_save = df.copy()
         df_to_save = df_to_save.fillna('')
 
-        data_to_write = [df_to_save.columns.values.tolist()] + df.values.tolist()
+        data_to_write = [df_to_save.columns.values.tolist()] + df_to_save.values.tolist()
         worksheet.clear()
         worksheet.update(data_to_write, value_input_option='USER_ENTERED')
         st.success("Material cadastrado na planilha com sucesso!")
@@ -749,7 +748,7 @@ def render_main_app():
             edited_df = st.data_editor(
                 df_editavel,
                 use_container_width=True,
-                hide_index=True,
+                hide_index=False,
                 column_order=cols_disponiveis,
                 column_config={
                     "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
@@ -775,16 +774,19 @@ def render_main_app():
         if submitted:
             st.info("Detectando alterações...")
 
-            # Identifica os índices das linhas que foram marcadas para exclusão
-            indices_a_excluir = edited_df[edited_df['Excluir'] == True].index
-
+            # CRUCIAL: Mapeia o índice do edited_df para o índice do df original
+            edited_df_with_original_index = edited_df.set_index(pedidos_pendentes_oc.index)
+            
+            # Identifica os índices originais das linhas que foram marcadas para exclusão
+            indices_a_excluir = edited_df_with_original_index[edited_df_with_original_index['Excluir'] == True].index.tolist()
+            
             # Filtra o DataFrame principal para remover as linhas a serem excluídas
             df_atualizado = st.session_state.df_pedidos.drop(indices_a_excluir, errors='ignore')
 
-            # Processa as edições das linhas que não foram excluídas
-            df_editadas_sem_exclusao = edited_df[edited_df['Excluir'] == False].copy()
-
-            for index, edited_row in df_editadas_sem_exclusao.iterrows():
+            # Processa as edições das linhas que NÃO foram excluídas
+            df_editadas_sem_exclusao = edited_df_with_original_index[edited_df_with_original_index['Excluir'] == False]
+            
+            for original_index, edited_row in df_editadas_sem_exclusao.iterrows():
                 # Converte as colunas de data do editor para datetime
                 for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
                     edited_row[col] = parse_date_from_editor(edited_row[col])
@@ -800,15 +802,15 @@ def render_main_app():
                 edited_row['DIAS_EMISSAO'] = (edited_row['DATA_APROVACAO'] - edited_row['DATA']).days if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']) else 0
 
                 # Atualiza a linha correspondente no DataFrame principal
-                if index in df_atualizado.index:
-                    df_atualizado.loc[index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
-                    df_atualizado.loc[index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
-                    df_atualizado.loc[index, 'VALOR_ITEM'] = edited_row['VALOR_ITEM']
-                    df_atualizado.loc[index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
-                    df_atualizado.loc[index, 'PREVISAO_ENTREGA'] = edited_row['PREVISAO_ENTREGA']
-                    df_atualizado.loc[index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
-                    df_atualizado.loc[index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
-                    df_atualizado.loc[index, 'DIAS_EMISSAO'] = edited_row['DIAS_EMISSAO']
+                if original_index in df_atualizado.index:
+                    df_atualizado.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
+                    df_atualizado.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
+                    df_atualizado.loc[original_index, 'VALOR_ITEM'] = edited_row['VALOR_ITEM']
+                    df_atualizado.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
+                    df_atualizado.loc[original_index, 'PREVISAO_ENTREGA'] = edited_row['PREVISAO_ENTREGA']
+                    df_atualizado.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
+                    df_atualizado.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
+                    df_atualizado.loc[original_index, 'DIAS_EMISSAO'] = edited_row['DIAS_EMISSAO']
 
             st.session_state.df_pedidos = df_atualizado
             salvar_dados_pedidos(st.session_state.df_pedidos)
