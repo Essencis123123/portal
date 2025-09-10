@@ -180,11 +180,11 @@ def _to_datetime(series, dayfirst=True):
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
-    """Carrega dados do Google Sheets (aba de Almoxarifado)."""
+    """Carrega dados do Google Sheets (aba de Almoxarifado - segunda aba)."""
     try:
-        gc = get_gspread_client()  # Use gc em vez de client
-        sheet = gc.open("dados_pedido")  # Use gc aqui
-        worksheet = sheet.get_worksheet(2)  # E aqui também
+        gc = get_gspread_client()
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(1)  # Segunda aba (índice 1) é Almoxarifado
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
@@ -194,8 +194,6 @@ def carregar_dados_almoxarifado():
         headers = data[0]
         records = data[1:]
         df = pd.DataFrame(records, columns=headers)
-
-
 
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
@@ -226,13 +224,12 @@ def carregar_dados_almoxarifado():
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
             "ORDEM_COMPRA", "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ])
-
 def salvar_dados_almoxarifado(df):
-    """Salva os dados do DataFrame no Google Sheets (aba de Almoxarifado)."""
+    """Salva os dados do DataFrame no Google Sheets (segunda aba - Almoxarifado)."""
     try:
-        gc = get_gspread_client()  # Use gc em vez de client
-        sheet = gc.open("dados_pedido")  # Use gc aqui
-        worksheet = sheet.get_worksheet(2)  # E aqui também
+        gc = get_gspread_client()
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(1)  # Segunda aba (índice 1) é Almoxarifado
 
         df_copy = df.copy()
 
@@ -263,13 +260,11 @@ def salvar_dados_almoxarifado(df):
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_pedidos():
-    """Carrega os dados de pedidos do Google Sheets."""
+    """Carrega os dados de pedidos do Google Sheets (primeira aba)."""
     try:
-        gc = get_gspread_client()  
-        sheet = gc.open("dados_pedido") 
-        worksheet = sheet.get_worksheet(0) 
-        
-
+        gc = get_gspread_client()
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(0)  # Primeira aba (índice 0) é dados_pedido
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
@@ -299,14 +294,13 @@ def carregar_dados_pedidos():
         st.error(f"Erro ao carregar dados de pedidos: {e}")
         return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"])
 
+
 def salvar_dados_pedidos(df):
-    """Salva os dados de pedidos no Google Sheets."""
+    """Salva os dados de pedidos no Google Sheets (primeira aba)."""
     try:
-        gc = get_gspread_client()  # Use gc em vez de client
-        sheet = gc.open("dados_pedido")  # Use gc aqui
-        worksheet = sheet.get_worksheet(0)  # E aqui também
-
-
+        gc = get_gspread_client()
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(0)  # Primeira aba (índice 0) é dados_pedido
 
         df_copy = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
@@ -318,6 +312,7 @@ def salvar_dados_pedidos(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados de pedidos: {e}")
         return False
+        
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_solicitantes():
