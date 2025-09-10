@@ -182,9 +182,9 @@ def _to_datetime(series, dayfirst=True):
 def carregar_dados_almoxarifado():
     """Carrega dados do Google Sheets (aba de Almoxarifado)."""
     try:
-        gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(2)
+        gc = get_gspread_client()  # Use gc em vez de client
+        sheet = gc.open("dados_pedido")  # Use gc aqui
+        worksheet = sheet.get_worksheet(2)  # E aqui também
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
@@ -194,6 +194,8 @@ def carregar_dados_almoxarifado():
         headers = data[0]
         records = data[1:]
         df = pd.DataFrame(records, columns=headers)
+
+
 
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
@@ -228,9 +230,9 @@ def carregar_dados_almoxarifado():
 def salvar_dados_almoxarifado(df):
     """Salva os dados do DataFrame no Google Sheets (aba de Almoxarifado)."""
     try:
-        gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(2)
+        gc = get_gspread_client()  # Use gc em vez de client
+        sheet = gc.open("dados_pedido")  # Use gc aqui
+        worksheet = sheet.get_worksheet(2)  # E aqui também
 
         df_copy = df.copy()
 
@@ -263,9 +265,11 @@ def salvar_dados_almoxarifado(df):
 def carregar_dados_pedidos():
     """Carrega os dados de pedidos do Google Sheets."""
     try:
-        gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(0)
+        gc = get_gspread_client()  
+        sheet = gc.open("dados_pedido") 
+        worksheet = sheet.get_worksheet(0) 
+        
+
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
@@ -298,9 +302,11 @@ def carregar_dados_pedidos():
 def salvar_dados_pedidos(df):
     """Salva os dados de pedidos no Google Sheets."""
     try:
-        gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(0)
+        gc = get_gspread_client()  # Use gc em vez de client
+        sheet = gc.open("dados_pedido")  # Use gc aqui
+        worksheet = sheet.get_worksheet(0)  # E aqui também
+
+
 
         df_copy = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
@@ -317,9 +323,9 @@ def salvar_dados_pedidos(df):
 def carregar_dados_solicitantes():
     """Carrega dados dos solicitantes do Google Sheets."""
     try:
-        gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
-        worksheet = spreadsheet.get_worksheet(1)
+        gc = get_gspread_client()  # Use gc em vez de client
+        sheet = gc.open("dados_pedido")  # Use gc aqui
+        worksheet = sheet.get_worksheet(1)  # E aqui também
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
         return df
