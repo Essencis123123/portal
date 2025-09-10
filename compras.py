@@ -245,7 +245,6 @@ def parse_date_from_editor(date_value):
     
     return pd.to_datetime(date_value, errors='coerce')
 
-# NOVA FUNÇÃO DE PARSE MAIS ROBUSTA
 def parse_brazilian_date(date_str):
     if pd.isna(date_str) or date_str == '' or date_str is None:
         return pd.NaT
@@ -377,7 +376,7 @@ def salvar_dados_pedidos(df):
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(formatar_data_brasil_hifen)
         
-        # CORREÇÃO: Converte valores numéricos para formato de string que o Google Sheets entende
+        # Converte valores numéricos para formato de string que o Google Sheets entende
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
@@ -695,9 +694,8 @@ def render_main_app():
         """, unsafe_allow_html=True)
 
         st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
-        st.info("Edite os campos diretamente na tabela abaixo para adicionar os dados de Ordem de Compra. Eles serão salvos ao clicar no botão abaixo.")
+        st.info("Edite os campos diretamente na tabela abaixo e selecione as linhas para exclusão.")
         
-        # Primeiro, definir pedidos_pendentes_oc
         pedidos_pendentes_oc = st.session_state.df_pedidos[
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | 
             (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")
@@ -707,19 +705,14 @@ def render_main_app():
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
             st.stop()
         
-        # Processar datas
+        # Processar datas para exibição no editor
         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
             if col in pedidos_pendentes_oc.columns:
-                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_date_from_editor)
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_brazilian_date)
         
-        # Carregar dados do almoxarifado
         df_almox = st.session_state.df_almoxarifado.copy()
-        
-        # Só fazer o merge se houver dados no almoxarifado
         if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
             df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
-            
-            # Verificar se a coluna ORDEM_COMPRA existe em ambos os DataFrames
             if 'ORDEM_COMPRA' in pedidos_pendentes_oc.columns:
                 pedidos_pendentes_oc = pedidos_pendentes_oc.merge(
                     df_almox_oc, 
@@ -727,27 +720,27 @@ def render_main_app():
                     how='left', 
                     suffixes=('', '_almox')
                 )
-                
-                # Processar a coluna DOC NF
                 if 'DOC NF_almox' in pedidos_pendentes_oc.columns:
                     pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
                     pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
         
-        # Converter datas para formato de exibição
+        # Converte datas para o formato de exibição do editor (date)
         data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
         for col in data_cols_to_convert:
             if col in pedidos_pendentes_oc.columns:
                 pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
-                    lambda x: x.date() if pd.notna(x) and hasattr(x, 'date') else None
+                    lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime.datetime)) else None
                 )
+
+        # Adiciona a coluna de exclusão
+        pedidos_pendentes_oc['Excluir'] = False
         
         cols_para_editar = [
-            "REQUISICAO", "DATA", "SOLICITANTE", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+            "Excluir", "REQUISICAO", "DATA", "SOLICITANTE", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
             "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
             "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
         ]
         
-        # Garantir que as colunas existem
         cols_disponiveis = [col for col in cols_para_editar if col in pedidos_pendentes_oc.columns]
         df_editavel = pedidos_pendentes_oc[cols_disponiveis].copy()
         
@@ -758,8 +751,9 @@ def render_main_app():
                 hide_index=True,
                 column_order=cols_disponiveis,
                 column_config={
+                    "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                    "DATA": st.column_config.DateColumn("Data da Requisição"),
+                    "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
                     "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                     "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
@@ -779,42 +773,43 @@ def render_main_app():
 
         if submitted:
             st.info("Detectando alterações...")
-            
-            # Converte as colunas de data do editor para datetime
-            for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
-                edited_df[col] = edited_df[col].apply(parse_date_from_editor)
+
+            # Identifica os índices das linhas que foram marcadas para exclusão
+            indices_a_excluir = edited_df[edited_df['Excluir'] == True].index
+
+            # Filtra o DataFrame principal para remover as linhas a serem excluídas
+            df_atualizado = st.session_state.df_pedidos.drop(indices_a_excluir, errors='ignore')
+
+            # Processa as edições das linhas que não foram excluídas
+            df_editadas_sem_exclusao = edited_df[edited_df['Excluir'] == False].copy()
+
+            for index, edited_row in df_editadas_sem_exclusao.iterrows():
+                # Converte as colunas de data do editor para datetime
+                for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+                    edited_row[col] = parse_date_from_editor(edited_row[col])
+
+                # Trata os dados numéricos do editor
+                for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                    if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
+                        edited_row[col_val] = 0
+                    else:
+                        edited_row[col_val] = float(str(edited_row[col_val]).replace('.', '').replace(',', '.'))
                 
-            # CORREÇÃO: Trata os dados numéricos do editor antes de salvar
-            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-                # Converte para string, remove pontos de milhar e substitui vírgula por ponto
-                edited_df[col_val] = edited_df[col_val].astype(str).str.replace(r'\.(?=.*\d,)', '', regex=True).str.replace(',', '.', regex=False)
-                # Converte para numérico
-                edited_df[col_val] = pd.to_numeric(edited_df[col_val], errors='coerce').fillna(0)
-            
-            edited_df['DIAS_EMISSAO'] = edited_df.apply(
-                lambda row: (row['DATA_APROVACAO'] - row['DATA']).days if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']) else 0,
-                axis=1
-            )
-            
-            for index, edited_row in edited_df.iterrows():
-                original_index = st.session_state.df_pedidos[
-                    (st.session_state.df_pedidos['REQUISICAO'] == edited_row['REQUISICAO']) & 
-                    (st.session_state.df_pedidos['MATERIAL'] == edited_row['MATERIAL'])
-                ].index
-                
-                if not original_index.empty:
-                    original_index = original_index[0]
-                    # ATUALIZAÇÃO: Garante que a DATA seja salva corretamente
-                    st.session_state.df_pedidos.loc[original_index, 'DATA'] = edited_row['DATA']
-                    st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
-                    st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
-                    st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_df.loc[index, 'VALOR_ITEM']
-                    st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
-                    st.session_state.df_pedidos.loc[original_index, 'PREVISAO_ENTREGA'] = edited_row['PREVISAO_ENTREGA']
-                    st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
-                    st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
-                    st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = edited_row['DIAS_EMISSAO']
-            
+                # Recalcula 'DIAS_EMISSAO'
+                edited_row['DIAS_EMISSAO'] = (edited_row['DATA_APROVACAO'] - edited_row['DATA']).days if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']) else 0
+
+                # Atualiza a linha correspondente no DataFrame principal
+                if index in df_atualizado.index:
+                    df_atualizado.loc[index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
+                    df_atualizado.loc[index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
+                    df_atualizado.loc[index, 'VALOR_ITEM'] = edited_row['VALOR_ITEM']
+                    df_atualizado.loc[index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
+                    df_atualizado.loc[index, 'PREVISAO_ENTREGA'] = edited_row['PREVISAO_ENTREGA']
+                    df_atualizado.loc[index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
+                    df_atualizado.loc[index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
+                    df_atualizado.loc[index, 'DIAS_EMISSAO'] = edited_row['DIAS_EMISSAO']
+
+            st.session_state.df_pedidos = df_atualizado
             salvar_dados_pedidos(st.session_state.df_pedidos)
             st.success("Dados atualizados com sucesso!")
             st.rerun()
@@ -834,7 +829,7 @@ def render_main_app():
         
         # Uso da nova função auxiliar para garantir que as datas estejam no formato correto
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
-            df_history[col] = df_history[col].apply(parse_date_from_editor)
+            df_history[col] = df_history[col].apply(parse_brazilian_date)
         
         # Recalcula o VALOR_TOTAL com os valores limpos
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
