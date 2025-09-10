@@ -1246,27 +1246,43 @@ def render_main_app():
         df_analise = st.session_state.df_pedidos.copy()
         df_analise['DATA'] = pd.to_datetime(df_analise['DATA'], errors='coerce', dayfirst=True)
         
-        st.subheader("Filtros de Período")
-        col_filtro1, col_filtro2 = st.columns(2)
+# Na seção do Dashboard, substitua todo o bloco de filtros por:
+    st.subheader("Filtros de Período")
+    col_filtro1, col_filtro2 = st.columns(2)
+    
+    if not df_analise['DATA'].isnull().all():
+        meses_disponiveis = df_analise['DATA'].dt.month.unique()
+        anos_disponiveis = df_analise['DATA'].dt.year.unique()
+        meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 
+                      7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         
-        if not df_analise['DATA'].isnull().all():
-            meses_disponiveis = df_analise['DATA'].dt.month.unique()
-            anos_disponiveis = df_analise['DATA'].dt.year.unique()
-            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Jully", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-            with col_filtro1:
-                mes_selecionado = st.multiselect("Selecione o Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis))
-            with col_filtro2:
-                ano_selecionado = st.selectbox("Selecione o Ano", sorted(anos_disponiveis, reverse=True))
-        else:
-            mes_selecionado = []
-            ano_selecionado = None
-            st.info("Nenhum dado com data válida para filtragem.")
-            st.stop()
-
-        if mes_selecionado and ano_selecionado:
-            df_filtrado_dash = df_analise[(df_analise['DATA'].dt.month.isin(mes_selecionado)) & (df_analise['DATA'].dt.year == ano_selecionado)]
-        else:
-            df_filtrado_dash = pd.DataFrame()
+        with col_filtro1:
+            # CORREÇÃO: Garantir que o default contenha apenas valores válidos
+            default_meses = [x for x in sorted(meses_disponiveis) if x in meses_disponiveis]
+            mes_selecionado = st.multiselect(
+                "Selecione o Mês", 
+                sorted(meses_disponiveis), 
+                format_func=lambda x: meses_nomes.get(x), 
+                default=default_meses if default_meses else None
+            )
+        
+        with col_filtro2:
+            ano_selecionado = st.selectbox("Selecione o Ano", sorted(anos_disponiveis, reverse=True))
+    else:
+        mes_selecionado = []
+        ano_selecionado = None
+        st.info("Nenhum dado com data válida para filtragem.")
+        st.stop()
+    
+    # E também adicione uma verificação para o caso de mes_selecionado estar vazio:
+    if not mes_selecionado:
+        st.warning("Selecione pelo menos um mês para visualizar os dados.")
+        st.stop()
+    
+    if mes_selecionado and ano_selecionado:
+        df_filtrado_dash = df_analise[(df_analise['DATA'].dt.month.isin(mes_selecionado)) & (df_analise['DATA'].dt.year == ano_selecionado)]
+    else:
+        df_filtrado_dash = pd.DataFrame()
         
         if df_filtrado_dash.empty:
             st.warning("Nenhum dado disponível para o período selecionado.")
