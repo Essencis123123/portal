@@ -294,7 +294,8 @@ def carregar_dados_pedidos():
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns and not df[col].empty:
-                df[col] = df[col].apply(parse_date_from_editor)
+                # Usa uma conversão mais robusta
+                df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
         
         # Converte colunas numéricas (elas já virão como float do Google Sheets)
         numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO"]
@@ -347,7 +348,9 @@ def salvar_dados_pedidos(df):
         # Converte as colunas de data para o formato string com HÍFEN
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
-                df_to_save[col] = df_to_save[col].apply(formatar_data_brasil_hifen)
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else ''
+                )
         
         # Converte valores numéricos para formato brasileiro com 2 casas decimais
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
