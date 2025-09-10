@@ -1259,7 +1259,7 @@ def render_main_app():
             with col_filtro1:
                 # CORREÇÃO: Garantir que o default contenha apenas valores válidos
                 default_meses = [x for x in sorted(meses_disponiveis) if x in meses_disponiveis]
-                mes_selecionado = st.multiselect(
+                 mes_selecionado = st.multiselect(
                     "Selecione o Mês", 
                     sorted(meses_disponiveis), 
                     format_func=lambda x: meses_nomes.get(x), 
