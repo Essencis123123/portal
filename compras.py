@@ -201,7 +201,6 @@ def get_gspread_client():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         
-        # Verifica se estamos usando secrets do Streamlit ou variáveis de ambiente
         if 'gcp_service_account' in st.secrets:
             credentials_info = st.secrets["gcp_service_account"]
             
@@ -212,25 +211,15 @@ def get_gspread_client():
                     st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
                     return None
             
-            # Cria as credenciais a partir do dicionário
             creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
         else:
-            # Fallback para autenticação com variáveis de ambiente
             creds = Credentials.from_service_account_file(
                 os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), scopes=scopes
             )
         
-        # Cria o cliente com um timeout explícito
+        # Cria o cliente e retorna sem a chamada de teste que estava causando o erro
         client = gspread.authorize(creds)
-        
-        # Testa a conexão
-        try:
-            # CORREÇÃO: Removido o argumento 'limit' que estava causando o erro
-            client.list_spreadsheet_files()
-            return client
-        except Exception as test_error:
-            st.error(f"Erro ao testar conexão com Google Sheets: {test_error}")
-            return None
+        return client
             
     except Exception as e:
         st.error(f"Erro ao conectar com Google Sheets: {e}")
@@ -505,6 +494,9 @@ def carregar_dados_materiais():
     """Carrega dados dos materiais do Google Sheets (terceira aba)."""
     try:
         gc = get_gspread_client()
+        if gc is None:
+            return pd.DataFrame(columns=["MATERIAL", "DESCRICAO"])
+            
         sheet = gc.open("dados_pedido")
         worksheet = sheet.get_worksheet(2)  # Terceira aba (índice 2) é MATERIAIS
         data = worksheet.get_all_records()
