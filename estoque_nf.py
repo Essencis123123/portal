@@ -13,7 +13,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import gspread
-from gspread_dataframe import set_with_dataframe
+from gspread_dataframe import set_with_dataframe, get_as_dataframe
 from google.oauth2.service_account import Credentials
 import json
 import re
@@ -148,11 +148,62 @@ def load_logo(url):
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
     """Retorna o cliente gspread autorizado."""
-    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    credentials_info = st.secrets["gcp_service_account"]
-    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-    return gspread.authorize(credentials)
-    
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        return gspread.authorize(credentials)
+    except Exception as e:
+        st.error(f"Erro ao conectar com Google Sheets: {e}")
+        return None
+
+@st.cache_data(ttl=300, show_spinner="Carregando dados do Google Sheets...")
+def carregar_dados_google_sheets(_client, sheet_name):
+    """Carrega dados de uma planilha específica do Google Sheets."""
+    try:
+        # ID da planilha do Google Sheets (substitua pelo seu ID real)
+        SPREADSHEET_ID = st.secrets["spreadsheet_id"]
+        
+        # Abre a planilha
+        spreadsheet = _client.open_by_key(SPREADSHEET_ID)
+        
+        # Seleciona a aba específica
+        worksheet = spreadsheet.worksheet(sheet_name)
+        
+        # Obtém todos os registros como DataFrame
+        df = get_as_dataframe(worksheet, evaluate_formulas=True)
+        
+        # Remove linhas completamente vazias
+        df = df.dropna(how='all')
+        
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        return pd.DataFrame()
+
+def salvar_dados_google_sheets(_client, df, sheet_name):
+    """Salva dados em uma planilha específica do Google Sheets."""
+    try:
+        # ID da planilha do Google Sheets
+        SPREADSHEET_ID = st.secrets["spreadsheet_id"]
+        
+        # Abre a planilha
+        spreadsheet = _client.open_by_key(SPREADSHEET_ID)
+        
+        # Seleciona a aba específica
+        worksheet = spreadsheet.worksheet(sheet_name)
+        
+        # Limpa a planilha existente
+        worksheet.clear()
+        
+        # Atualiza com os novos dados
+        set_with_dataframe(worksheet, df)
+        
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados no Google Sheets: {e}")
+        return False
+
 def parse_brazil_number(value_str):
     """
     Converte uma string de número no formato brasileiro (1.234,56) para float (1234.56).
@@ -187,198 +238,383 @@ def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
 
-    @st.cache_data(show_spinner=False)
-    def carregar_dados_almoxarifado():
-        """Carrega dados da aba de Almoxarifado do arquivo Excel."""
-        try:
-            # Carrega o arquivo Excel
-            df = pd.read_excel("dados_pedido.xlsx", sheet_name="Almoxarifado")
-            
-            if df.empty:
-                return pd.DataFrame()
-            
-            # Garante que todas as colunas esperadas existam
-            colunas_esperadas = [
-                "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
-                "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
-                "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "ORDEM_COMPRA", "REGISTRO_ENVIO", 
-                "REGISTRO_LANCAMENTO", "VALOR_JUROS", "VALOR_FRETE", "CONDICAO_FRETE", 
-                "MES_ANO", "ANO", "MES"
-            ]
-            
-            for col in colunas_esperadas:
-                if col not in df.columns:
-                    df[col] = ''
-            
-            # Converter colunas de data
-            date_columns = ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']
-            for col in date_columns:
-                if col in df.columns:
-                    df[col] = pd.to_datetime(df[col], errors='coerce')
-            
-            # Converter colunas numéricas
-            numeric_cols = ['V. TOTAL NF', 'VALOR FRETE', 'VALOR_JUROS', 'VOLUME']
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-            # Garantir que colunas críticas sejam strings
-            string_cols = ['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'STATUS_FINANCEIRO']
-            for col in string_cols:
-                if col in df.columns:
-                    df[col] = df[col].astype(str).fillna('')
-            
-            return df
-            
-        except Exception as e:
-            st.error(f"Erro ao carregar dados do almoxarifado: {e}")
-            return pd.DataFrame()
+def carregar_dados_almoxarifado(_client):
+    """Carrega dados da aba de Almoxarifado do Google Sheets."""
+    df = carregar_dados_google_sheets(_client, "Almoxarifado")
     
-    def salvar_dados_almoxarifado(df):
-        """Salva os dados do DataFrame no arquivo Excel."""
-        try:
-            # Carrega o arquivo completo
-            with pd.ExcelWriter("dados_pedido.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-                df.to_excel(writer, sheet_name='Almoxarifado', index=False)
-            return True
-        except Exception as e:
-            st.error(f"Erro ao salvar dados do almoxarifado: {e}")
-            return False
+    if df.empty:
+        return pd.DataFrame()
     
-    @st.cache_data(show_spinner=False)
-    def carregar_dados_pedidos():
-        """Carrega os dados de pedidos do arquivo Excel."""
-        try:
-            # Supondo que os pedidos estão na primeira aba
-            df = pd.read_excel("dados_pedido.xlsx", sheet_name=0)
-            
-            if df.empty:
-                return pd.DataFrame()
-            
-            # Converter colunas de data
-            date_columns = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
-            for col in date_columns:
-                if col in df.columns:
-                    df[col] = pd.to_datetime(df[col], errors='coerce')
-            
-            # Converter colunas numéricas
-            numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-            if 'DOC NF' not in df.columns:
-                df['DOC NF'] = ''
-                
-            return df
-        except Exception as e:
-            st.error(f"Erro ao carregar dados de pedidos: {e}")
-            return pd.DataFrame()
+    # Garante que todas as colunas esperadas existam
+    colunas_esperadas = [
+        "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
+        "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+        "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "ORDEM_COMPRA", "REGISTRO_ENVIO", 
+        "REGISTRO_LANCAMENTO", "VALOR_JUROS", "VALOR_FRETE", "CONDICAO_FRETE", 
+        "MES_ANO", "ANO", "MES"
+    ]
     
-    @st.cache_data(show_spinner=False)
-    def carregar_dados_solicitantes():
-        """Carrega dados dos solicitantes do arquivo Excel."""
-        try:
-            # Supondo que os solicitantes estão na segunda aba
-            df = pd.read_excel("dados_pedido.xlsx", sheet_name=1)
-            return df
-        except Exception as e:
-            st.error(f"Erro ao carregar dados de solicitantes: {e}")
-            return pd.DataFrame()
+    for col in colunas_esperadas:
+        if col not in df.columns:
+            df[col] = ''
     
-    # ==============================================================================
-    # FUNÇÃO SALVAR DADOS PEDIDOS (QUE ESTAVA FALTANDO)
-    # ==============================================================================
-    def salvar_dados_pedidos(df):
-        """Salva os dados de pedidos no arquivo Excel."""
-        try:
-            # Carrega o arquivo completo e substitui apenas a aba de pedidos
-            with pd.ExcelWriter("dados_pedido.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-                df.to_excel(writer, sheet_name='Pedidos', index=False)
-            return True
-        except Exception as e:
-            st.error(f"Erro ao salvar dados de pedidos: {e}")
-            return False
+    # Converter colunas de data
+    date_columns = ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
     
-    # ==============================================================================
-    # MODIFICAÇÕES NA FUNÇÃO render_registrar_nf_page
-    # ==============================================================================
-    def render_registrar_nf_page():
-        """Página para registrar novas notas fiscais."""
-        # ... (código anterior mantido)
+    # Converter colunas numéricas
+    numeric_cols = ['V. TOTAL NF', 'VALOR FRETE', 'VALOR_JUROS', 'VOLUME']
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    # Garantir que colunas críticas sejam strings
+    string_cols = ['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'STATUS_FINANCEIRO']
+    for col in string_cols:
+        if col in df.columns:
+            df[col] = df[col].astype(str).fillna('')
+    
+    return df
+
+def carregar_dados_pedidos(_client):
+    """Carrega os dados de pedidos do Google Sheets."""
+    df = carregar_dados_google_sheets(_client, "Pedidos")
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    # Converter colunas de data
+    date_columns = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+    
+    # Converter colunas numéricas
+    numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    if 'DOC NF' not in df.columns:
+        df['DOC NF'] = ''
+            
+    return df
+
+def carregar_dados_solicitantes(_client):
+    """Carrega dados dos solicitantes do Google Sheets."""
+    df = carregar_dados_google_sheets(_client, "Solicitantes")
+    return df
+
+def salvar_dados_almoxarifado(_client, df):
+    """Salva os dados do DataFrame no Google Sheets."""
+    return salvar_dados_google_sheets(_client, df, "Almoxarifado")
+
+def salvar_dados_pedidos(_client, df):
+    """Salva os dados de pedidos no Google Sheets."""
+    return salvar_dados_google_sheets(_client, df, "Pedidos")
+
+def atualizar_status_pedido(ordem_compra, quantidade_entregue):
+    """Atualiza o status do pedido com base na quantidade entregue."""
+    if 'df_pedidos' not in st.session_state:
+        return
+    
+    # Encontra o pedido correspondente
+    mask = st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra.strip().upper()
+    
+    if mask.any():
+        # Atualiza a quantidade entregue
+        st.session_state.df_pedidos.loc[mask, 'QUANTIDADE_ENTREGUE'] = quantidade_entregue
         
-        with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
-            with st.form("formulario_nota", clear_on_submit=True):
-                # ... (código anterior mantido)
-                
-                if enviar:
-                    campos_validos = all([
-                        fornecedor_selecionado.strip(), 
-                        nf_numero.strip(), 
-                        ordem_compra_nf.strip(),
-                        valor_total_nf.strip() not in ["", "0,00"], 
-                        quantidade_entregue_nf > 0
-                    ])
+        # Atualiza o status com base na quantidade entregue
+        quantidade_total = st.session_state.df_pedidos.loc[mask, 'QUANTIDADE'].values[0]
+        
+        if quantidade_entregue >= quantidade_total:
+            st.session_state.df_pedidos.loc[mask, 'STATUS'] = 'ENTREGUE'
+        elif quantidade_entregue > 0:
+            st.session_state.df_pedidos.loc[mask, 'STATUS'] = 'PARCIALMENTE ENTREGUE'
+
+# ==============================================================================
+# FUNÇÕES DE PÁGINA
+# ==============================================================================
+def render_login_page():
+    """Página de login."""
+    st.markdown(
+        """
+        <div style='text-align: center; padding: 50px 0;'>
+            <h1 style='color: #1C4D86;'>Sistema de Controle de Almoxarifado</h1>
+            <p style='color: #555;'>Faça login para acessar o sistema</p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        with st.form("login_form"):
+            username = st.text_input("Usuário", placeholder="Digite seu usuário")
+            password = st.text_input("Senha", type="password", placeholder="Digite sua senha")
+            
+            if st.form_submit_button("Entrar"):
+                # Verificação simples de login (substitua por sua lógica de autenticação)
+                if username == "admin" and password == "admin":
+                    st.session_state['logado'] = True
+                    st.session_state['usuario'] = username
                     
-                    if not campos_validos:
-                        st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
-                    else:
-                        try:
-                            valor_total_float = parse_brazil_number(valor_total_nf)
-                            valor_frete_float = parse_brazil_number(valor_frete_nf)
-                            
-                            # CORREÇÃO: Buscar pedidos relacionados corretamente
-                            pedidos_relacionados = st.session_state.df_pedidos[
-                                st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
-                            ]
-                            
-                            valor_oc_total = 0.0
-                            if not pedidos_relacionados.empty:
-                                # Soma todos os valores dos itens relacionados à mesma OC
-                                valor_oc_total = pedidos_relacionados['VALOR_ITEM'].sum()
-                            
-                            divergencia = valor_total_float - valor_oc_total
-                            
-                            # CORREÇÃO: Remover timezone para compatibilidade com Excel
-                            agora = datetime.datetime.now()
-                            
-                            st.session_state['novo_registro_nf'] = {
-                                "DATA": data_recebimento,
-                                "RECEBEDOR": recebedor,
-                                "FORNECEDOR_NF": fornecedor_selecionado,   
-                                "NF": nf_numero,
-                                "VOLUME": volume_nf,
-                                "V. TOTAL NF": valor_total_float,
-                                "CONDICAO FRETE": condicao_frete_nf,
-                                "VALOR FRETE": valor_frete_float,
-                                "OBSERVACAO": observacao,
-                                "DOC NF": doc_nf_link,
-                                "VENCIMENTO": vencimento_nf,
-                                "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                                "CONDICAO_PROBLEMA": "N/A",
-                                "ORDEM_COMPRA": ordem_compra_nf,
-                                "REGISTRO_ENVIO": agora,
-                                "REGISTRO_LANCAMENTO": agora,
-                                "VALOR_JUROS": 0,
-                                "VALOR_FRETE": valor_frete_float,
-                                "CONDICAO_FRETE": condicao_frete_nf,
-                                "MES_ANO": data_recebimento.strftime('%Y-%m'),
-                                "ANO": data_recebimento.year,
-                                "MES": data_recebimento.month
-                            }
-                            
-                            st.session_state['divergencia_oc'] = divergencia
-                            st.session_state['valor_oc_total'] = valor_oc_total
-                            st.session_state['quantidade_entregue'] = quantidade_entregue_nf
-                            
-                            if abs(divergencia) > 0.01:
-                                st.session_state['mostrar_popup_divergencia'] = True
-                                st.rerun()
-                            else:
-                                salvar_nota_fiscal(st.session_state['novo_registro_nf'])
+                    # Inicializa o cliente do Google Sheets
+                    st.session_state.gs_client = get_gspread_client()
+                    
+                    # Carrega os dados
+                    if st.session_state.gs_client:
+                        st.session_state.df_pedidos = carregar_dados_pedidos(st.session_state.gs_client)
+                        st.session_state.df_almoxarifado = carregar_dados_almoxarifado(st.session_state.gs_client)
+                        st.session_state.df_solicitantes = carregar_dados_solicitantes(st.session_state.gs_client)
+                    
+                    st.rerun()
+                else:
+                    st.error("Usuário ou senha incorretos")
+
+def render_main_app():
+    """Aplicação principal após login."""
+    # Sidebar com navegação
+    with st.sidebar:
+        # Logo da empresa
+        logo_url = "https://example.com/logo.png"  # Substitua pela URL real do logo
+        logo = load_logo(logo_url)
+        if logo:
+            st.image(logo)
+        
+        st.title("🏭 Almoxarifado")
+        st.write(f"Usuário: {st.session_state.get('usuario', 'N/A')}")
+        
+        # Menu de navegação
+        pagina = st.radio(
+            "Navegação",
+            ["📋 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"],
+            label_visibility="collapsed"
+        )
+        
+        st.markdown("---")
+        if st.button("🚪 Sair"):
+            st.session_state.clear()
+            st.rerun()
+    
+    # Conteúdo principal baseado na página selecionada
+    if pagina == "📋 Registrar NF":
+        render_registrar_nf_page()
+    elif pagina == "📊 Dashboard":
+        render_dashboard_page()
+    elif pagina == "🔍 Consultar NFs":
+        render_consultar_nfs_page()
+    elif pagina == "⚙️ Configurações":
+        render_configuracoes_page()
+
+def render_registrar_nf_page():
+    """Página para registrar novas notas fiscais."""
+    st.markdown("""
+        <div class='header-container'>
+            <h1>📋 REGISTRAR NOTA FISCAL</h1>
+            <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Verifica se os dados foram carregados
+    if 'df_pedidos' not in st.session_state or st.session_state.df_pedidos.empty:
+        st.error("Dados de pedidos não disponíveis. Verifique a conexão com o Google Sheets.")
+        return
+    
+    if 'df_almoxarifado' not in st.session_state:
+        st.session_state.df_almoxarifado = pd.DataFrame()
+    
+    # Inicializa estado para popup de divergência se não existir
+    if 'mostrar_popup_divergencia' not in st.session_state:
+        st.session_state['mostrar_popup_divergencia'] = False
+    
+    with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
+        with st.form("formulario_nota", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Data de recebimento
+                data_recebimento = st.date_input(
+                    "Data de Recebimento*",
+                    value=datetime.date.today(),
+                    help="Data em que a mercadoria foi recebida"
+                )
+                
+                # Recebedor
+                recebedor = st.text_input(
+                    "Recebedor*",
+                    value="ARLEY GONCALVES DOS SANTOS",
+                    help="Nome de quem recebeu a mercadoria"
+                )
+                
+                # Fornecedor
+                fornecedores_unicos = sorted(st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist())
+                fornecedor_selecionado = st.selectbox(
+                    "Fornecedor*",
+                    options=fornecedores_unicos,
+                    help="Selecione o fornecedor da nota fiscal"
+                )
+                
+                # Número da NF
+                nf_numero = st.text_input(
+                    "Número da NF*",
+                    placeholder="Ex: 123456",
+                    help="Número da nota fiscal"
+                )
+                
+                # Volume
+                volume_nf = st.number_input(
+                    "Volume*",
+                    min_value=1,
+                    value=1,
+                    help="Quantidade de volumes recebidos"
+                )
+            
+            with col2:
+                # Ordem de Compra
+                ordens_compra = st.session_state.df_pedidos[
+                    st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado
+                ]['ORDEM_COMPRA'].unique()
+                
+                ordem_compra_nf = st.selectbox(
+                    "Ordem de Compra*",
+                    options=ordens_compra,
+                    help="Selecione a ordem de compra relacionada"
+                )
+                
+                # Valor Total NF
+                valor_total_nf = st.text_input(
+                    "Valor Total NF (R$)*",
+                    placeholder="Ex: 1.234,56",
+                    help="Valor total da nota fiscal"
+                )
+                
+                # Condição de Frete
+                condicao_frete_nf = st.selectbox(
+                    "Condição de Frete*",
+                    options=["CIF", "FOB"],
+                    index=0,
+                    help="Condição de frete (CIF: frete pago pelo fornecedor, FOB: frete pago pelo destinatário)"
+                )
+                
+                # Valor do Frete
+                valor_frete_nf = st.text_input(
+                    "Valor do Frete (R$)",
+                    placeholder="Ex: 100,00",
+                    value="0,00",
+                    help="Valor do frete (se houver)"
+                )
+                
+                # Quantidade Entregue
+                pedido_selecionado = st.session_state.df_pedidos[
+                    st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
+                ]
+                
+                quantidade_total = pedido_selecionado['QUANTIDADE'].values[0] if not pedido_selecionado.empty else 0
+                
+                quantidade_entregue_nf = st.number_input(
+                    "Quantidade Entregue*",
+                    min_value=0,
+                    max_value=quantidade_total,
+                    value=quantidade_total,
+                    help=f"Quantidade entregue (total do pedido: {quantidade_total})"
+                )
+            
+            # Observação e Link do Documento
+            observacao = st.text_area(
+                "Observações",
+                placeholder="Observações adicionais sobre a nota fiscal...",
+                height=80
+            )
+            
+            doc_nf_link = st.text_input(
+                "Link do Documento NF",
+                placeholder="URL do documento da NF (SharePoint, Drive, etc.)",
+                help="Link para a nota fiscal digitalizada"
+            )
+            
+            # Data de Vencimento
+            vencimento_nf = st.date_input(
+                "Data de Vencimento*",
+                value=datetime.date.today() + datetime.timedelta(days=30),
+                help="Data de vencimento para pagamento"
+            )
+            
+            # Botão de envio
+            enviar = st.form_submit_button("📤 Registrar Nota Fiscal")
+            
+            if enviar:
+                campos_validos = all([
+                    fornecedor_selecionado.strip(), 
+                    nf_numero.strip(), 
+                    ordem_compra_nf.strip(),
+                    valor_total_nf.strip() not in ["", "0,00"], 
+                    quantidade_entregue_nf > 0
+                ])
+                
+                if not campos_validos:
+                    st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
+                else:
+                    try:
+                        valor_total_float = parse_brazil_number(valor_total_nf)
+                        valor_frete_float = parse_brazil_number(valor_frete_nf)
                         
-                        except ValueError:
-                            st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
+                        # Buscar pedidos relacionados
+                        pedidos_relacionados = st.session_state.df_pedidos[
+                            st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                        ]
+                        
+                        valor_oc_total = 0.0
+                        if not pedidos_relacionados.empty:
+                            # Soma todos os valores dos itens relacionados à mesma OC
+                            valor_oc_total = pedidos_relacionados['VALOR_ITEM'].sum()
+                        
+                        divergencia = valor_total_float - valor_oc_total
+                        
+                        # Remover timezone para compatibilidade
+                        agora = datetime.datetime.now()
+                        
+                        st.session_state['novo_registro_nf'] = {
+                            "DATA": data_recebimento,
+                            "RECEBEDOR": recebedor,
+                            "FORNECEDOR_NF": fornecedor_selecionado,   
+                            "NF": nf_numero,
+                            "VOLUME": volume_nf,
+                            "V. TOTAL NF": valor_total_float,
+                            "CONDICAO FRETE": condicao_frete_nf,
+                            "VALOR FRETE": valor_frete_float,
+                            "OBSERVACAO": observacao,
+                            "DOC NF": doc_nf_link,
+                            "VENCIMENTO": vencimento_nf,
+                            "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                            "CONDICAO_PROBLEMA": "N/A",
+                            "ORDEM_COMPRA": ordem_compra_nf,
+                            "REGISTRO_ENVIO": agora,
+                            "REGISTRO_LANCAMENTO": agora,
+                            "VALOR_JUROS": 0,
+                            "VALOR_FRETE": valor_frete_float,
+                            "CONDICAO_FRETE": condicao_frete_nf,
+                            "MES_ANO": data_recebimento.strftime('%Y-%m'),
+                            "ANO": data_recebimento.year,
+                            "MES": data_recebimento.month
+                        }
+                        
+                        st.session_state['divergencia_oc'] = divergencia
+                        st.session_state['valor_oc_total'] = valor_oc_total
+                        st.session_state['quantidade_entregue'] = quantidade_entregue_nf
+                        
+                        if abs(divergencia) > 0.01:
+                            st.session_state['mostrar_popup_divergencia'] = True
+                            st.rerun()
+                        else:
+                            salvar_nota_fiscal(st.session_state['novo_registro_nf'])
+                    
+                    except ValueError:
+                        st.error("❌ Erro na conversão de valores. Verifique os formats numéricos.")
     
     # Lógica do Pop-up de Validação
     if st.session_state.get('mostrar_popup_divergencia'):
@@ -469,9 +705,8 @@ def salvar_nota_fiscal(novo_registro_nf):
     )
     
     # Salva as alterações em ambas as planilhas
-    salvar_dados_pedidos(st.session_state.df_pedidos)
-    
-    if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+    if salvar_dados_pedidos(st.session_state.gs_client, st.session_state.df_pedidos) and \
+       salvar_dados_almoxarifado(st.session_state.gs_client, st.session_state.df_almoxarifado):
         st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso!")
     else:
         st.error("Erro ao salvar os dados da nota fiscal.")
@@ -675,8 +910,9 @@ def render_configuracoes_page():
         
         if st.button("🔄 Recarregar Dados"):
             st.cache_data.clear()
-            st.session_state.df_pedidos = carregar_dados_pedidos()
-            st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
+            st.session_state.df_pedidos = carregar_dados_pedidos(st.session_state.gs_client)
+            st.session_state.df_almoxarifado = carregar_dados_almoxarifado(st.session_state.gs_client)
+            st.session_state.df_solicitantes = carregar_dados_solicitantes(st.session_state.gs_client)
             st.success("Dados recarregados com sucesso!")
             st.rerun()
     
@@ -692,7 +928,7 @@ def render_configuracoes_page():
             mime="text/csv",
             help="Clique para baixar uma cópia de segurança dos dados."
         )
-    
+
 # ==============================================================================
 # EXECUÇÃO PRINCIPAL
 # ==============================================================================
