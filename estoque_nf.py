@@ -800,161 +800,161 @@ def render_dashboard_page():
     else:
         st.write("Nenhum dado disponível.")
 
-    def render_consultar_nfs_page():
-        """Página para consultar e filtrar notas fiscais."""
-        st.markdown("""
-            <div class='header-container'>
-                <h1>🔍 CONSULTAR NOTAS FISCAIS</h1>
-                <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
-            </div>
-        """, unsafe_allow_html=True)
+def render_consultar_nfs_page():
+    """Página para consultar e filtrar notas fiscais."""
+    st.markdown("""
+        <div class='header-container'>
+            <h1>🔍 CONSULTAR NOTAS FISCAIS</h1>
+            <p>Sistema de Controle de Notas Fiscais e Status Financeiro</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    df = st.session_state.df_almoxarifado.copy()
+    
+    if not df.empty:
+        st.subheader("🔎 Consulta Avançada")
+        col1, col2 = st.columns(2)
         
-        df = st.session_state.df_almoxarifado.copy()
+        with col1:
+            nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
+            ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
+            
+            # Garantir que a coluna existe e é string
+            if 'FORNECEDOR_NF' in df.columns:
+                df['FORNECEDOR_NF'] = df['FORNECEDOR_NF'].astype(str)
+                fornecedores_unicos = sorted(df['FORNECEDOR_NF'].dropna().unique().tolist())
+            else:
+                fornecedores_unicos = []
+                
+            fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + fornecedores_unicos)
         
-        if not df.empty:
-            st.subheader("🔎 Consulta Avançada")
-            col1, col2 = st.columns(2)
+        with col2:
+            status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
+            status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
             
-            with col1:
-                nf_consulta = st.text_input("Buscar por Número da NF", placeholder="Digite o número da NF...")
-                ordem_compra_consulta = st.text_input("Buscar por N° Ordem de Compra", placeholder="Digite o número da OC...")
+            # Converter coluna DATA para datetime
+            if 'DATA' in df.columns:
+                df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
                 
-                # Garantir que a coluna existe e é string
-                if 'FORNECEDOR_NF' in df.columns:
-                    df['FORNECEDOR_NF'] = df['FORNECEDOR_NF'].astype(str)
-                    fornecedores_unicos = sorted(df['FORNECEDOR_NF'].dropna().unique().tolist())
-                else:
-                    fornecedores_unicos = []
-                    
-                fornecedor_consulta = st.selectbox("Filtrar por Fornecedor", options=["Todos"] + fornecedores_unicos)
-            
-            with col2:
-                status_financeiro_options = ["EM ANDAMENTO", "NF PROBLEMA", "CAPTURADO", "FINALIZADO"]
-                status_consulta = st.multiselect("Filtrar por Status", options=["Todos"] + status_financeiro_options, default=["Todos"])
-                
-                # Converter coluna DATA para datetime
-                if 'DATA' in df.columns:
-                    df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
-                    
-                    # Obter datas mínima e máxima válidas
-                    datas_validas = df['DATA'].dropna()
-                    if not datas_validas.empty:
-                        data_minima = datas_validas.min().date()
-                        data_maxima = datas_validas.max().date()
-                    else:
-                        data_minima = datetime.date(2020, 1, 1)
-                        data_maxima = datetime.date.today()
+                # Obter datas mínima e máxima válidas
+                datas_validas = df['DATA'].dropna()
+                if not datas_validas.empty:
+                    data_minima = datas_validas.min().date()
+                    data_maxima = datas_validas.max().date()
                 else:
                     data_minima = datetime.date(2020, 1, 1)
                     data_maxima = datetime.date.today()
-                
-                data_inicio_consulta = st.date_input("Data Início", value=data_minima, min_value=data_minima, max_value=data_maxima)
-                data_fim_consulta = st.date_input("Data Fim", value=data_maxima, min_value=data_minima, max_value=data_maxima)
-    
-            # Aplicar filtros
-            df_consulta = df.copy()
-            
-            # Filtro por número da NF
-            if nf_consulta and 'NF' in df_consulta.columns:
-                df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False, na=False)]
-            
-            # Filtro por ordem de compra
-            if ordem_compra_consulta and 'ORDEM_COMPRA' in df_consulta.columns:
-                df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False, na=False)]
-            
-            # Filtro por fornecedor
-            if fornecedor_consulta != "Todos" and 'FORNECEDOR_NF' in df_consulta.columns:
-                df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
-            
-            # Filtro por status
-            if "Todos" not in status_consulta and 'STATUS_FINANCEIRO' in df_consulta.columns:
-                df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
-            
-            # Filtro por data
-            if 'DATA' in df_consulta.columns:
-                mask = df_consulta['DATA'].notna()
-                df_consulta = df_consulta[
-                    mask & 
-                    (df_consulta['DATA'].dt.date >= data_inicio_consulta) & 
-                    (df_consulta['DATA'].dt.date <= data_fim_consulta)
-                ]
-            
-            st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
-            
-            if not df_consulta.empty:
-                # Selecionar colunas para exibição
-                colunas_exibicao = [
-                    'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 
-                    'V. TOTAL NF', 'STATUS_FINANCEIRO', 'DOC NF'
-                ]
-                
-                # Filtrar apenas colunas que existem
-                colunas_disponiveis = [col for col in colunas_exibicao if col in df_consulta.columns]
-                df_exibir_consulta = df_consulta[colunas_disponiveis].copy()
-                
-                # Formatar datas
-                if 'DATA' in df_exibir_consulta.columns:
-                    df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].apply(
-                        lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else 'Não informado'
-                    )
-                
-                # Formatar valores monetários
-                if 'V. TOTAL NF' in df_exibir_consulta.columns:
-                    df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
-                        lambda x: f"R$ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notna(x) and x != 0 else 'R$ 0,00'
-                    )
-                
-                # Colorir status
-                def colorir_status(status):
-                    if pd.isna(status):
-                        return "⚪ NÃO INFORMADO"
-                    cores = {
-                        "EM ANDAMENTO": "🟡",
-                        "NF PROBLEMA": "🔴",
-                        "CAPTURADO": "🟣",
-                        "FINALIZADO": "🟢"
-                    }
-                    return f"{cores.get(status, '⚪')} {status}"
-                
-                if 'STATUS_FINANCEIRO' in df_exibir_consulta.columns:
-                    df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
-                
-                st.dataframe(
-                    df_exibir_consulta,
-                    use_container_width=True,
-                    height=400,
-                    column_config={
-                        "DATA": st.column_config.TextColumn("Data"),
-                        "FORNECEDOR_NF": "Fornecedor",
-                        "NF": "N° NF",
-                        "ORDEM_COMPRA": "N° Ordem de Compra",
-                        "VOLUME": "Volume",
-                        "V. TOTAL NF": st.column_config.TextColumn("Valor Total NF"),
-                        "STATUS_FINANCEIRO": "Status Financeiro",
-                        "DOC NF": st.column_config.LinkColumn(
-                            "Anexo NF",
-                            help="Clique para abrir a nota fiscal.",
-                            display_text="📥 Abrir NF"
-                        )
-                    },
-                    hide_index=True
-                )
-                
-                # Preparar dados para download
-                df_download = df_consulta[colunas_disponiveis].copy()
-                csv_consulta = df_download.to_csv(index=False, encoding='utf-8-sig')
-                
-                st.download_button(
-                    label="📥 Download Resultados",
-                    data=csv_consulta,
-                    file_name="consulta_nfs.csv",
-                    mime="text/csv",
-                    help="Clique para baixar os dados da tabela filtrada."
-                )
             else:
-                st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
+                data_minima = datetime.date(2020, 1, 1)
+                data_maxima = datetime.date.today()
+            
+            data_inicio_consulta = st.date_input("Data Início", value=data_minima, min_value=data_minima, max_value=data_maxima)
+            data_fim_consulta = st.date_input("Data Fim", value=data_maxima, min_value=data_minima, max_value=data_maxima)
+
+        # Aplicar filtros
+        df_consulta = df.copy()
+        
+        # Filtro por número da NF
+        if nf_consulta and 'NF' in df_consulta.columns:
+            df_consulta = df_consulta[df_consulta['NF'].astype(str).str.contains(nf_consulta, case=False, na=False)]
+        
+        # Filtro por ordem de compra
+        if ordem_compra_consulta and 'ORDEM_COMPRA' in df_consulta.columns:
+            df_consulta = df_consulta[df_consulta['ORDEM_COMPRA'].astype(str).str.contains(ordem_compra_consulta, case=False, na=False)]
+        
+        # Filtro por fornecedor
+        if fornecedor_consulta != "Todos" and 'FORNECEDOR_NF' in df_consulta.columns:
+            df_consulta = df_consulta[df_consulta['FORNECEDOR_NF'] == fornecedor_consulta]
+        
+        # Filtro por status
+        if "Todos" not in status_consulta and 'STATUS_FINANCEIRO' in df_consulta.columns:
+            df_consulta = df_consulta[df_consulta['STATUS_FINANCEIRO'].isin(status_consulta)]
+        
+        # Filtro por data
+        if 'DATA' in df_consulta.columns:
+            mask = df_consulta['DATA'].notna()
+            df_consulta = df_consulta[
+                mask & 
+                (df_consulta['DATA'].dt.date >= data_inicio_consulta) & 
+                (df_consulta['DATA'].dt.date <= data_fim_consulta)
+            ]
+        
+        st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
+        
+        if not df_consulta.empty:
+            # Selecionar colunas para exibição
+            colunas_exibicao = [
+                'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 
+                'V. TOTAL NF', 'STATUS_FINANCEIRO', 'DOC NF'
+            ]
+            
+            # Filtrar apenas colunas que existem
+            colunas_disponiveis = [col for col in colunas_exibicao if col in df_consulta.columns]
+            df_exibir_consulta = df_consulta[colunas_disponiveis].copy()
+            
+            # Formatar datas
+            if 'DATA' in df_exibir_consulta.columns:
+                df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].apply(
+                    lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else 'Não informado'
+                )
+            
+            # Formatar valores monetários
+            if 'V. TOTAL NF' in df_exibir_consulta.columns:
+                df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
+                    lambda x: f"R$ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notna(x) and x != 0 else 'R$ 0,00'
+                )
+            
+            # Colorir status
+            def colorir_status(status):
+                if pd.isna(status):
+                    return "⚪ NÃO INFORMADO"
+                cores = {
+                    "EM ANDAMENTO": "🟡",
+                    "NF PROBLEMA": "🔴",
+                    "CAPTURADO": "🟣",
+                    "FINALIZADO": "🟢"
+                }
+                return f"{cores.get(status, '⚪')} {status}"
+            
+            if 'STATUS_FINANCEIRO' in df_exibir_consulta.columns:
+                df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
+            
+            st.dataframe(
+                df_exibir_consulta,
+                use_container_width=True,
+                height=400,
+                column_config={
+                    "DATA": st.column_config.TextColumn("Data"),
+                    "FORNECEDOR_NF": "Fornecedor",
+                    "NF": "N° NF",
+                    "ORDEM_COMPRA": "N° Ordem de Compra",
+                    "VOLUME": "Volume",
+                    "V. TOTAL NF": st.column_config.TextColumn("Valor Total NF"),
+                    "STATUS_FINANCEIRO": "Status Financeiro",
+                    "DOC NF": st.column_config.LinkColumn(
+                        "Anexo NF",
+                        help="Clique para abrir a nota fiscal.",
+                        display_text="📥 Abrir NF"
+                    )
+                },
+                hide_index=True
+            )
+            
+            # Preparar dados para download
+            df_download = df_consulta[colunas_disponiveis].copy()
+            csv_consulta = df_download.to_csv(index=False, encoding='utf-8-sig')
+            
+            st.download_button(
+                label="📥 Download Resultados",
+                data=csv_consulta,
+                file_name="consulta_nfs.csv",
+                mime="text/csv",
+                help="Clique para baixar os dados da tabela filtrada."
+            )
         else:
-            st.info("📝 Nenhum dado disponível para consulta.")
+            st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
+    else:
+        st.info("📝 Nenhum dado disponível para consulta.")
 
 def render_configuracoes_page():
     """Página de configurações do sistema."""
