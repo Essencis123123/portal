@@ -20,22 +20,15 @@ import re
 import pytz
 
 # ==============================================================================
-# CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
-# ==============================================================================
-# Configuração da página com layout wide e ícone
-st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
-# CSS personalizado para o tema Essencis
+st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 st.markdown(
     """
     <style>
-    /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
         color: white;
     }
-    
-    /* Regras para garantir que TODO o texto no sidebar seja branco */
     [data-testid="stSidebar"] *,
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] h1,
@@ -47,20 +40,15 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
-
-    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
     }
-    
-    /* Estilo para deixar a letra dos botões preta */
     .stButton button p {
         color: black !important;
     }
     .stDownloadButton button p {
         color: white !important;
     }
-
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -69,8 +57,6 @@ st.markdown(
         border-radius: 10px;
         padding: 10px 0;
     }
-
-    /* Estilo para o container principal da página */
     .main-container {
         background-color: white;
         padding: 40px;
@@ -78,8 +64,6 @@ st.markdown(
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
         color: #333;
     }
-    
-    /* Estilo para o cabeçalho principal da página */
     .header-container {
         background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
         padding: 25px;
@@ -89,25 +73,19 @@ st.markdown(
         text-align: center;
         color: white;
     }
-    
     .header-container h1 {
         color: white;
         margin: 0;
     }
-
     .header-container p {
         color: white;
         margin: 5px 0 0 0;
         font-size: 18px;
     }
-    
-    /* Estilo para os sub-cabeçalhos dentro da área principal */
     h2, h3 {
         color: #1C4D86;
         font-weight: 600;
     }
-    
-    /* Estilo para os botões de ação */
     .stButton button {
         background-color: #0055a5;
         color: white;
@@ -117,8 +95,6 @@ st.markdown(
     .stButton button:hover {
         background-color: #007ea7;
     }
-    
-    /* Estilo para os cards de métricas */
     [data-testid="stMetric"] > div {
         background-color: #f0f2f5;
         color: #1C4D86;
@@ -130,13 +106,10 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+# ==============================================================================
 
-# ==============================================================================
-# FUNÇÕES DE UTILIDADE E CONEXÃO
-# ==============================================================================
 @st.cache_data(show_spinner=False)
 def load_logo(url):
-    """Carrega a imagem do logo a partir de uma URL e a armazena em cache."""
     try:
         response = requests.get(url)
         img = Image.open(BytesIO(response.content))
@@ -147,74 +120,54 @@ def load_logo(url):
 
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    """Retorna o cliente gspread autorizado."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     credentials_info = st.secrets["gcp_service_account"]
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     return gspread.authorize(credentials)
-    
+
 def parse_brazil_number(value_str):
-    """
-    Converte uma string de número no formato brasileiro (1.234,56) para float (1234.56).
-    """
     if not isinstance(value_str, str):
         return value_str
-
     cleaned_value = value_str.strip()
-    
-    # Remove 'R$' e espaços.
     cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
-    
-    # Assume que a vírgula é sempre o separador decimal.
     cleaned_value = cleaned_value.replace('.', '')
     cleaned_value = cleaned_value.replace(',', '.')
-
     try:
         return float(cleaned_value)
     except (ValueError, TypeError):
         return pd.NaT
 
 def _to_datetime(series, dayfirst=True):
-    """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
-    """Carrega dados do Google Sheets (aba de Almoxarifado)."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
+        spreadsheet = gc.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(2)
-        
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
-        
         if not data or len(data) <= 1:
             return pd.DataFrame()
-        
         headers = data[0]
         records = data[1:]
         df = pd.DataFrame(records, columns=headers)
-
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
             "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA",
             "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ]
-        
         for col in colunas_essenciais:
             if col not in df.columns:
                 df[col] = ''
-            
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
                 df[col] = df[col].replace('', np.nan).replace(0, np.nan).replace('0', np.nan)
                 df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
-        
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
                 df[col] = df[col].apply(parse_brazil_number).fillna(0)
-        
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
@@ -226,14 +179,11 @@ def carregar_dados_almoxarifado():
         ])
 
 def salvar_dados_almoxarifado(df):
-    """Salva os dados do DataFrame no Google Sheets (aba de Almoxarifado)."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
+        spreadsheet = gc.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(2)
-
         df_copy = df.copy()
-
         df_copy = df_copy.rename(columns={
             "REGISTRO_ADICIONAL": "OBSERVACAO",
             "V. TOTAL NF": "V. TOTAL NF",
@@ -243,15 +193,12 @@ def salvar_dados_almoxarifado(df):
             "FORNECEDOR_NF": "FORNECEDOR_NF",
             "REGISTRO_LANCAMENTO": "REGISTRO_LANCAMENTO",
             "REGISTRO_ENVIO": "REGISTRO_ENVIO",
-            "STATUS_FINANCEIRO": "STATUS_FINANCEIRO",
+            "STATUS_FINANCEIRO": "STATUS_FINANCEIRO"
         }, errors='ignore')
-        
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
-
-        df_copy = df_copy.loc[:,~df_copy.columns.duplicated()]
-        
+        df_copy = df_copy.loc[:, ~df_copy.columns.duplicated()]
         worksheet.clear()
         set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
@@ -261,52 +208,40 @@ def salvar_dados_almoxarifado(df):
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_pedidos():
-    """Carrega os dados de pedidos do Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
+        spreadsheet = gc.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(0)
-        
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
-        
         if not data or len(data) <= 1:
             st.warning("A planilha está vazia ou não contém dados.")
             return pd.DataFrame()
-            
         headers = data[0]
         records = data[1:]
-        
         df = pd.DataFrame(records, columns=headers)
-        
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df.columns:
                 df[col] = _to_datetime(df[col], dayfirst=True)
-        
         numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = df[col].apply(parse_brazil_number).fillna(0)
-        
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
-            
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de pedidos: {e}")
         return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"])
 
 def salvar_dados_pedidos(df):
-    """Salva os dados de pedidos no Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
+        spreadsheet = gc.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(0)
-
         df_copy = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
-        
         set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
     except Exception as e:
@@ -315,10 +250,9 @@ def salvar_dados_pedidos(df):
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_solicitantes():
-    """Carrega dados dos solicitantes do Google Sheets."""
     try:
         gc = get_gspread_client()
-        sheet = client.open("dados_pedido")
+        spreadsheet = gc.open("dados_pedido")
         worksheet = spreadsheet.get_worksheet(1)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -327,77 +261,7 @@ def carregar_dados_solicitantes():
         st.error(f"Erro ao carregar dados de solicitantes: {e}")
         return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
-# --- LÓGICA DE LOGIN ---
-USERS = {
-    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
-    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
-    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAURA SOARES"},
-    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
-    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
-    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"}
-}
 
-def fazer_login(email, senha):
-    """Lógica para autenticar o usuário."""
-    if email in USERS and USERS[email]["password"] == senha:
-        st.session_state['logado'] = True
-        st.session_state['nome_colaborador'] = USERS[email]["name"]
-        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
-        time.sleep(1)
-        st.rerun()
-    else:
-        st.error("E-mail ou senha incorretos.")
-
-# ==============================================================================
-# INTERFACE PRINCIPAL
-# ==============================================================================
-def render_login_page():
-    """Exibe a página de login."""
-    st.title("🏭 Login do Almoxarifado")
-    with st.form("login_form"):
-        email = st.text_input("E-mail")
-        senha = st.text_input("Senha", type="password")
-        if st.form_submit_button("Entrar"):
-            fazer_login(email, senha)
-
-def render_main_app():
-    """Exibe a interface principal da aplicação após o login."""
-    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-    logo_img = load_logo(logo_url)
-    
-    if 'df_pedidos' not in st.session_state:
-        st.session_state.df_pedidos = carregar_dados_pedidos()
-    if 'df_almoxarifado' not in st.session_state:
-        st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
-
-    df_solicitantes = carregar_dados_solicitantes()
-
-    # Sidebar
-    with st.sidebar:
-        if logo_img:
-            st.image(logo_img, use_container_width=True)
-        
-        st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
-        st.title("Menu de Navegação")
-        menu_option = st.radio(
-            "Selecione a opção:",
-            ["📝 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"],
-            index=0
-        )
-        st.divider()
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.rerun()
-    
-    # Renderiza a página selecionada
-    if menu_option == "📝 Registrar NF":
-        render_registrar_nf_page()
-    elif menu_option == "📊 Dashboard":
-        render_dashboard_page()
-    elif menu_option == "🔍 Consultar NFs":
-        render_consultar_nfs_page()
-    elif menu_option == "⚙️ Configurações":
-        render_configuracoes_page()
 
 def render_registrar_nf_page():
     """Página para registrar novas notas fiscais."""
