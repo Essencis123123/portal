@@ -404,23 +404,19 @@ def criar_dataframe_solicitantes_vazio():
     """Cria um DataFrame de solicitantes vazio."""
     return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
+@st.cache_data(show_spinner=False)
 def carregar_dados_solicitantes():
-    """Carrega o DataFrame de solicitantes do Google Sheets."""
+    """Carrega dados dos solicitantes do Google Sheets (quarta aba)."""
     try:
         gc = get_gspread_client()
-        if gc is None:
-            return criar_dataframe_solicitantes_vazio()
-            
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(1)
-        
+        worksheet = sheet.get_worksheet(3)  # Quarta aba (índice 3) é Solicitantes
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
-        
         return df
     except Exception as e:
-        st.error(f"Erro ao carregar dados de solicitantes do Google Sheets: {e}")
-        return criar_dataframe_solicitantes_vazio()
+        st.error(f"Erro ao carregar dados de solicitantes: {e}")
+        return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
 def salvar_dados_solicitantes(df):
     """Salva o DataFrame de solicitantes no Google Sheets."""
@@ -461,27 +457,20 @@ def carregar_dados_almoxarifado():
         st.warning(f"Aviso: Não foi possível carregar dados do Almoxarifado para preencher a nota fiscal. Verifique a aba 'Almoxarifado' da planilha. {e}")
         return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
 
+@st.cache_data(show_spinner=False)
 def carregar_dados_materiais():
-    """Carrega o DataFrame de materiais do Google Sheets."""
+    """Carrega dados dos materiais do Google Sheets (terceira aba)."""
     try:
         gc = get_gspread_client()
-        if gc is None:
-            return pd.DataFrame(columns=['CODIGO', 'DESCRICAO'])
-            
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(3)
+        worksheet = sheet.get_worksheet(2)  # Terceira aba (índice 2) é MATERIAIS
         data = worksheet.get_all_records()
-        
-        if not data:
-            df = pd.DataFrame(columns=['CODIGO', 'DESCRICAO'])
-        else:
-            df = pd.DataFrame(data)
-            df.columns = [col.upper() for col in df.columns]
-        
+        df = pd.DataFrame(data)
         return df
     except Exception as e:
-        st.warning(f"Aviso: Não foi possível carregar dados de materiais. Verifique a aba 'MATERIAIS' da planilha. {e}")
-        return pd.DataFrame(columns=['CODIGO', 'DESCRICAO'])
+        st.error(f"Erro ao carregar dados de materiais: {e}")
+        return pd.DataFrame(columns=["MATERIAL", "DESCRICAO", "CATEGORIA", "UNIDADE_MEDIDA"])
+
 
 def salvar_dados_materiais(df):
     """Salva o DataFrame de materiais no Google Sheets."""
