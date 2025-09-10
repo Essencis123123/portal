@@ -569,6 +569,8 @@ def render_main_app():
             st.session_state.pop('nome_colaborador', None)
             st.rerun()
 
+# ... código anterior ...
+
     if menu == "📝 Requisição":
         st.markdown("""
             <div class='header-container'>
@@ -587,27 +589,51 @@ def render_main_app():
         # Usando colunas para compactar a primeira linha
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         with col1:
-            solicitante_selecionado = st.selectbox("Solicitante", solicitantes_nomes)
+            # Usar session_state para manter o estado do solicitante
+            if 'solicitante_selecionado' not in st.session_state:
+                st.session_state.solicitante_selecionado = ""
+            
+            solicitante_selecionado = st.selectbox(
+                "Solicitante", 
+                solicitantes_nomes,
+                key="select_solicitante"
+            )
             if solicitante_selecionado:
                 solicitante_info = st.session_state.df_solicitantes[st.session_state.df_solicitantes['NOME'] == solicitante_selecionado].iloc[0]
                 departamento_selecionado = solicitante_info['DEPARTAMENTO']
                 filial_selecionada = solicitante_info['FILIAL']
         
         with col2:
-            st.text_input("Departamento", value=departamento_selecionado, disabled=True)
+            st.text_input("Departamento", value=departamento_selecionado, disabled=True, key="display_departamento")
         
         with col3:
-            st.text_input("Filial", value=filial_selecionada, disabled=True)
+            st.text_input("Filial", value=filial_selecionada, disabled=True, key="display_filial")
             
         with col4:
-            requisicao = st.text_input("N° Requisição")
+            # Usar session_state para manter o estado da requisição
+            if 'requisicao_numero' not in st.session_state:
+                st.session_state.requisicao_numero = ""
+            
+            requisicao = st.text_input("N° Requisição", key="input_requisicao")
 
         # Segunda linha para os outros campos
         col5, col6 = st.columns(2)
         with col5:
-            data_requisicao = st.date_input("Data da Requisição", datetime.date.today())
+            # Usar session_state para manter a data
+            if 'data_requisicao' not in st.session_state:
+                st.session_state.data_requisicao = datetime.date.today()
+            
+            data_requisicao = st.date_input("Data da Requisição", st.session_state.data_requisicao, key="input_data")
         with col6:
-            tipo_pedido = st.selectbox("Tipo de Pedido", ["LOCAL", "EMERGENCIAL", "PROGRAMADO"])
+            # Usar session_state para manter o tipo de pedido
+            if 'tipo_pedido' not in st.session_state:
+                st.session_state.tipo_pedido = "LOCAL"
+            
+            tipo_pedido = st.selectbox(
+                "Tipo de Pedido", 
+                ["LOCAL", "EMERGENCIAL", "PROGRAMADO"],
+                key="select_tipo_pedido"
+            )
         
         st.markdown("---")
         st.subheader("Itens da Requisição")
@@ -622,77 +648,89 @@ def render_main_app():
                     "MATERIAL": "Descrição Material",
                     "UN": "Unidade de Medida",
                     "QUANTIDADE": st.column_config.NumberColumn("Quantidade", min_value=1)
-                }
+                },
+                key="editor_itens"
             )
 
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         with col_item1:
-            item_codigo = st.text_input("Código do Material", key="codigo_material_input")
+            # Usar session_state para manter o código do material
+            if 'item_codigo' not in st.session_state:
+                st.session_state.item_codigo = ""
+            
+            item_codigo = st.text_input("Código do Material", key="input_codigo_material")
         with col_item2:
             descricao_material = ""
             if item_codigo and not st.session_state.df_materiais.empty:
                 material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
                 if not material_info.empty:
                     descricao_material = material_info.iloc[0]['DESCRICAO']
-            item_material = st.text_input("Descrição do Material", value=descricao_material, disabled=True, key="material_input")
-            with col_item3:
-                unidade_medida = st.selectbox(
-                    "Unidade de Medida",
-                    [
-                        "UN",  # Unidade
-                        "TB",
-                        "PÇ",  # Peça
-                        "KIT", # Kit
-                        "CX",  # Caixa
-                        "FR",  # Frasco
-                        "GL",  # Galão
-                        "KG",  # Quilograma
-                        "G",   # Grama
-                        "MG",  # Miligrama
-                        "L",   # Litro
-                        "ML",  # Mililitro
-                        "M",   # Metro
-                        "CM",  # Centímetro
-                        "MM",  # Milímetro
-                        "M2",  # Metro quadrado
-                        "M3",  # Metro cúbico
-                        "PCT", # Pacote
-                        "RL",  # Rolo
-                        "BD",  # Bandeja
-                        "AMP", # Ampola
-                        "SC",  # Saco
-                        "T",   # Tonelada
-                        "DZ",  # Dúzia
-                        "CJ",  # Conjunto
-                        "JG",  # Jogo
-                        "PAR", # Par
-                        "CXA", # Caixa com alça
-                        "FAR", # Fardo
-                        "BL",  # Bloco
-                        "CR",  # Cartela
-                        "PL",  # Palete
-                        "TON", # Tonelada
-                        "LT",  # Lata
-                        "S",   # Seringa
-                        "CAP", # Cápsula
-                    ],
-                    key="unidade_medida_input"
-                )
+            
+            # Usar session_state para manter a descrição do material
+            if 'item_material' not in st.session_state:
+                st.session_state.item_material = ""
+            
+            item_material = st.text_input(
+                "Descrição do Material", 
+                value=descricao_material, 
+                disabled=True, 
+                key="input_material"
+            )
+        
+        with col_item3:
+            # Usar session_state para manter a unidade de medida
+            if 'unidade_medida' not in st.session_state:
+                st.session_state.unidade_medida = "UN"
+            
+            unidade_medida = st.selectbox(
+                "Unidade de Medida",
+                [
+                    "UN", "TB", "PÇ", "KIT", "CX", "FR", "GL", "KG", "G", "MG", 
+                    "L", "ML", "M", "CM", "MM", "M2", "M3", "PCT", "RL", "BD", 
+                    "AMP", "SC", "T", "DZ", "CJ", "JG", "PAR", "CXA", "FAR", 
+                    "BL", "CR", "PL", "TON", "LT", "S", "CAP",
+                ],
+                key="select_unidade_medida"
+            )
 
         with col_item4:
-            item_quantidade = st.number_input("Quantidade", min_value=1, value=1, key="quantidade_input")
-            if st.button("➕ Adicionar Item"):
+            # Usar session_state para manter a quantidade
+            if 'item_quantidade' not in st.session_state:
+                st.session_state.item_quantidade = 1
+            
+            item_quantidade = st.number_input(
+                "Quantidade", 
+                min_value=1, 
+                value=st.session_state.item_quantidade, 
+                key="input_quantidade"
+            )
+            
+            if st.button("➕ Adicionar Item", key="btn_adicionar_item"):
                 if item_codigo and item_material and item_quantidade > 0 and unidade_medida:
-                    novo_item = pd.DataFrame([{"CODIGO_MATERIAL": item_codigo, "MATERIAL": item_material, "UN": unidade_medida, "QUANTIDADE": item_quantidade}])
-                    st.session_state.itens_requisicao_temp = pd.concat([st.session_state.itens_requisicao_temp, novo_item], ignore_index=True)
+                    novo_item = pd.DataFrame([{
+                        "CODIGO_MATERIAL": item_codigo, 
+                        "MATERIAL": item_material, 
+                        "UN": unidade_medida, 
+                        "QUANTIDADE": item_quantidade
+                    }])
+                    st.session_state.itens_requisicao_temp = pd.concat(
+                        [st.session_state.itens_requisicao_temp, novo_item], 
+                        ignore_index=True
+                    )
                     st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
+                    
+                    # Limpar campos do item após adicionar
+                    st.session_state.item_codigo = ""
+                    st.session_state.item_material = ""
+                    st.session_state.unidade_medida = "UN"
+                    st.session_state.item_quantidade = 1
                     st.rerun()
                 else:
                     st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
         
         st.write("---")
         
-        if st.button("Finalizar e Registrar Requisição"):
+        if st.button("Finalizar e Registrar Requisição", key="btn_finalizar_requisicao"):
             if requisicao and not st.session_state.itens_requisicao_temp.empty:
                 linhas_a_adicionar = []
                 for _, item_row in st.session_state.itens_requisicao_temp.iterrows():
@@ -721,11 +759,25 @@ def render_main_app():
                 st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_a_adicionar], ignore_index=True)
                 
                 salvar_dados_pedidos(st.session_state.df_pedidos)
+                
+                # RESETAR TODOS OS CAMPOS APÓS SALVAR
                 st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"])
+                st.session_state.solicitante_selecionado = ""
+                st.session_state.requisicao_numero = ""
+                st.session_state.data_requisicao = datetime.date.today()
+                st.session_state.tipo_pedido = "LOCAL"
+                st.session_state.item_codigo = ""
+                st.session_state.item_material = ""
+                st.session_state.unidade_medida = "UN"
+                st.session_state.item_quantidade = 1
+                
                 st.success("Requisição registrada com sucesso! Vá para 'Atualizar Pedidos' para completar as informações.")
                 st.balloons()
+                st.rerun()
             else:
                 st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
+
+# ... resto do código ...
 
     elif menu == "✍️ Pedidos (OC)":
         st.markdown("""
