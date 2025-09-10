@@ -38,7 +38,7 @@ st.markdown(
     [data-testid="stSidebar"] *,
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] h1,
-    [data-testid="stSidebar"] h2,
+    [data.testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
@@ -197,6 +197,812 @@ logo_img = load_logo(logo_url)
 # --- Funções de Conexão e Carregamento de Dados ---
 @st.cache_data(ttl=300)
 def get_gspread_client():
+    """Conecta com o Google Sheets usando os secrets do Streamlit."""
+    try:
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        
+        # Verifica se estamos usando secrets do Streamlit ou variáveis de ambiente
+        if 'gcp_service_account' in st.secrets:
+            credentials_info = st.secrets["gcp_service_account"]
+            
+            if isinstance(credentials_info, str):
+                try:
+                    credentials_info = json.loads(credentials_info)
+                except json.JSONDecodeError as e:
+                    st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
+                    return None
+            
+            # Cria as credenciais a partir do dicionário
+            creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        else:
+            # Fallback para autenticação com variáveis de ambiente
+            creds = Credentials.from_service_account_file(
+                os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), scopes=scopes
+            )
+        
+        # Cria o cliente com um timeout explícito
+        client = gspread.authorize(creds)
+        
+        # Testa a conexão
+        try:
+            client.list_spreadsheet_files(limit=1)
+            return client
+        except Exception as test_error:
+            st.error(f"Erro ao testar conexão com Google Sheets: {test_error}")
+            return None
+            
+    except Exception as e:
+        st.error(f"Erro ao conectar com Google Sheets: {e}")
+        return None
+
+# Funções auxiliares para formatação e parsing de datas
+def parse_date_from_editor(date_value):
+    """Converte valores do editor para datetime (suporte a hífen, barra e ISO)"""
+    if date_value is None or pd.isna(date_value) or date_value == '':
+        return pd.NaT
+    
+    # Se já for datetime, retorna como está
+    if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
+        return date_value
+    
+    # Se for date (do datetime.date), converte para datetime
+    if isinstance(date_value, datetime.date):
+        return datetime.datetime.combine(date_value, datetime.time())
+    
+    # Se for string, tenta parse nos formatos esperados
+    if isinstance(date_value, str):
+        try:
+            # Tenta formato DD-MM-YYYY (com hífen)
+            if '-' in date_value and len(date_value.split('-')) == 3:
+                return datetime.datetime.strptime(date_value, '%d-%m-%Y')
+            # Tenta formato DD/MM/YYYY (com barra)
+            elif '/' in date_value and len(date_value.split('/')) == 3:
+                return datetime.datetime.strptime(date_value, '%d/%m/%Y')
+            # Tenta formato YYYY-MM-DD (padrão ISO)
+            elif '-' in date_value and len(date_value.split('-')) == 3:
+                return datetime.datetime.strptime(date_value, '%Y-%m-%d')
+            else:
+                # Tenta parse automático
+                return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+        except ValueError:
+            return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+    
+    return pd.to_datetime(date_value, errors='coerce')
+
+def parse_brazilian_date(date_str):
+    """Converte datas em formato brasileiro para datetime"""
+    if pd.isna(date_str) or date_str == '' or date_str is None:
+        return pd.NaT
+    try:
+        # Tenta vários formatos de data
+        formats = ['%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%Y', '%d-%m-%y', '%d/%m/%y']
+        for fmt in formats:
+            try:
+                return datetime.datetime.strptime(str(date_str), fmt)
+            except ValueError:
+                continue
+        return pd.to_datetime(date_str, dayfirst=True, errors='coerce')
+    except:
+        return pd.NaT
+
+def formatar_data_brasil_hifen(data):
+    """Formata datetime para exibição no formato DD-MM-YYYY"""
+    if pd.isna(data) or data is None:
+        return ""
+    try:
+        # Se já for string no formato com hífen, retorna como está
+        if isinstance(data, str) and '-' in data and len(data.split('-')) == 3:
+            return data
+        # Se for datetime, formata para DD-MM-YYYY
+        elif isinstance(data, (pd.Timestamp, datetime.datetime)):
+            return data.strftime('%d-%m-%Y')
+        else:
+            return str(data)
+    except:
+        return str(data)
+
+def criar_dataframe_pedidos_vazio():
+    """Cria um DataFrame de pedidos vazio com a estrutura correta."""
+    return pd.DataFrame(columns=[
+        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
+        "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
+    ])
+
+@st.cache_data(ttl=300)
+def carregar_dados_pedidos():
+    """Carrega o DataFrame de pedidos do Google Sheets."""
+    try:
+        gc = get_gspread_client()
+        if gc is None:
+            return criar_dataframe_pedidos_vazio()
+            
+        sheet = gc.open("dados_pedido")
+        
+        # Get all values from the worksheet with the UNFORMATTED_VALUE option
+        data = sheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
+        
+        # O cabeçalho é a primeira linha
+        headers = data[0]
+        records = data[1:]
+
+        if not records:
+            st.warning("A planilha está vazia ou não contém dados.")
+            return criar_dataframe_pedidos_vazio()
+        
+        df = pd.DataFrame(records, columns=headers)
+
+        # Trata colunas de data com formato BRASILEIRO (DD/MM/YYYY)
+        date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+        for col in date_cols:
+            if col in df.columns:
+                df[col] = df[col].apply(parse_brazilian_date)
+        
+        # Converte colunas numéricas
+        numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRasO", "DIAS_EMISSAO"]
+        for col in numeric_cols:
+            if col in df.columns:
+                # Converte strings com formato brasileiro para float
+                if df[col].dtype == 'object':
+                    df[col] = df[col].apply(lambda x: float(str(x).replace('.', '').replace(',', '.')) 
+                                          if pd.notna(x) and str(x).strip() != '' else 0)
+                else:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
+            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
+        
+        if 'DOC NF' not in df.columns:
+            df['DOC NF'] = ""
+        
+        if 'PREVISAO_ENTREGA' not in df.columns:
+            df['PREVISAO_ENTREGA'] = pd.NaT
+
+        df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
+            lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
+        )
+        
+        if 'UN' not in df.columns:
+            df['UN'] = ''
+        if 'CODIGO_MATERIAL' not in df.columns:
+            df['CODIGO_MATERIAL'] = ''
+
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
+        return criar_dataframe_pedidos_vazio()
+
+def formatar_numero_brasileiro(valor, casas_decimais=2):
+    """Formata número no padrão brasileiro (vírgula como separador decimal)"""
+    if pd.isna(valor) or valor == 0:
+        return ''
+    return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
+
+def salvar_dados_pedidos(df):
+    """Salva o DataFrame de pedidos no Google Sheets."""
+    try:
+        gc = get_gspread_client()
+        if gc is None:
+            return
+        
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(0)
+
+        df_to_save = df.copy()
+        
+        # Converte as colunas de data para o formato string com HÍFEN
+        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
+            if col in df_to_save.columns:
+                df_to_save[col] = df_to_save[col].apply(formatar_data_brasil_hifen)
+        
+        # Converte valores numéricos para formato de string que o Google Sheets entende
+        numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        for col in numeric_cols_to_save:
+            if col in df_to_save.columns:
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: str(x).replace('.', ',') if pd.notna(x) and x != '' else ''
+                )
+        
+        # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
+        if 'VALOR_TOTAL' in df_to_save.columns:
+            df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
+
+        # Substitui NaN por string vazia para evitar problemas na gravação
+        df_to_save = df_to_save.fillna('')
+        
+        # Limpa a planilha e escreve os novos dados
+        worksheet.clear()
+        set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
+        
+        st.success("Dados salvos na planilha com sucesso!")
+        
+    except Exception as e:
+        st.error(f"Erro ao salvar dados no Google Sheets: {e}")
+
+def criar_dataframe_solicitantes_vazio():
+    """Cria um DataFrame de solicitantes vazio."""
+    return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
+
+@st.cache_data(show_spinner=False, ttl=300)
+def carregar_dados_solicitantes():
+    """Carrega dados dos solicitantes do Google Sheets (quarta aba)."""
+    try:
+        gc = get_gspread_client()
+        if gc is None:
+            return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(3)  # Quarta aba (índice 3) é Solicitantes
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de solicitantes: {e}")
+        return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
+
+def salvar_dados_solicitantes(df):
+    """Salva o DataFrame de solicitantes no Google Sheets."""
+    try:
+        gc = get_gspread_client()
+        if gc is None:
+            return
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(3)
+
+        data_to_write = [df.columns.values.tolist()] + df.values.tolist()
+        
+        worksheet.clear()
+        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        
+        st.success("Solicitante cadastrado na planilha com sucesso!")
+    except Exception as e:
+        st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
+
+def validar_dados_pedidos(df):
+    """Valida e corrige dados inconsistentes no DataFrame de pedidos"""
+    df = df.copy()
+    
+    # Garantir que colunas numéricas sejam numéricas
+    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    # Garantir que datas sejam datetime
+    date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = df[col].apply(parse_brazilian_date)
+    
+    return df
+
+@st.cache_data(ttl=300)
+def carregar_dados_almoxarifado():
+    """Carrega dados do almoxarifado para preencher a nota fiscal."""
+    try:
+        gc = get_gspread_client()
+        if gc is None:
+            return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(2)  # Almoxarifado está na terceira aba
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+
+        ordem_colunas = ['ORDEM_COMPRA', 'DOC NF']
+        df = df.reindex(columns=ordem_colunas, fill_value="")
+        
+        return df
+    except Exception as e:
+        st.warning(f"Aviso: Não foi possível carregar dados do Almoxarifado. {e}")
+        return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
+
+@st.cache_data(show_spinner=False, ttl=300)
+def carregar_dados_materiais():
+    """Carrega dados dos materiais do Google Sheets (terceira aba)."""
+    try:
+        gc = get_gspread_client()
+        if gc is None:
+            return pd.DataFrame(columns=["CODIGO", "DESCRICAO"])
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(2)  # Terceira aba (índice 2) é MATERIAIS
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de materiais: {e}")
+        return pd.DataFrame(columns=["CODIGO", "DESCRICAO"])
+
+def salvar_dados_materiais(df):
+    """Salva os dados de materiais no Google Sheets (terceira aba - MATERIAIS)."""
+    try:
+        gc = get_gspread_client()
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(2)  # Terceira aba (índice 2) é MATERIAIS
+
+        df_copy = df.copy()
+        set_with_dataframe(worksheet, df_copy, include_index=False)
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados de materiais: {e}")
+        return False
+
+# --- LÓGICA DE LOGIN (SEM INTEGRAÇÃO COM SMTP) ---
+USERS = {
+    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
+    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
+    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
+    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
+    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"},
+    "wrezende@essencis.com.br": {"password": "Essencis01", "name": "WELLINGTON CASSIO DE REZENDE"}
+}
+
+def fazer_login(email, senha):
+    """Valida as credenciais do usuário"""
+    import re
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        st.error("Formato de e-mail inválido")
+        return
+        
+    if email in USERS and USERS[email]["password"] == senha:
+        st.session_state['logado'] = True
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
+        st.rerun()
+    else:
+        st.error("E-mail ou senha incorretos.")
+
+# --- INTERFACE PRINCIPAL ---
+def render_login_page():
+    """Exibe a página de login."""
+    st.title("Login - Painel do Comprador")
+    with st.form("login_form"):
+        email = st.text_input("E-mail")
+        senha = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar"):
+            fazer_login(email, senha)
+
+def testar_conexao_google():
+    """Função para testar a conexão com Google Sheets"""
+    try:
+        gc = get_gspread_client()
+        if gc:
+            files = gc.list_spreadsheet_files(limit=5)
+            st.write("Arquivos encontrados:", files)
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Erro no teste de conexão: {e}")
+        return False
+
+def render_main_app():
+    """Exibe a interface principal da aplicação após o login."""
+    logo_img = load_logo(logo_url)
+
+    if 'df_pedidos' not in st.session_state:
+        st.session_state.df_pedidos = carregar_dados_pedidos()
+    if 'df_solicitantes' not in st.session_state:
+        st.session_state.df_solicitantes = carregar_dados_solicitantes()
+    if 'itens_requisicao_temp' not in st.session_state:
+        st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"])
+    if 'df_almoxarifado' not in st.session_state:
+        st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
+    if 'df_materiais' not in st.session_state:
+        st.session_state.df_materiais = carregar_dados_materiais()
+
+    with st.sidebar:
+        if logo_img:
+            st.image(logo_img, use_container_width=True)
+        
+        st.write(f"Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!")
+        st.title("👨‍💼 Comprador")
+        st.divider()
+        menu = st.radio(
+            "📌 Navegação",
+            ["📝 Requisição", "✍️ Pedidos (OC)", "📜 Histórico ", "👤 Cadastro", "📊 Dashboards ", "📊 Performance "]
+        )
+        st.divider()
+        
+        if st.sidebar.button("Testar Conexão Google"):
+            if testar_conexao_google():
+                st.success("Conexão com Google Sheets bem-sucedida!")
+            else:
+                st.error("Falha na conexão com Google Sheets")
+                
+        if st.sidebar.button("Atualizar Dados"):
+            st.session_state.df_pedidos = carregar_dados_pedidos()
+            st.success("Dados atualizados com sucesso!")
+            st.rerun()
+            
+        if st.sidebar.button("Logout"):
+            st.session_state['logado'] = False
+            st.session_state.pop('nome_colaborador', None)
+            st.rerun()
+
+    if menu == "📝 Requisição":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📝 REGISTRAR REQUISIÇÃO DE COMPRA</h1>
+                <p>Sistema de Controle e Análise de Pedidos</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.header("📝 Registrar Nova Requisição de Compra")
+        
+        solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist()
+        
+        departamento_selecionado = ""
+        filial_selecionada = ""
+
+        # Inicializar estados da sessão se não existirem
+        if 'solicitante_selecionado' not in st.session_state:
+            st.session_state.solicitante_selecionado = ""
+        if 'requisicao_numero' not in st.session_state:
+            st.session_state.requisicao_numero = ""
+        if 'data_requisicao' not in st.session_state:
+            st.session_state.data_requisicao = datetime.date.today()
+        if 'tipo_pedido' not in st.session_state:
+            st.session_state.tipo_pedido = "LOCAL"
+        if 'item_codigo' not in st.session_state:
+            st.session_state.item_codigo = ""
+        if 'item_material' not in st.session_state:
+            st.session_state.item_material = ""
+        if 'unidade_medida' not in st.session_state:
+            st.session_state.unidade_medida = "UN"
+        if 'item_quantidade' not in st.session_state:
+            st.session_state.item_quantidade = 1
+
+        # Usando colunas para compactar a primeira linha
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        with col1:
+            solicitante_selecionado = st.selectbox(
+                "Solicitante", 
+                solicitantes_nomes,
+                key="select_solicitante",
+                index=solicitantes_nomes.index(st.session_state.solicitante_selecionado) if st.session_state.solicitante_selecionado in solicitantes_nomes else 0
+            )
+            if solicitante_selecionado:
+                solicitante_info = st.session_state.df_solicitantes[st.session_state.df_solicitantes['NOME'] == solicitante_selecionado].iloc[0]
+                departamento_selecionado = solicitante_info['DEPARTAMENTO']
+                filial_selecionada = solicitante_info['FILIAL']
+        
+        with col2:
+            st.text_input("Departamento", value=departamento_selecionado, disabled=True, key="display_departamento")
+        
+        with col3:
+            st.text_input("Filial", value=filial_selecionada, disabled=True, key="display_filial")
+            
+        with col4:
+            requisicao = st.text_input("N° Requisição", key="input_requisicao", value=st.session_state.requisicao_numero)
+
+        # Segunda linha para os outros campos
+        col5, col6 = st.columns(2)
+        with col5:
+            data_requisicao = st.date_input("Data da Requisição", st.session_state.data_requisicao, key="input_data")
+        with col6:
+            tipo_pedido = st.selectbox(
+                "Tipo de Pedido", 
+                ["LOCAL", "EMERGENCIAL", "PROGRAMADO"],
+                key="select_tipo_pedido",
+                index=["LOCAL", "EMERGENCIAL", "PROGRAMADO"].index(st.session_state.tipo_pedido)
+            )
+        
+        st.markdown("---")
+        st.subheader("Itens da Requisição")
+        
+        if not st.session_state.itens_requisicao_temp.empty:
+            st.session_state.itens_requisicao_temp = st.data_editor(
+                st.session_state.itens_requisicao_temp,
+                use_container_width=True,
+                num_rows='dynamic',
+                column_config={
+                    "CODIGO_MATERIAL": "Código Material",
+                    "MATERIAL": "Descrição Material",
+                    "UN": "Unidade de Medida",
+                    "QUANTIDADE": st.column_config.NumberColumn("Quantidade", min_value=1)
+                },
+                key="editor_itens"
+            )
+
+        col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
+        with col_item1:
+            item_codigo = st.text_input("Código do Material", key="input_codigo_material", value=st.session_state.item_codigo)
+        with col_item2:
+            descricao_material = ""
+            if item_codigo and not st.session_state.df_materiais.empty:
+                material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
+                if not material_info.empty:
+                    descricao_material = material_info.iloc[0]['DESCRICAO']
+            
+            item_material = st.text_input(
+                "Descrição do Material", 
+                value=descricao_material, 
+                disabled=True, 
+                key="input_material"
+            )
+        
+        with col_item3:
+            unidade_medida = st.selectbox(
+                "Unidade de Medida",
+                [
+                    "UN", "TB", "PÇ", "KIT", "CX", "FR", "GL", "KG", "G", "MG", 
+                    "L", "ML", "M", "CM", "MM", "M2", "M3", "PCT", "RL", "BD", 
+                    "AMP", "SC", "T", "DZ", "CJ", "JG", "PAR", "CXA", "FAR", 
+                    "BL", "CR", "PL", "TON", "LT", "S", "CAP",
+                ],
+                key="select_unidade_medida",
+                index=[
+                    "UN", "TB", "PÇ", "KIT", "CX", "FR", "GL", "KG", "G", "MG", 
+                    "L", "ML", "M", "CM", "MM", "M2", "M3", "PCT", "RL", "BD", 
+                    "AMP", "SC", "T", "DZ", "CJ", "JG", "PAR", "CXA", "FAR", 
+                    "BL", "CR", "PL", "TON", "LT", "S", "CAP",
+                ].index(st.session_state.unidade_medida)
+            )
+
+        with col_item4:
+            item_quantidade = st.number_input(
+                "Quantidade", 
+                min_value=1, 
+                value=st.session_state.item_quantidade, 
+                key="input_quantidade"
+            )
+            
+            if st.button("➕ Adicionar Item", key="btn_adicionar_item"):
+                if item_codigo and item_material and item_quantidade > 0 and unidade_medida:
+                    novo_item = pd.DataFrame([{
+                        "CODIGO_MATERIAL": item_codigo, 
+                        "MATERIAL": item_material, 
+                        "UN": unidade_medida, 
+                        "QUANTIDADE": item_quantidade
+                    }])
+                    st.session_state.itens_requisicao_temp = pd.concat(
+                        [st.session_state.itens_requisicao_temp, novo_item], 
+                        ignore_index=True
+                    )
+                    st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
+                    
+                    # Limpar campos do item após adicionar
+                    st.session_state.item_codigo = ""
+                    st.session_state.item_material = ""
+                    st.session_state.unidade_medida = "UN"
+                    st.session_state.item_quantidade = 1
+                    st.rerun()
+                else:
+                    st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
+        
+        st.write("---")
+        
+        if st.button("Finalizar e Registrar Requisição", key="btn_finalizar_requisicao"):
+            if requisicao and not st.session_state.itens_requisicao_temp.empty:
+                linhas_a_adicionar = []
+                for _, item_row in st.session_state.itens_requisicao_temp.iterrows():
+                    nova_linha = {
+                        "DATA": data_requisicao,
+                        "SOLICITANTE": solicitante_selecionado,
+                        "DEPARTAMENTO": departamento_selecionado,
+                        "FILIAL": filial_selecionada,
+                        "CODIGO_MATERIAL": item_row["CODIGO_MATERIAL"],
+                        "MATERIAL": item_row["MATERIAL"],
+                        "UN": item_row["UN"],
+                        "QUANTIDADE": item_row["QUANTIDADE"],
+                        "TIPO_PEDIDO": tipo_pedido,
+                        "REQUISICAO": requisicao,
+                        "FORNECEDOR": "", "ORDEM_COMPRA": "", "VALOR_ITEM": 0.0, "VALOR_RENEGOCIADO": 0.0,
+                        "DATA_APROVACAO": pd.NaT, "PREVISAO_ENTREGA": pd.NaT, "CONDICAO_FRETE": "",
+                        "STATUS_PEDIDO": "PENDENTE", "DATA_ENTREGA": pd.NaT,
+                        "DIAS_ATRASO": 0, "DIAS_EMISSAO": 0, "DOC NF": ""
+                    }
+                    linhas_a_adicionar.append(nova_linha)
+                
+                # Converte a lista de dicionários para um DataFrame
+                df_a_adicionar = pd.DataFrame(linhas_a_adicionar)
+                
+                # Concatena os DataFrames
+                st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_a_adicionar], ignore_index=True)
+                
+                salvar_dados_pedidos(st.session_state.df_pedidos)
+                
+                # RESETAR TODOS OS CAMPOS APÓS SALVAR
+                st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"])
+                st.session_state.solicitante_selecionado = ""
+                st.session_state.requisicao_numero = ""
+                st.session_state.data_requisicao = datetime.date.today()
+                st.session_state.tipo_pedido = "LOCAL"
+                st.session_state.item_codigo = ""
+                st.session_state.item_material = ""
+                st.session_state.unidade_medida = "UN"
+                st.session_state.item_quantidade = 1
+                
+                st.success("Requisição registrada com sucesso! Vá para 'Atualizar Pedidos' para completar as informações.")
+                st.balloons()
+                st.rerun()
+            else:
+                st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
+
+    elif menu == "✍️ Pedidos (OC)":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1>
+                <p>Vincule as Ordens de Compra às Requisições Pendentes</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+        st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
+        st.info("Edite os campos diretamente na tabela abaixo e selecione las linhas para exclusão.")
+        
+        # CORREÇÃO: Criar uma cópia explícita para evitar problemas de referência
+        pedidos_pendentes_oc = st.session_state.df_pedidos[
+            (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | 
+            (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")
+        ].copy()
+        
+        if pedidos_pendentes_oc.empty:
+            st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
+            st.stop()
+        
+        # Salvar os índices originais para referência posterior
+        indices_originais = pedidos_pendentes_oc.index.tolist()
+        
+        # Processar datas para exibição no editor
+        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+            if col in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_brazilian_date)
+        
+        df_almox = st.session_state.df_almoxarifado.copy()
+        if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
+            df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
+            if 'ORDEM_COMPRA' in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc = pedidos_pendentes_oc.merge(
+                    df_almox_oc, 
+                    on='ORDEM_COMPRA', 
+                    how='left', 
+                    suffixes=('', '_almox')
+                )
+                
+                if 'DOC NF_almox' in pedidos_pendentes_oc.columns:
+                    pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
+                    pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+        
+        # Converte datas para o formato de exibição do editor (date)
+        data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
+        for col in data_cols_to_convert:
+            if col in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(
+                    lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime.datetime)) else None
+                )
+    
+        # Adiciona a coluna de exclusão - CORREÇÃO: resetar índice primeiro
+        pedidos_pendentes_oc_reset = pedidos_pendentes_oc.reset_index(drop=True)
+        pedidos_pendentes_oc_reset['Excluir'] = False
+        
+        cols_para_editar = [
+            "Excluir", "REQUISICAO", "DATA", "SOLICITANTE", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+            "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+            "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
+        ]
+        
+        cols_disponiveis = [col for col in cols_para_editar if col in pedidos_pendentes_oc_reset.columns]
+        df_editavel = pedidos_pendentes_oc_reset[cols_disponiveis].copy()
+        
+        with st.form(key="form_atualizar_pedidos"):
+            edited_df = st.data_editor(
+                df_editavel,
+                use_container_width=True,
+                hide_index=True,
+                column_order=cols_disponiveis,
+                column_config={
+                    "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
+                    "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
+                    "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
+                    "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+                    "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
+                    "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
+                    "UN": st.column_config.TextColumn("UN", disabled=True),
+                    "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
+                    "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
+                    "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
+                    "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
+                    "VALOR_RENegOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
+                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
+                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD-MM-YYYY"),
+                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]),
+                }
+            )
+            
+            submitted = st.form_submit_button("Salvar Atualizações")
+    
+        if submitted:
+            st.info("Processando alterações...")
+    
+            # DEBUG: Verificar se há alterações
+            changes_detected = False
+            
+            # CORREÇÃO: Mapear corretamente os índices para exclusão
+            linhas_para_excluir = edited_df[edited_df['Excluir'] == True].index.tolist()
+            
+            if linhas_para_excluir:
+                changes_detected = True
+                # Converter índices do editor para índices originais
+                indices_para_excluir = [indices_originais[i] for i in linhas_para_excluir if i < len(indices_originais)]
+                
+                # Excluir as linhas do DataFrame principal
+                st.session_state.df_pedidos = st.session_state.df_pedidos.drop(indices_para_excluir)
+                st.success(f"{len(indices_para_excluir)} linha(s) excluída(s) com sucesso!")
+    
+            # Processar as linhas que NÃO foram marcadas para exclusão
+            linhas_para_atualizar = edited_df[edited_df['Excluir'] == False]
+            
+            for index, edited_row in linhas_para_atualizar.iterrows():
+                if index < len(indices_originais):
+                    original_index = indices_originais[index]
+                    
+                    # Verificar se houve alterações nesta linha
+                    original_row = df_editavel.loc[index]
+                    row_changed = False
+                    
+                    for col in edited_row.index:
+                        if col != 'Excluir' and str(edited_row[col]) != str(original_row[col]):
+                            row_changed = True
+                            changes_detected = True
+                            break
+                    
+                    if row_changed:
+                        # Converte as colunas de data do editor para datetime
+                        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+                            edited_row[col] = parse_date_from_editor(edited_row[col])
+    
+                        # Trata os dados numéricos do editor
+                        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                            if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
+                                edited_row[col_val] = 0
+                            else:
+                                # Converte string para float, tratando formato brasileiro
+                                if isinstance(edited_row[col_val], str):
+                                    edited_row[col_val] = float(edited_row[col_val].replace('R$', '').replace('.', '').replace(',', '.').strip())
+                                else:
+                                    edited_row[col_val] = float(edited_row[col_val])
+                        
+                        # Recalcula 'DIAS_EMISSAO'
+                        dias_emissao = 0
+                        if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']):
+                            try:
+                                dias_emissao = (edited_row['DATA_APROVACAO'] - edited_row['DATA']).days
+                            except:
+                                dias_emissao = 0
+    
+                        # Atualiza a linha correspondente no DataFrame principal
+                        if original_index in st.session_state.df_pedidos.index:
+                            st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
+                            st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
+                            st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_row['VALOR_ITEM']
+                            st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
+                            st.session_state.df_pedidos.loc[original_index, 'PREVISAO_ENTREGA'] = edited_row['PREVISAO_ENTREGA']
+                            st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
+                            st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
+                            st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
+    
+            # Salvar apenas se houve alterações
+            if not changes_detected:
+                st.info("Nenhuma alteração detectada.")
+            else:
+                salvar_dados_pedidos(st.session_state.df_pedidos)
+                st.success("Dados atualizados com sucesso!")
+                time.sleep(2)
+                st.rerun()
+
+    elif menu == "📜 Histórico ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📜 HISTÓRICO E EDIÇÃO DE PEDIDOS</h1>
+                <p>Gerencie e Edite os Registros Anteriores</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.header("📜 Visualização
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     credentials_info = st.secrets["gcp_service_account"]
