@@ -195,6 +195,7 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Conexão e Carregamento de Dados ---
+@st.cache_data(ttl=300)
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -246,24 +247,17 @@ def parse_date_from_editor(date_value):
     return pd.to_datetime(date_value, errors='coerce')
 
 def parse_brazilian_date(date_str):
+    """Converte datas em formato brasileiro para datetime"""
     if pd.isna(date_str) or date_str == '' or date_str is None:
         return pd.NaT
     try:
-        # Tenta parse no formato DD-MM-YYYY (formato salvo)
-        if isinstance(date_str, str) and '-' in date_str:
+        # Tenta vários formatos de data
+        formats = ['%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%d-%m-%y', '%d/%m/%y']
+        for fmt in formats:
             try:
-                return datetime.datetime.strptime(date_str, '%d-%m-%Y')
-            except:
-                pass
-        
-        # Tenta parse no formato DD/MM/YYYY
-        if isinstance(date_str, str) and '/' in date_str:
-            try:
-                return datetime.datetime.strptime(date_str, '%d/%m/%Y')
-            except:
-                pass
-        
-        # Tenta parse automático do pandas como fallback
+                return datetime.datetime.strptime(str(date_str), fmt)
+            except ValueError:
+                continue
         return pd.to_datetime(date_str, dayfirst=True, errors='coerce')
     except:
         return pd.NaT
@@ -292,6 +286,7 @@ def criar_dataframe_pedidos_vazio():
         "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
     ])
 
+@st.cache_data(ttl=300)
 def carregar_dados_pedidos():
     """Carrega o DataFrame de pedidos do Google Sheets."""
     try:
@@ -406,7 +401,7 @@ def criar_dataframe_solicitantes_vazio():
     """Cria um DataFrame de solicitantes vazio."""
     return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=300)
 def carregar_dados_solicitantes():
     """Carrega dados dos solicitantes do Google Sheets (quarta aba)."""
     try:
@@ -439,7 +434,6 @@ def salvar_dados_solicitantes(df):
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
-
 def validar_dados_pedidos(df):
     """Valida e corrige dados inconsistentes no DataFrame de pedidos"""
     df = df.copy()
@@ -458,6 +452,7 @@ def validar_dados_pedidos(df):
     
     return df
 
+@st.cache_data(ttl=300)
 def carregar_dados_almoxarifado():
     """Carrega dados do almoxarifado para preencher a nota fiscal."""
     try:
@@ -478,7 +473,7 @@ def carregar_dados_almoxarifado():
         st.warning(f"Aviso: Não foi possível carregar dados do Almoxarifado para preencher a nota fiscal. Verifique a aba 'Almoxarifado' da planilha. {e}")
         return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=300)
 def carregar_dados_materiais():
     """Carrega dados dos materiais do Google Sheets (terceira aba)."""
     try:
@@ -491,7 +486,6 @@ def carregar_dados_materiais():
     except Exception as e:
         st.error(f"Erro ao carregar dados de materiais: {e}")
         return pd.DataFrame(columns=["MATERIAL", "DESCRICAO"])
-
 
 def salvar_dados_materiais(df):
     """Salva os dados de materiais no Google Sheets (terceira aba - MATERIAIS)."""
@@ -519,6 +513,12 @@ USERS = {
 }
 
 def fazer_login(email, senha):
+    """Valida as credenciais do usuário"""
+    import re
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        st.error("Formato de e-mail inválido")
+        return
+        
     if email in USERS and USERS[email]["password"] == senha:
         st.session_state['logado'] = True
         st.session_state['nome_colaborador'] = USERS[email]["name"]
@@ -572,10 +572,6 @@ def render_main_app():
             st.session_state['logado'] = False
             st.session_state.pop('nome_colaborador', None)
             st.rerun()
-
-# ... código anterior ...
-
-# ... código anterior ...
 
     if menu == "📝 Requisição":
         st.markdown("""
@@ -777,10 +773,6 @@ def render_main_app():
             else:
                 st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
 
-# ... resto do código ...
-
-# ... resto do código ...
-
     elif menu == "✍️ Pedidos (OC)":
         st.markdown("""
             <div class='header-container'>
@@ -790,7 +782,7 @@ def render_main_app():
         """, unsafe_allow_html=True)
     
         st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
-        st.info("Edite os campos diretamente na tabela abaixo e selecione as linhas para exclusão.")
+        st.info("Edite os campos diretamente na tabela abaixo e selecione las linhas para exclusão.")
         
         # CORREÇÃO: Criar uma cópia explícita para evitar problemas de referência
         pedidos_pendentes_oc = st.session_state.df_pedidos[
@@ -819,6 +811,7 @@ def render_main_app():
                     on='ORDEM_COMPRA', 
                     how='left', 
                     suffixes=('', '_almox')
+                )
                 
                 if 'DOC NF_almox' in pedidos_pendentes_oc.columns:
                     pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
@@ -951,7 +944,6 @@ def render_main_app():
                 time.sleep(2)
                 st.rerun()
 
-    
     elif menu == "📜 Histórico ":
         st.markdown("""
             <div class='header-container'>
@@ -979,9 +971,7 @@ def render_main_app():
             almox_map = df_almox.set_index('ORDEM_COMPRA')['DOC NF'].to_dict()
             # Aplicar o mapeamento sem fazer merge
             df_history['DOC NF'] = df_history['ORDEM_COMPRA'].map(almox_map).fillna(df_history['DOC NF'])
-            df_history['DOC NF'] = df_history['DOC NF_almox'].fillna(df_history['DOC NF'])
-            df_history.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
-    
+        
         df_valid_dates = df_history.dropna(subset=['DATA'])
         
         if not df_valid_dates.empty:
@@ -1125,7 +1115,6 @@ def render_main_app():
             edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
             edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(calcular_dias_emissao, axis=1)
 
-
             for col in edited_history_df.columns:
                 if col in st.session_state.df_pedidos.columns:
                     st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
@@ -1263,7 +1252,7 @@ def render_main_app():
         if not df_analise['DATA'].isnull().all():
             meses_disponiveis = df_analise['DATA'].dt.month.unique()
             anos_disponiveis = df_analise['DATA'].dt.year.unique()
-            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Jully", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             with col_filtro1:
                 mes_selecionado = st.multiselect("Selecione o Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis))
             with col_filtro2:
@@ -1513,7 +1502,7 @@ def render_main_app():
             with col_filtro_p2:
                 ano_selecionado_p = st.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
-            st.info("Nenhum pedido com data válida para análise.")
+            st.info("Nenhum pedido avec data válida para análise.")
             st.stop()
 
         if mes_selecionado_p and ano_selecionado_p:
@@ -1548,7 +1537,7 @@ def render_main_app():
         col1, col2, col3 = st.columns(3)
         with col1:
             total_pedidos_local = len(df_performance_local)
-            st.metric("Total de Pedidos Locais", total_pedidos_local)
+            st.metric("Total de Pedidos Locals", total_pedidos_local)
         with col2:
             media_economia = df_negociados['PERC_ECONOMIA'].mean() if 'PERC_ECONOMIA' in df_negociados.columns and not df_negociados.empty else 0
             st.metric("Média de Economia (%)", f"{media_economia:.2f}%")
