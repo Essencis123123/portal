@@ -137,6 +137,19 @@ def parse_brazil_number(value_str):
     except (ValueError, TypeError):
         return pd.NaT
 
+def render_login_page():
+    try:
+        st.title("🏭 Login do Almoxarifado")
+        with st.form("login_form"):
+            email = st.text_input("E-mail")
+            senha = st.text_input("Senha", type="password")
+            if st.form_submit_button("Entrar"):
+                fazer_login(email, senha)
+    except Exception as e:
+        st.error(f"Erro na renderização da página de login: {e}")
+
+
+
 def _to_datetime(series, dayfirst=True):
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
 
