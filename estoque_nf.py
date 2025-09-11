@@ -178,12 +178,12 @@ def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
     
-def _clean_string_column(series):
-    """Limpa strings removendo espaços extras e quebras de linha."""
-    if not series.empty:
-        # Substitui quebras de linha e múltiplos espaços por um único espaço
-        return series.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
-    return series
+def _clean_string(s):
+    """Limpa uma string removendo espaços extras e quebras de linha."""
+    if pd.isna(s):
+        return ''
+    # Substitui quebras de linha e múltiplos espaços por um único espaço
+    return re.sub(r'[\r\n\s]+', ' ', str(s)).strip()
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
@@ -227,12 +227,6 @@ def carregar_dados_almoxarifado():
             if col in df.columns:
                 df[col] = df[col].apply(parse_brazil_number).fillna(0)
         
-        # Limpar espaços e quebras de linha nas colunas de texto
-        if 'FORNECEDOR_NF' in df.columns:
-            df['FORNECEDOR_NF'] = _clean_string_column(df['FORNECEDOR_NF'])
-        if 'ORDEM_COMPRA' in df.columns:
-            df['ORDEM_COMPRA'] = _clean_string_column(df['ORDEM_COMPRA'])
-
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
@@ -307,9 +301,6 @@ def carregar_dados_pedidos():
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
-        
-        # Manter os dados originais brutos aqui para a lógica de seleção
-        # A limpeza agora será feita apenas na exibição e na comparação de strings
         
         return df
     except Exception as e:
@@ -419,7 +410,8 @@ def render_registrar_nf_page():
             col1_form, col2_form, col3_form = st.columns(3)
             
             with col1_form:
-                fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+                # Agora, limpamos os nomes apenas para a visualização no selectbox
+                fornecedores_disponiveis = [_clean_string(f) for f in st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()]
                 fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select")
                 nf_numero = st.text_input("Número da NF*", key="nf_numero_input")
 
@@ -434,9 +426,9 @@ def render_registrar_nf_page():
                 
                 ordens_disponiveis = ['']
                 if fornecedor_selecionado:
-                    # A lógica de filtragem agora usa strip() para remover espaços, garantindo a correspondência
+                    # A lógica de filtragem agora usa a versão limpa do fornecedor para encontrar as ordens de compra
                     pedidos_filtrados = st.session_state.df_pedidos[
-                        st.session_state.df_pedidos['FORNECEDOR'].astype(str).str.strip().str.upper() == fornecedor_selecionado.strip().upper()
+                        st.session_state.df_pedidos['FORNECEDOR'].apply(_clean_string).str.upper() == fornecedor_selecionado.upper()
                     ]
                     ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
                 
@@ -448,9 +440,8 @@ def render_registrar_nf_page():
                 )
                 
                 if ordem_compra_nf and st.session_state.get('last_oc_selected') != ordem_compra_nf:
-                    # Usamos a mesma lógica de limpeza para garantir a correspondência
                     oc_items = st.session_state.df_pedidos[
-                        st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                        st.session_state.df_pedidos['ORDEM_COMPRA'].apply(_clean_string).str.upper() == _clean_string(ordem_compra_nf).upper()
                     ].copy()
                     if not oc_items.empty:
                         if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
@@ -824,7 +815,7 @@ def render_consultar_nfs_page():
                 use_container_width=True,
                 height=400,
                 column_config={
-                    "DATA": st.column_config.TextColumn("Data"),
+                    "Data": st.column_config.TextColumn("Data"),
                     "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
                     "Anexo NF": st.column_config.TextColumn(
                         "Anexos NF",
