@@ -340,6 +340,13 @@ def carregar_dados_solicitantes():
         st.error(f"Erro ao carregar dados de solicitantes: {e}")
         return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
+def filter_oc():
+    """Função de callback para filtrar a Ordem de Compra e recarregar o script."""
+    # Essa função é chamada quando o selectbox de fornecedor muda.
+    # A re-execução é automática.
+    st.session_state.oc_select = ''
+    st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
+    
 # ==============================================================================
 # INTERFACE PRINCIPAL
 # ==============================================================================
@@ -405,7 +412,7 @@ def render_registrar_nf_page():
             
             with col1_form:
                 fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
-                fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select")
+                fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select", on_change=filter_oc)
                 nf_numero = st.text_input("Número da NF*", key="nf_numero_input")
 
             with col2_form:
