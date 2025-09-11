@@ -867,51 +867,9 @@ def render_consultar_nfs_page():
                     (df_consulta['DATA'].dt.date <= data_fim_consulta)
                 ]
         
-        st.subheader("🛠️ Editar Notas Fiscais")
+        st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
         
         if not df_consulta.empty:
-            df_editavel = df_consulta.copy()
-            
-            # Use o índice do DataFrame original para o data_editor
-            df_editavel.set_index(df_editavel.index, inplace=True)
-            
-            # Transforma a coluna de Valor para float, caso ainda não seja
-            df_editavel['V. TOTAL NF'] = df_editavel['V. TOTAL NF'].astype(float)
-            
-            # Exibe a tabela de edição com os campos permitidos
-            edited_df = st.data_editor(
-                df_editavel[['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'V. TOTAL NF', 'STATUS_FINANCEIRO']],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "NF": st.column_config.TextColumn("Número NF", disabled=True),
-                    "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra", disabled=True),
-                    "FORNECEDOR_NF": st.column_config.TextColumn("Fornecedor", disabled=True),
-                    "V. TOTAL NF": st.column_config.NumberColumn("Valor Total NF", format="%.2f", disabled=False), 
-                    "STATUS_FINANCEIRO": st.column_config.SelectboxColumn("Status", options=['EM ANDAMENTO', 'NF PROBLEMA', 'CAPTURADO', 'FINALIZADO'], required=True)
-                },
-                key="editor_consulta"
-            )
-
-            st.markdown("---")
-            if st.button("💾 Salvar Alterações"):
-                for index, row in edited_df.iterrows():
-                    # Mapeia o índice do data_editor para o índice original do DataFrame
-                    original_index = edited_df.index[index]
-                    
-                    st.session_state.df_almoxarifado.loc[original_index, 'V. TOTAL NF'] = row['V. TOTAL NF']
-                    st.session_state.df_almoxarifado.loc[original_index, 'STATUS_FINANCEIRO'] = row['STATUS_FINANCEIRO']
-                
-                if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                    st.success("✅ Alterações salvas com sucesso!")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("❌ Erro ao salvar as alterações. Tente novamente.")
-            
-            st.markdown("---")
-            st.subheader("Detalhes da Nota Fiscal")
-            
             df_exibir_consulta = df_consulta[[
                 'DATA', 'FORNECEDOR_NF', 'NF', 'ORDEM_COMPRA', 'VOLUME', 'V. TOTAL NF',
                 'STATUS_FINANCEIRO', 'DOC NF'
@@ -965,7 +923,7 @@ def render_configuracoes_page():
         </div>
     """, unsafe_allow_html=True)
     
-    df = st.session_state.df_almoxarifado
+    df = st.session_state.df_almoxarifado.copy()
     
     st.subheader("⚙️ Configurações Gerais")
     col1, col2 = st.columns(2)
@@ -997,6 +955,46 @@ def render_configuracoes_page():
             mime="text/csv",
             help="Clique para baixar uma cópia de segurança dos dados."
         )
+
+    # --- Seção para a edição de notas fiscais ---
+    st.markdown("---")
+    st.subheader("📝 Editar Notas Fiscais")
+    
+    if not df.empty:
+        df_editavel = df[['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'V. TOTAL NF', 'STATUS_FINANCEIRO']].copy()
+        
+        df_editavel.set_index(df_editavel.index, inplace=True)
+        df_editavel['V. TOTAL NF'] = df_editavel['V. TOTAL NF'].astype(float)
+        
+        edited_df = st.data_editor(
+            df_editavel,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "NF": st.column_config.TextColumn("Número NF", disabled=True),
+                "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra", disabled=True),
+                "FORNECEDOR_NF": st.column_config.TextColumn("Fornecedor", disabled=True),
+                "V. TOTAL NF": st.column_config.NumberColumn("Valor Total NF", format="%.2f", disabled=False), 
+                "STATUS_FINANCEIRO": st.column_config.SelectboxColumn("Status", options=['EM ANDAMENTO', 'NF PROBLEMA', 'CAPTURADO', 'FINALIZADO'], required=True)
+            },
+            key="editor_config"
+        )
+        
+        st.markdown("---")
+        if st.button("💾 Salvar Alterações"):
+            for index, row in edited_df.iterrows():
+                original_index = edited_df.index[index]
+                st.session_state.df_almoxarifado.loc[original_index, 'V. TOTAL NF'] = row['V. TOTAL NF']
+                st.session_state.df_almoxarifado.loc[original_index, 'STATUS_FINANCEIRO'] = row['STATUS_FINANCEIRO']
+            
+            if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                st.success("✅ Alterações salvas com sucesso!")
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error("❌ Erro ao salvar as alterações. Tente novamente.")
+    else:
+        st.info("📝 Nenhum dado disponível para edição.")
 
 # ==============================================================================
 # EXECUÇÃO PRINCIPAL (ATUALIZADA)
