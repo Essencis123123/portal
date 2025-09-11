@@ -308,12 +308,9 @@ def carregar_dados_pedidos():
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
         
-        # Limpar espaços e quebras de linha nas colunas de texto
-        if 'FORNECEDOR' in df.columns:
-            df['FORNECEDOR'] = _clean_string_column(df['FORNECEDOR'])
-        if 'ORDEM_COMPRA' in df.columns:
-            df['ORDEM_COMPRA'] = _clean_string_column(df['ORDEM_COMPRA'])
-
+        # Manter os dados originais brutos aqui para a lógica de seleção
+        # A limpeza agora será feita apenas na exibição e na comparação de strings
+        
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de pedidos: {e}")
@@ -437,7 +434,10 @@ def render_registrar_nf_page():
                 
                 ordens_disponiveis = ['']
                 if fornecedor_selecionado:
-                    pedidos_filtrados = st.session_state.df_pedidos[st.session_state.df_pedidos['FORNECEDOR'].str.strip() == fornecedor_selecionado.strip()]
+                    # A lógica de filtragem agora usa strip() para remover espaços, garantindo a correspondência
+                    pedidos_filtrados = st.session_state.df_pedidos[
+                        st.session_state.df_pedidos['FORNECEDOR'].astype(str).str.strip().str.upper() == fornecedor_selecionado.strip().upper()
+                    ]
                     ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
                 
                 ordem_compra_nf = st.selectbox(
@@ -448,7 +448,10 @@ def render_registrar_nf_page():
                 )
                 
                 if ordem_compra_nf and st.session_state.get('last_oc_selected') != ordem_compra_nf:
-                    oc_items = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == ordem_compra_nf.strip()].copy()
+                    # Usamos a mesma lógica de limpeza para garantir a correspondência
+                    oc_items = st.session_state.df_pedidos[
+                        st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                    ].copy()
                     if not oc_items.empty:
                         if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
                             oc_items['QUANTIDADE_ENTREGUE'] = 0.0
