@@ -219,14 +219,6 @@ def get_gspread_client():
         
         client = gspread.authorize(creds)
         
-        # Removendo a chamada de teste que causou o erro em algumas versões de biblioteca
-        # try:
-        #     client.list_spreadsheet_files()
-        #     return client
-        # except Exception as test_error:
-        #     st.error(f"Erro ao testar conexão com Google Sheets: {test_error}")
-        #     return None
-        
         return client
 
     except Exception as e:
@@ -239,28 +231,21 @@ def parse_date_from_editor(date_value):
     if date_value is None or pd.isna(date_value) or date_value == '':
         return pd.NaT
     
-    # Se já for datetime, retorna como está
     if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
         return date_value
     
-    # Se for date (do datetime.date), converte para datetime
     if isinstance(date_value, datetime.date):
         return datetime.datetime.combine(date_value, datetime.time())
     
-    # Se for string, tenta parse nos formatos esperados
     if isinstance(date_value, str):
         try:
-            # Tenta formato DD-MM-YYYY (com hífen)
             if '-' in date_value and len(date_value.split('-')) == 3:
                 return datetime.datetime.strptime(date_value, '%d-%m-%Y')
-            # Tenta formato DD/MM/YYYY (com barra)
             elif '/' in date_value and len(date_value.split('/')) == 3:
                 return datetime.datetime.strptime(date_value, '%d/%m/%Y')
-            # Tenta formato YYYY-MM-DD (padrão ISO)
             elif '-' in date_value and len(date_value.split('-')) == 3:
                 return datetime.datetime.strptime(date_value, '%Y-%m-%d')
             else:
-                # Tenta parse automático
                 return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
         except ValueError:
             return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
@@ -272,7 +257,6 @@ def parse_brazilian_date(date_str):
     if pd.isna(date_str) or date_str == '' or date_str is None:
         return pd.NaT
     try:
-        # Tenta vários formatos de data
         formats = ['%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%d-%m-%y', '%d/%m/%y']
         for fmt in formats:
             try:
@@ -288,10 +272,8 @@ def formatar_data_brasil_hifen(data):
     if pd.isna(data) or data is None:
         return ""
     try:
-        # Se já for string no formato com hífen, retorna como está
         if isinstance(data, str) and '-' in data and len(data.split('-')) == 3:
             return data
-        # Se for datetime, formata para DD-MM-YYYY
         elif isinstance(data, (pd.Timestamp, datetime.datetime)):
             return data.strftime('%d-%m-%Y')
         else:
@@ -317,10 +299,8 @@ def carregar_dados_pedidos():
             
         sheet = gc.open("dados_pedido")
         
-        # Get all values from the worksheet with the UNFORMATTED_VALUE option
         data = sheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
         
-        # O cabeçalho é a primeira linha
         headers = data[0]
         records = data[1:]
 
@@ -330,17 +310,14 @@ def carregar_dados_pedidos():
         
         df = pd.DataFrame(records, columns=headers)
 
-        # Trata colunas de data com formato BRASILEIRO (DD/MM/YYYY)
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns:
                 df[col] = df[col].apply(parse_brazilian_date)
         
-        # Converte colunas numéricas
         numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO"]
         for col in numeric_cols:
             if col in df.columns:
-                # Converte strings com formato brasileiro para float
                 if df[col].dtype == 'object':
                     df[col] = df[col].apply(lambda x: float(str(x).replace('.', '').replace(',', '.')) 
                                              if pd.notna(x) and str(x).strip() != '' else 0)
@@ -389,12 +366,10 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df.copy()
         
-        # Converte as colunas de data para o formato string com HÍFEN
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(formatar_data_brasil_hifen)
         
-        # Converte valores numéricos para formato de string que o Google Sheets entende
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
@@ -402,14 +377,11 @@ def salvar_dados_pedidos(df):
                     lambda x: str(x).replace('.', ',') if pd.notna(x) and x != '' else ''
                 )
         
-        # Remove a coluna 'VALOR_TOTAL' se ela não for uma coluna original da planilha
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
-        # Substitui NaN por string vazia para evitar problemas na gravação
         df_to_save = df_to_save.fillna('')
         
-        # Limpa a planilha e escreve os novos dados
         worksheet.clear()
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
@@ -431,7 +403,7 @@ def carregar_dados_solicitantes():
             return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
             
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(3)  # Quarta aba (índice 3) é Solicitantes
+        worksheet = sheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
         return df
@@ -462,13 +434,11 @@ def validar_dados_pedidos(df):
     """Valida e corrige dados inconsistentes no DataFrame de pedidos"""
     df = df.copy()
     
-    # Garantir que colunas numéricas sejam numéricas
     numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
-    # Garantir que datas sejam datetime
     date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
     for col in date_cols:
         if col in df.columns:
@@ -506,7 +476,7 @@ def carregar_dados_materiais():
             return pd.DataFrame(columns=["MATERIAL", "DESCRICAO"])
             
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(2)  # Terceira aba (índice 2) é MATERIAIS
+        worksheet = sheet.get_worksheet(2)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
         return df
@@ -519,7 +489,7 @@ def salvar_dados_materiais(df):
     try:
         gc = get_gspread_client()
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(2)  # Terceira aba (índice 2) é MATERIAIS
+        worksheet = sheet.get_worksheet(2)
 
         df_copy = df.copy()
         set_with_dataframe(worksheet, df_copy, include_index=False)
@@ -615,7 +585,6 @@ def render_main_app():
         departamento_selecionado = ""
         filial_selecionada = ""
 
-        # Inicializar estados da sessão se não existirem
         if 'solicitante_selecionado' not in st.session_state:
             st.session_state.solicitante_selecionado = ""
         if 'requisicao_numero' not in st.session_state:
@@ -633,7 +602,6 @@ def render_main_app():
         if 'item_quantidade' not in st.session_state:
             st.session_state.item_quantidade = 1
 
-        # Usando colunas para compactar a primeira linha
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         with col1:
             solicitante_selecionado = st.selectbox(
@@ -656,7 +624,6 @@ def render_main_app():
         with col4:
             requisicao = st.text_input("N° Requisição", key="input_requisicao", value=st.session_state.requisicao_numero)
 
-        # Segunda linha para os outros campos
         col5, col6 = st.columns(2)
         with col5:
             data_requisicao = st.date_input("Data da Requisição", st.session_state.data_requisicao, key="input_data")
@@ -742,7 +709,6 @@ def render_main_app():
                     )
                     st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
                     
-                    # Limpar campos do item após adicionar
                     st.session_state.item_codigo = ""
                     st.session_state.item_material = ""
                     st.session_state.unidade_medida = "UN"
@@ -775,15 +741,12 @@ def render_main_app():
                     }
                     linhas_a_adicionar.append(nova_linha)
                 
-                # Converte a lista de dicionários para um DataFrame
                 df_a_adicionar = pd.DataFrame(linhas_a_adicionar)
                 
-                # Concatena os DataFrames
                 st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_a_adicionar], ignore_index=True)
                 
                 salvar_dados_pedidos(st.session_state.df_pedidos)
                 
-                # RESETAR TODOS OS CAMPOS APÓS SALVAR
                 st.session_state.itens_requisicao_temp = pd.DataFrame(columns=["CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"])
                 st.session_state.solicitante_selecionado = ""
                 st.session_state.requisicao_numero = ""
@@ -811,7 +774,6 @@ def render_main_app():
         st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
         st.info("Edite os campos diretamente na tabela abaixo e selecione las linhas para exclusão.")
         
-        # CORREÇÃO: Criar uma cópia explícita para evitar problemas de referência
         pedidos_pendentes_oc = st.session_state.df_pedidos[
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | 
             (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")
@@ -821,10 +783,8 @@ def render_main_app():
             st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!")
             st.stop()
         
-        # Salvar os índices originais para referência posterior
         indices_originais = pedidos_pendentes_oc.index.tolist()
         
-        # Processar datas para exibição no editor
         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
             if col in pedidos_pendentes_oc.columns:
                 pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_brazilian_date)
@@ -844,7 +804,6 @@ def render_main_app():
                     pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
                     pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
         
-        # Converte datas para o formato de exibição do editor (date)
         data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
         for col in data_cols_to_convert:
             if col in pedidos_pendentes_oc.columns:
@@ -852,7 +811,6 @@ def render_main_app():
                     lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime.datetime)) else None
                 )
     
-        # Adiciona a coluna de exclusão - CORREÇÃO: resetar índice primeiro
         pedidos_pendentes_oc_reset = pedidos_pendentes_oc.reset_index(drop=True)
         pedidos_pendentes_oc_reset['Excluir'] = False
         
@@ -895,29 +853,22 @@ def render_main_app():
         if submitted:
             st.info("Processando alterações...")
     
-            # DEBUG: Verificar se há alterações
             changes_detected = False
             
-            # CORREÇÃO: Mapear corretamente os índices para exclusão
             linhas_para_excluir = edited_df[edited_df['Excluir'] == True].index.tolist()
             
             if linhas_para_excluir:
                 changes_detected = True
-                # Converter índices do editor para índices originais
                 indices_para_excluir = [indices_originais[i] for i in linhas_para_excluir if i < len(indices_originais)]
-                
-                # Excluir as linhas do DataFrame principal
                 st.session_state.df_pedidos = st.session_state.df_pedidos.drop(indices_para_excluir)
                 st.success(f"{len(indices_para_excluir)} linha(s) excluída(s) com sucesso!")
     
-            # Processar as linhas que NÃO foram marcadas para exclusão
             linhas_para_atualizar = edited_df[edited_df['Excluir'] == False]
             
             for index, edited_row in linhas_para_atualizar.iterrows():
                 if index < len(indices_originais):
                     original_index = indices_originais[index]
                     
-                    # Verificar se houve alterações nesta linha
                     original_row = df_editavel.loc[index]
                     row_changed = False
                     
@@ -928,22 +879,18 @@ def render_main_app():
                             break
                     
                     if row_changed:
-                        # Converte as colunas de data do editor para datetime
                         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
                             edited_row[col] = parse_date_from_editor(edited_row[col])
     
-                        # Trata os dados numéricos do editor
                         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                             if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
                                 edited_row[col_val] = 0
                             else:
-                                # Converte string para float, tratando formato brasileiro
                                 if isinstance(edited_row[col_val], str):
                                     edited_row[col_val] = float(edited_row[col_val].replace('R$', '').replace('.', '').replace(',', '.').strip())
                                 else:
                                     edited_row[col_val] = float(edited_row[col_val])
                         
-                        # Recalcula 'DIAS_EMISSAO'
                         dias_emissao = 0
                         if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']):
                             try:
@@ -951,7 +898,6 @@ def render_main_app():
                             except:
                                 dias_emissao = 0
     
-                        # Atualiza a linha correspondente no DataFrame principal
                         if original_index in st.session_state.df_pedidos.index:
                             st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
                             st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
@@ -962,7 +908,6 @@ def render_main_app():
                             st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
                             st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
     
-            # Salvar apenas se houve alterações
             if not changes_detected:
                 st.info("Nenhuma alteração detectada.")
             else:
@@ -984,19 +929,15 @@ def render_main_app():
 
         df_history = st.session_state.df_pedidos.copy()
         
-        # Uso da nova função auxiliar para garantir que as datas estejam no formato correto
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             df_history[col] = df_history[col].apply(parse_brazilian_date)
         
-        # Recalcula o VALOR_TOTAL com os valores limpos
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
         df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)
     
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
-            # Criar um dicionário para mapeamento rápido
             almox_map = df_almox.set_index('ORDEM_COMPRA')['DOC NF'].to_dict()
-            # Aplicar o mapeamento sem fazer merge
             df_history['DOC NF'] = df_history['ORDEM_COMPRA'].map(almox_map).fillna(df_history['DOC NF'])
         
         df_valid_dates = df_history.dropna(subset=['DATA'])
@@ -1048,7 +989,6 @@ def render_main_app():
             st.warning("Nenhum registro encontrado com os filtros aplicados.")
             st.stop()
         
-        # Cria uma cópia para o editor e formata apenas o status para exibição
         df_for_editor = df_history.copy()
         def formatar_status_display(status):
             if status == 'ENTREGUE':
@@ -1059,7 +999,6 @@ def render_main_app():
                 return status
         df_for_editor['STATUS_PEDIDO'] = df_for_editor['STATUS_PEDIDO'].apply(formatar_status_display)
 
-        # Formata os valores para exibição com 2 casas decimais no df de exibição
         for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
             if col in df_for_editor.columns:
                 df_for_editor[col] = df_for_editor[col].apply(
@@ -1109,7 +1048,6 @@ def render_main_app():
         if not edited_history_df.equals(df_for_editor):
             st.info("Salvando alterações...")
             
-            # Mapeia o status de volta para o valor original (sem emoji)
             edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({
                 '🟢 ENTREGUE': 'ENTREGUE',
                 '🟡 PENDENTE': 'PENDENTE',
@@ -1117,14 +1055,11 @@ def render_main_app():
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
 
-            # Trata os dados numéricos do editor antes de salvar
             for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                 edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
             
-            # Corrige a lista de colunas para o loop
             data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
             
-            # Converte as colunas de data do editor para datetime
             for col in data_cols_history:
                 edited_history_df[col] = edited_history_df[col].apply(parse_date_from_editor)
             
@@ -1227,24 +1162,18 @@ def render_main_app():
                         else:
                             df_novos_materiais = pd.read_excel(uploaded_file_material)
                         
-                        # Converte os nomes das colunas para maiúsculas e remove espaços
                         df_novos_materiais.columns = [col.upper().strip() for col in df_novos_materiais.columns]
 
-                        # Verifica se as colunas necessárias existem
                         if 'CODIGO' not in df_novos_materiais.columns or 'DESCRICAO' not in df_novos_materiais.columns:
                             st.error("O arquivo deve conter as colunas 'CODIGO' e 'DESCRICAO'.")
                         else:
-                            # Preenche valores vazios para evitar o erro de JSON
                             df_novos_materiais = df_novos_materiais.fillna('')
                             
-                            # Converte as colunas para maiúsculas antes de concatenar
                             df_novos_materiais['CODIGO'] = df_novos_materiais['CODIGO'].astype(str).str.upper()
                             df_novos_materiais['DESCRICAO'] = df_novos_materiais['DESCRICAO'].astype(str).str.upper()
 
-                            # Adiciona os novos materiais ao DataFrame principal
                             st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, df_novos_materiais], ignore_index=True)
 
-                            # Remove duplicados
                             st.session_state.df_materiais.drop_duplicates(subset=['CODIGO'], inplace=True, ignore_index=True)
                             
                             salvar_dados_materiais(st.session_state.df_materiais)
@@ -1276,10 +1205,8 @@ def render_main_app():
         st.subheader("Filtros de Período")
         col_filtro1, col_filtro2 = st.columns(2)
         
-        # Cria uma lista de datas válidas para a filtragem
         df_valid_dates = df_analise.dropna(subset=['DATA'])
         
-        # CORREÇÃO: Verifique se há datas válidas antes de criar os filtros
         if not df_valid_dates.empty:
             meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
             anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
@@ -1287,34 +1214,29 @@ def render_main_app():
                            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             
             with col_filtro1:
-                # Garante que o valor padrão seja uma lista vazia se não houver meses
                 default_meses = sorted(meses_disponiveis)
                 mes_selecionado = st.multiselect(
                     "Selecione o Mês", 
                     default_meses, 
                     format_func=lambda x: meses_nomes.get(x), 
-                    default=default_meses if default_meses.any() else []
+                    default=default_meses if default_meses else []
                 )
             
             with col_filtro2:
                 ano_selecionado = st.selectbox("Selecione o Ano", sorted(anos_disponiveis, reverse=True))
 
-            # Aplicar os filtros se eles foram definidos
             if mes_selecionado and ano_selecionado:
                 df_filtrado_dash = df_analise[(df_analise['DATA'].dt.month.isin(mes_selecionado)) & (df_analise['DATA'].dt.year == ano_selecionado)]
             else:
                 df_filtrado_dash = pd.DataFrame()
         else:
-            # Caso não haja datas válidas no DataFrame, exibe um aviso e interrompe
             st.info("Nenhum dado com data válida para filtragem.")
             st.stop()
         
-        # Outra checagem para evitar erros caso os filtros sejam desmarcados
         if df_filtrado_dash.empty:
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
         
-        # Recalcula o VALOR_TOTAL com os valores limpos
         df_filtrado_dash['VALOR_TOTAL'] = df_filtrado_dash['QUANTIDADE'] * df_filtrado_dash['VALOR_ITEM']
         
         st.subheader("Visão Geral")
@@ -1413,22 +1335,18 @@ def render_main_app():
         
         df_abc = df_filtrado_dash.copy()
 
-        # Remove linhas sem valor total ou material
         df_abc = df_abc[df_abc['VALOR_TOTAL'] > 0]
         if df_abc.empty:
             st.info("Nenhum dado com custo total para gerar a Curva ABC.")
         else:
-            # Agrupa os dados por material e calcula o custo total de cada um
             custo_por_material = df_abc.groupby(['CODIGO_MATERIAL', 'MATERIAL'])['VALOR_TOTAL'].sum().reset_index()
             custo_por_material.sort_values(by='VALOR_TOTAL', ascending=False, inplace=True)
             custo_por_material.reset_index(drop=True, inplace=True)
 
-            # Calcula a participação percentual e a participação acumulada
             custo_total_geral = custo_por_material['VALOR_TOTAL'].sum()
             custo_por_material['PARTICIPACAO'] = (custo_por_material['VALOR_TOTAL'] / custo_total_geral)
             custo_por_material['PARTICIPACAO_ACUMULADA'] = custo_por_material['PARTICIPACAO'].cumsum()
 
-            # Classifica os materiais em A, B e C
             def classificar_abc(row):
                 if row['PARTICIPACAO_ACUMULADA'] <= 0.8:
                     return 'A'
@@ -1445,7 +1363,6 @@ def render_main_app():
             with col_abc_1:
                 fig_abc = make_subplots(specs=[[{"secondary_y": True}]])
 
-                # Adiciona o gráfico de barras para o custo total
                 fig_abc.add_trace(
                     go.Bar(
                         x=custo_por_material['CODIGO_MATERIAL'],
@@ -1456,7 +1373,6 @@ def render_main_app():
                     secondary_y=False,
                 )
 
-                # Adiciona o gráfico de linha para a participação acumulada
                 fig_abc.add_trace(
                     go.Scatter(
                         x=custo_por_material['CODIGO_MATERIAL'],
@@ -1468,11 +1384,9 @@ def render_main_app():
                     secondary_y=True,
                 )
 
-                # Adiciona as linhas de referência para as classes A e B
                 fig_abc.add_hline(y=0.8, line_dash="dash", line_color="green", annotation_text="80% (Classe A)", annotation_position="bottom right")
                 fig_abc.add_hline(y=0.95, line_dash="dash", line_color="orange", annotation_text="95% (Classe B)", annotation_position="bottom right")
 
-                # Atualiza o layout do gráfico
                 fig_abc.update_layout(
                     title_text="Curva ABC do Custo dos Materiais",
                     xaxis_title="Material (Código)",
@@ -1548,7 +1462,6 @@ def render_main_app():
             st.info("Nenhum pedido com data válida para análise.")
             st.stop()
         
-        # VERIFICAÇÃO ADICIONAL: para evitar que o código continue com filtros vazios
         if not mes_selecionado_p or ano_selecionado_p is None:
              st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
              st.stop()
@@ -1562,7 +1475,6 @@ def render_main_app():
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
 
-        # Recálculo das colunas de economia para o DataFrame filtrado
         df_negociados = df_performance_filtrado.copy()
         df_negociados = df_negociados[
             (df_negociados['VALOR_RENEGOCIADO'] > 0) & 
