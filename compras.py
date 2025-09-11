@@ -403,7 +403,7 @@ def carregar_dados_solicitantes():
             return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
             
         sheet = gc.open("dados_pedido")
-        # CORRIGIDO: O índice correto para "Solicitantes" é 3
+        # CORREÇÃO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -424,7 +424,7 @@ def salvar_dados_solicitantes(df):
             return
             
         sheet = gc.open("dados_pedido")
-        # CORRIGIDO: O índice correto para "Solicitantes" é 3
+        # CORREÇÃO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
 
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
