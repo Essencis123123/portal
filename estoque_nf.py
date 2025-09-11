@@ -410,9 +410,9 @@ def render_registrar_nf_page():
             col1_form, col2_form, col3_form = st.columns(3)
             
             with col1_form:
-                # Agora, limpamos os nomes apenas para a visualização no selectbox
-                fornecedores_disponiveis = [_clean_string(f) for f in st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()]
-                fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select")
+                # Limpa os nomes apenas para a visualização no selectbox
+                fornecedores_disponiveis_limpos = sorted([_clean_string(f) for f in st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()])
+                fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + fornecedores_disponiveis_limpos, key="fornecedor_nf_select")
                 nf_numero = st.text_input("Número da NF*", key="nf_numero_input")
 
             with col2_form:
@@ -426,11 +426,12 @@ def render_registrar_nf_page():
                 
                 ordens_disponiveis = ['']
                 if fornecedor_selecionado:
-                    # A lógica de filtragem agora usa a versão limpa do fornecedor para encontrar as ordens de compra
+                    # Usa o nome limpo para filtrar no DataFrame, que ainda tem os nomes "sujos"
                     pedidos_filtrados = st.session_state.df_pedidos[
                         st.session_state.df_pedidos['FORNECEDOR'].apply(_clean_string).str.upper() == fornecedor_selecionado.upper()
                     ]
-                    ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
+                    # Limpa as ordens de compra antes de adicionar à lista de opções
+                    ordens_disponiveis.extend([_clean_string(oc) for oc in pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist()])
                 
                 ordem_compra_nf = st.selectbox(
                     "N° Ordem de Compra*",
