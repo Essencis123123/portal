@@ -406,6 +406,10 @@ def carregar_dados_solicitantes():
         worksheet = sheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
+        # Verifica se as colunas esperadas existem
+        if not all(col in df.columns for col in ["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"]):
+             st.error("A planilha de Solicitantes não tem as colunas esperadas: NOME, DEPARTAMENTO, EMAIL, FILIAL.")
+             return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de solicitantes: {e}")
@@ -473,16 +477,20 @@ def carregar_dados_materiais():
     try:
         gc = get_gspread_client()
         if gc is None:
-            return pd.DataFrame(columns=["CODIGO", "DESCRICAO"]) # Corrigido para as colunas corretas
+            return pd.DataFrame(columns=["CODIGO", "DESCRICAO"])
             
         sheet = gc.open("dados_pedido")
         worksheet = sheet.get_worksheet(2)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
+        # Verifica se as colunas esperadas existem
+        if not all(col in df.columns for col in ["CODIGO", "DESCRICAO"]):
+            st.error("A planilha de Materiais não tem as colunas esperadas: CODIGO, DESCRICAO.")
+            return pd.DataFrame(columns=["CODIGO", "DESCRICAO"])
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de materiais: {e}")
-        return pd.DataFrame(columns=["CODIGO", "DESCRICAO"]) # Corrigido para as colunas corretas
+        return pd.DataFrame(columns=["CODIGO", "DESCRICAO"])
 
 def salvar_dados_materiais(df):
     """Salva os dados de materiais no Google Sheets (terceira aba - MATERIAIS)."""
@@ -580,14 +588,9 @@ def render_main_app():
         
         st.header("📝 Registrar Nova Requisição de Compra")
         
-        solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist() if not st.session_state.df_solicitantes.empty else [""]
-        
-        if st.session_state.df_solicitantes.empty:
-            st.warning("Nenhum solicitante encontrado. Por favor, cadastre um na aba 'Cadastro'.")
-            solicitante_selecionado = ""
-            departamento_selecionado = ""
-            filial_selecionada = ""
-        else:
+        # Lógica para preencher o seletor de solicitantes
+        if st.session_state.df_solicitantes is not None and not st.session_state.df_solicitantes.empty:
+            solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist()
             solicitante_selecionado = st.selectbox(
                 "Solicitante", 
                 solicitantes_nomes,
@@ -601,10 +604,17 @@ def render_main_app():
             else:
                 departamento_selecionado = ""
                 filial_selecionada = ""
+        else:
+            st.warning("Nenhum solicitante encontrado. Por favor, cadastre um na aba 'Cadastro'.")
+            solicitante_selecionado = ""
+            departamento_selecionado = ""
+            filial_selecionada = ""
 
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         with col1:
-            st.text_input("Solicitante", value=solicitante_selecionado, disabled=True)
+            # st.text_input("Solicitante", value=solicitante_selecionado, disabled=True)
+            # A linha acima foi removida para evitar duplicidade, o selectbox já é o input
+            pass
         with col2:
             st.text_input("Departamento", value=departamento_selecionado, disabled=True)
         with col3:
@@ -642,16 +652,10 @@ def render_main_app():
 
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         
-        if st.session_state.df_materiais.empty:
-            st.warning("Nenhum material encontrado. Por favor, cadastre um na aba 'Cadastro'.")
-            item_codigo = ""
-            item_material = ""
-            unidade_medida = "UN"
-            item_quantidade = 1
-            st.button("➕ Adicionar Item", key="btn_adicionar_item", disabled=True)
-        else:
+        # Lógica para preencher o seletor de materiais
+        if st.session_state.df_materiais is not None and not st.session_state.df_materiais.empty:
+            item_codigo_options = [""] + st.session_state.df_materiais['CODIGO'].unique().tolist()
             with col_item1:
-                item_codigo_options = [""] + st.session_state.df_materiais['CODIGO'].unique().tolist()
                 item_codigo = st.selectbox("Código do Material", item_codigo_options, key="select_codigo_material")
 
             with col_item2:
@@ -696,6 +700,14 @@ def render_main_app():
                         st.rerun()
                     else:
                         st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
+        else:
+            st.warning("Nenhum material encontrado. Por favor, cadastre um na aba 'Cadastro'.")
+            st.text_input("Código do Material", disabled=True, value="")
+            st.text_input("Descrição do Material", disabled=True, value="")
+            st.selectbox("Unidade de Medida", ["UN"], disabled=True)
+            st.number_input("Quantidade", min_value=1, value=1, disabled=True)
+            st.button("➕ Adicionar Item", key="btn_adicionar_item", disabled=True)
+
         
         st.write("---")
         
