@@ -18,12 +18,13 @@ from google.oauth2.service_account import Credentials
 import json
 import re
 import pytz
+import sys
 
 # ==============================================================================
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
 # ==============================================================================
 # Configuração da página com layout wide e ícone
-st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
+st.set_page_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
 # CSS personalizado para o tema Essencis
 st.markdown(
@@ -349,42 +350,46 @@ def render_login_page():
 
 def render_main_app():
     """Exibe a interface principal da aplicação após o login."""
-    logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
-    logo_img = load_logo(logo_url)
-    
-    if 'df_pedidos' not in st.session_state:
-        st.session_state.df_pedidos = carregar_dados_pedidos()
-    if 'df_almoxarifado' not in st.session_state:
-        st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
-
-    df_solicitantes = carregar_dados_solicitantes()
-
-    # Sidebar
-    with st.sidebar:
-        if logo_img:
-            st.image(logo_img, use_container_width=True)
+    try:
+        logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
+        logo_img = load_logo(logo_url)
         
-        st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
-        st.title("Menu de Navegação")
-        menu_option = st.radio(
-            "Selecione a opção:",
-            ["📝 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"],
-            index=0
-        )
-        st.divider()
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.rerun()
-    
-    # Renderiza a página selecionada
-    if menu_option == "📝 Registrar NF":
-        render_registrar_nf_page()
-    elif menu_option == "📊 Dashboard":
-        render_dashboard_page()
-    elif menu_option == "🔍 Consultar NFs":
-        render_consultar_nfs_page()
-    elif menu_option == "⚙️ Configurações":
-        render_configuracoes_page()
+        if 'df_pedidos' not in st.session_state:
+            st.session_state.df_pedidos = carregar_dados_pedidos()
+        if 'df_almoxarifado' not in st.session_state:
+            st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
+
+        df_solicitantes = carregar_dados_solicitantes()
+
+        # Sidebar
+        with st.sidebar:
+            if logo_img:
+                st.image(logo_img, use_container_width=True)
+            
+            st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
+            st.title("Menu de Navegação")
+            menu_option = st.radio(
+                "Selecione a opção:",
+                ["📝 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"],
+                index=0
+            )
+            st.divider()
+            if st.button("Logout"):
+                st.session_state.clear()
+                st.rerun()
+        
+        # Renderiza a página selecionada
+        if menu_option == "📝 Registrar NF":
+            render_registrar_nf_page()
+        elif menu_option == "📊 Dashboard":
+            render_dashboard_page()
+        elif menu_option == "🔍 Consultar NFs":
+            render_consultar_nfs_page()
+        elif menu_option == "⚙️ Configurações":
+            render_configuracoes_page()
+    except Exception as e:
+        st.error(f"Erro ao renderizar a página principal: {e}")
+        st.info("Por favor, verifique a integridade dos dados nas suas planilhas e tente novamente.")
 
 def render_registrar_nf_page():
     """Página para registrar novas notas fiscais."""
@@ -433,18 +438,21 @@ def render_registrar_nf_page():
                     key="oc_select"
                 )
                 
-                if ordem_compra_nf and st.session_state.get('last_oc_selected') != ordem_compra_nf:
-                    oc_items = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == ordem_compra_nf.strip()].copy()
-                    if not oc_items.empty:
-                        if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
-                            oc_items['QUANTIDADE_ENTREGUE'] = 0.0
-                        oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
-                        st.session_state.oc_items_for_nf = oc_items
-                    else:
-                        st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
-                    
+                # Reseta a tabela se a OC mudar
+                if 'last_oc_selected' not in st.session_state or st.session_state.last_oc_selected != ordem_compra_nf:
                     st.session_state.last_oc_selected = ordem_compra_nf
-                    st.rerun()
+                    if ordem_compra_nf:
+                        oc_items = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == ordem_compra_nf.strip()].copy()
+                        if not oc_items.empty:
+                            if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
+                                oc_items['QUANTIDADE_ENTREGUE'] = 0.0
+                            oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
+                            st.session_state.oc_items_for_nf = oc_items
+                        else:
+                            st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
+                    
+                    if ordem_compra_nf:
+                        st.rerun()
 
             with col3_form:
                 valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00", key="valor_total_nf_input")
@@ -611,10 +619,8 @@ def render_registrar_nf_page():
 def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
     """Função para salvar a nota fiscal e atualizar os pedidos relacionados."""
     
-    # Adiciona o registro da nota fiscal ao DataFrame de almoxarifado
     st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
     
-    # Atualiza o DataFrame de pedidos com as quantidades recebidas
     for index, row in edited_items_df.iterrows():
         original_oc_items = st.session_state.df_pedidos[
             (st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == novo_registro_nf['ORDEM_COMPRA'].strip()) &
@@ -634,7 +640,6 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
                 st.session_state.df_pedidos.loc[original_idx, 'STATUS_PEDIDO'] = 'ENTREGUE'
                 st.session_state.df_pedidos.loc[original_idx, 'DATA_ENTREGA'] = pd.to_datetime(novo_registro_nf['DATA'])
     
-    # Salva as alterações em ambas as planilhas
     salvar_dados_pedidos(st.session_state.df_pedidos)
     salvar_dados_almoxarifado(st.session_state.df_almoxarifado)
 
