@@ -217,10 +217,18 @@ def get_gspread_client():
                 os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), scopes=scopes
             )
         
-        # Cria o cliente e retorna sem a chamada de teste que estava causando o erro
         client = gspread.authorize(creds)
+        
+        # Removendo a chamada de teste para evitar erros de versão
+        # try:
+        #     client.list_spreadsheet_files()
+        #     return client
+        # except Exception as test_error:
+        #     st.error(f"Erro ao testar conexão com Google Sheets: {test_error}")
+        #     return None
+        
         return client
-            
+
     except Exception as e:
         st.error(f"Erro ao conectar com Google Sheets: {e}")
         return None
@@ -1275,13 +1283,13 @@ def render_main_app():
                            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             
             with col_filtro1:
-                # CORREÇÃO: Garantir que o default contenha apenas valores válidos
+                # CORREÇÃO: Garante que o valor padrão seja uma lista vazia, evitando o erro de tipo
                 default_meses = [x for x in sorted(meses_disponiveis) if x in meses_disponiveis]
                 mes_selecionado = st.multiselect(
                     "Selecione o Mês", 
                     sorted(meses_disponiveis), 
                     format_func=lambda x: meses_nomes.get(x), 
-                    default=default_meses if default_meses else None
+                    default=default_meses if default_meses else []
                 )
             
             with col_filtro2:
@@ -1292,11 +1300,11 @@ def render_main_app():
             st.info("Nenhum dado com data válida para filtragem.")
             st.stop()
         
-        # E também adicione uma verificação para o caso de mes_selecionado estar vazio:
-        if not mes_selecionado:
-            st.warning("Selecione pelo menos um mês para visualizar os dados.")
-            st.stop()
-        
+        # VERIFICAÇÃO ADICIONAL: para evitar que o código continue com filtros vazios
+        if not mes_selecionado or ano_selecionado is None:
+             st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
+             st.stop()
+
         if mes_selecionado and ano_selecionado:
             df_filtrado_dash = df_analise[(df_analise['DATA'].dt.month.isin(mes_selecionado)) & (df_analise['DATA'].dt.year == ano_selecionado)]
         else:
@@ -1538,6 +1546,11 @@ def render_main_app():
         else:
             st.info("Nenhum pedido com data válida para análise.")
             st.stop()
+        
+        # VERIFICAÇÃO ADICIONAL: para evitar que o código continue com filtros vazios
+        if not mes_selecionado_p or ano_selecionado_p is None:
+             st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
+             st.stop()
 
         if mes_selecionado_p and ano_selecionado_p:
             df_performance_filtrado = df_performance[(df_performance['DATA'].dt.month.isin(mes_selecionado_p)) & (df_performance['DATA'].dt.year == ano_selecionado_p)]
