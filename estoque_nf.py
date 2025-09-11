@@ -181,7 +181,8 @@ def _to_datetime(series, dayfirst=True):
 def _clean_string_column(series):
     """Limpa strings removendo espaços extras e quebras de linha."""
     if not series.empty:
-        return series.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
+        # Substitui quebras de linha e múltiplos espaços por um único espaço
+        return series.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
     return series
 
 @st.cache_data(show_spinner=False)
