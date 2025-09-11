@@ -177,6 +177,12 @@ def parse_brazil_number(value_str):
 def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
+    
+def _clean_string_column(series):
+    """Limpa strings removendo espaços extras e quebras de linha."""
+    if not series.empty:
+        return series.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
+    return series
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
@@ -220,9 +226,11 @@ def carregar_dados_almoxarifado():
             if col in df.columns:
                 df[col] = df[col].apply(parse_brazil_number).fillna(0)
         
-        # Limpar espaços em branco na coluna de fornecedor da NF
+        # Limpar espaços e quebras de linha nas colunas de texto
         if 'FORNECEDOR_NF' in df.columns:
-            df['FORNECEDOR_NF'] = df['FORNECEDOR_NF'].astype(str).str.strip()
+            df['FORNECEDOR_NF'] = _clean_string_column(df['FORNECEDOR_NF'])
+        if 'ORDEM_COMPRA' in df.columns:
+            df['ORDEM_COMPRA'] = _clean_string_column(df['ORDEM_COMPRA'])
 
         return df
     except Exception as e:
@@ -299,9 +307,11 @@ def carregar_dados_pedidos():
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
         
-        # Limpar espaços em branco na coluna de fornecedor
+        # Limpar espaços e quebras de linha nas colunas de texto
         if 'FORNECEDOR' in df.columns:
-            df['FORNECEDOR'] = df['FORNECEDOR'].astype(str).str.strip()
+            df['FORNECEDOR'] = _clean_string_column(df['FORNECEDOR'])
+        if 'ORDEM_COMPRA' in df.columns:
+            df['ORDEM_COMPRA'] = _clean_string_column(df['ORDEM_COMPRA'])
 
         return df
     except Exception as e:
