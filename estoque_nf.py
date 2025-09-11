@@ -419,6 +419,39 @@ def confirm_divergence_dialog(novo_registro_nf, edited_items, valor_oc_total, di
         if st.button("❌ Não, Corrigir Valores"):
             st.rerun()
 
+@st.dialog("⚠️ Confirmação de Exclusão")
+def confirm_delete_dialog(nf_numero):
+    st.warning(f"**Tem certeza que deseja excluir o lançamento da NF {nf_numero}?**")
+    st.write("Esta ação não pode ser desfeita.")
+    
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("✅ Sim, Excluir", use_container_width=True):
+            excluir_lancamento(nf_numero)
+            st.rerun()
+    with col_btn2:
+        if st.button("❌ Cancelar", use_container_width=True):
+            st.rerun()
+
+def excluir_lancamento(nf_numero):
+    """Função para excluir um lançamento da planilha de Almoxarifado."""
+    df = st.session_state.df_almoxarifado
+    
+    # Filtra o DataFrame para remover a linha com a NF
+    df_atualizado = df[df['NF'].astype(str) != str(nf_numero)].reset_index(drop=True)
+    
+    if len(df_atualizado) < len(df):
+        st.session_state.df_almoxarifado = df_atualizado
+        if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+            st.success(f"🗑️ Lançamento da NF {nf_numero} excluído com sucesso!")
+            st.cache_data.clear()
+        else:
+            st.error("❌ Erro ao excluir o lançamento. Tente novamente.")
+    else:
+        st.error(f"❌ Nenhuma nota fiscal encontrada com o número {nf_numero}.")
+        
+    st.rerun()
+
 
 def salvar_nota_fiscal(novo_registro_nf, edited_items_df):
     """Função para salvar a nota fiscal e atualizar os pedidos relacionados."""
@@ -995,6 +1028,18 @@ def render_configuracoes_page():
                 st.error("❌ Erro ao salvar as alterações. Tente novamente.")
     else:
         st.info("📝 Nenhum dado disponível para edição.")
+        
+    # --- Seção de Exclusão de Lançamentos ---
+    st.markdown("---")
+    st.subheader("🗑️ Excluir Lançamento")
+    nf_excluir = st.text_input("Número da NF para Exclusão", key="nf_excluir_input")
+    
+    if st.button("⚠️ Excluir Lançamento"):
+        if nf_excluir.strip():
+            confirm_delete_dialog(nf_excluir.strip())
+        else:
+            st.error("Por favor, digite o número da NF para excluir.")
+
 
 # ==============================================================================
 # EXECUÇÃO PRINCIPAL (ATUALIZADA)
