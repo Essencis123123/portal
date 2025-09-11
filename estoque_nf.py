@@ -670,6 +670,31 @@ def render_registrar_nf_page():
                     tem_divergencia_valor = abs(divergencia) > 0.01
                     tem_saldo_pendente = edited_items['SALDO_PENDENTE'].sum() > 0
 
+                    brasilia_tz = pytz.timezone('America/Sao_Paulo')
+                    agora = datetime.datetime.now(brasilia_tz)
+                    
+                    doc_nf_string = doc_nf_links.replace('\n', ', ')
+
+                    novo_registro_nf = {
+                        "DATA": datetime.date.today(),
+                        "RECEBEDOR": recebedor,
+                        "FORNECEDOR_NF": fornecedor_selecionado,
+                        "NF": nf_numero,
+                        "VOLUME": quantidade_recebida_total,
+                        "V. TOTAL NF": valor_total_float,
+                        "CONDICAO FRETE": condicao_frete_nf,
+                        "VALOR FRETE": valor_frete_float,
+                        "OBSERVACAO": observacao,
+                        "DOC NF": doc_nf_string,
+                        "VENCIMENTO": vencimento_nf,
+                        "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                        "CONDICAO_PROBLEMA": "N/A",
+                        "ORDEM_COMPRA": ordem_compra_nf,
+                        "REGISTRO_ENVIO": agora,
+                        "REGISTRO_LANCAMENTO": agora
+                    }
+
+
                     if tem_divergencia_valor or tem_saldo_pendente:
                         confirm_divergence_dialog(novo_registro_nf, edited_items, valor_oc_total, divergencia)
                     else:
