@@ -417,17 +417,19 @@ def render_registrar_nf_page():
                 ]
                 recebedor = st.selectbox("Recebedor*", sorted(recebedor_options), key="recebedor_select")
                 
-                # CORREÇÃO: Filtrar ordens de compra baseado no fornecedor selecionado
+                # --- CORREÇÃO APLICADA A PARTIR DAQUI ---
+                # A lista de ordens de compra agora é FILTRADA
+                # com base no fornecedor selecionado.
                 ordens_disponiveis = ['']
                 if fornecedor_selecionado and fornecedor_selecionado != '':
                     pedidos_filtrados = st.session_state.df_pedidos[
                         st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado
                     ]
                     ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
+                # Se nenhum fornecedor selecionado, mostrar apenas a opção vazia
                 else:
-                    # Se nenhum fornecedor selecionado, mostrar apenas a opção vazia
-                    pass
-                
+                    st.info("Selecione um fornecedor para ver as Ordens de Compra.")
+                    
                 ordem_compra_nf = st.selectbox(
                     "N° Ordem de Compra*",
                     options=sorted(ordens_disponiveis),
@@ -595,7 +597,7 @@ def render_registrar_nf_page():
             return f"{cores.get(status, '⚪')} {status}"
         
         if 'Status Financeiro' in df_ultimas_nfs_display.columns:
-            df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
+            df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['STATUS_FINANCEIRO'].apply(colorir_status_display)
         
         st.dataframe(
             df_ultimas_nfs_display,
