@@ -342,9 +342,11 @@ def carregar_dados_solicitantes():
 
 def filter_oc():
     """Função de callback para filtrar a Ordem de Compra e recarregar o script."""
-    # Essa função é chamada quando o selectbox de fornecedor muda.
-    # A re-execução é automática.
-    st.session_state.oc_select = ''
+    # A re-execução é automática ao usar on_change
+    # O valor do fornecedor já está em st.session_state.fornecedor_nf_select
+    # Isso limpará a seleção de Ordem de Compra anterior
+    if 'oc_select' in st.session_state:
+        st.session_state.oc_select = ''
     st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
     
 # ==============================================================================
@@ -406,160 +408,162 @@ def render_registrar_nf_page():
     if 'oc_items_for_nf' not in st.session_state:
         st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
     
-    with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
-        with st.form("formulario_nota", clear_on_submit=False):
-            col1_form, col2_form, col3_form = st.columns(3)
-            
-            with col1_form:
-                fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
-                fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select", on_change=filter_oc)
-                nf_numero = st.text_input("Número da NF*", key="nf_numero_input")
+    # --- Widgets fora do formulário para usar on_change ---
+    col1_form, col2_form, col3_form = st.columns(3)
+    with col1_form:
+        fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
+        fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select", on_change=filter_oc)
 
-            with col2_form:
-                recebedor_options = [
-                    "ARLEY GONCALVES DOS SANTOS", "EVIANE DAS GRACAS DE ASSIS",
-                    "ANDRE CASTRO DE SOUZA", "ISABELA CAROLINA DE PAURA SOARES",
-                    "EMERSON ALMEIDA DE ARAUJO", "GABRIEL PEREIRA MARTINS",
-                    "OUTROS"
-                ]
-                recebedor = st.selectbox("Recebedor*", sorted(recebedor_options), key="recebedor_select")
-                
-                # --- CORREÇÃO APLICADA A PARTIR DAQUI ---
-                # A lista de ordens de compra agora é FILTRADA
-                # com base no fornecedor selecionado.
-                ordens_disponiveis = ['']
-                if fornecedor_selecionado and fornecedor_selecionado != '':
-                    pedidos_filtrados = st.session_state.df_pedidos[
-                        st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado
-                    ]
-                    ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
-                # Se nenhum fornecedor selecionado, mostrar apenas a opção vazia
-                else:
-                    st.info("Selecione um fornecedor para ver as Ordens de Compra.")
+    with col2_form:
+        ordens_disponiveis = ['']
+        if fornecedor_selecionado and fornecedor_selecionado != '':
+            pedidos_filtrados = st.session_state.df_pedidos[
+                st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado
+            ]
+            ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
+        
+        ordem_compra_nf = st.selectbox(
+            "N° Ordem de Compra*",
+            options=sorted(ordens_disponiveis),
+            help="Selecione o número da ordem de compra para vincular a nota.",
+            key="oc_select"
+        )
+    
+    # Atualizar itens quando uma ordem de compra for selecionada
+    if ordem_compra_nf and ordem_compra_nf != st.session_state.get('last_oc_selected'):
+        oc_items = st.session_state.df_pedidos[
+            st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
+        ].copy()
+        if not oc_items.empty:
+            if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
+                oc_items['QUANTIDADE_ENTREGUE'] = 0.0
+            oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
+            st.session_state.oc_items_for_nf = oc_items
+        else:
+            st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
+        
+        st.session_state.last_oc_selected = ordem_compra_nf
+
+    st.markdown("---")
+    
+    # --- Formulário para os demais campos ---
+    with st.form("formulario_nota", clear_on_submit=False):
+        col1_form, col2_form, col3_form = st.columns(3)
+        with col1_form:
+            st.write("Fornecedor selecionado: **"+str(fornecedor_selecionado)+"**")
+            nf_numero = st.text_input("Número da NF*", key="nf_numero_input")
+
+        with col2_form:
+            recebedor_options = [
+                "ARLEY GONCALVES DOS SANTOS", "EVIANE DAS GRACAS DE ASSIS",
+                "ANDRE CASTRO DE SOUZA", "ISABELA CAROLINA DE PAURA SOARES",
+                "EMERSON ALMEIDA DE ARAUJO", "GABRIEL PEREIRA MARTINS",
+                "OUTROS"
+            ]
+            recebedor = st.selectbox("Recebedor*", sorted(recebedor_options), key="recebedor_select")
+            st.write("Ordem de Compra selecionada: **"+str(ordem_compra_nf)+"**")
+
+        with col3_form:
+            valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00", key="valor_total_nf_input")
+            condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"], key="condicao_frete_select")
+            valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00", key="valor_frete_input")
+        
+        doc_nf_links = st.text_area("Links das Notas Fiscais (um por linha)", placeholder="Cole os links de acesso aqui...", key="doc_nf_links_area")
+        
+        observacao = st.text_area("Observações", placeholder="Informações adicionais...", key="observacao_area")
+        vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30), key="vencimento_nf_input")
+        
+        st.markdown("---")
+        st.subheader("Itens do Pedido")
+
+        if not st.session_state.oc_items_for_nf.empty:
+            df_to_edit = st.session_state.oc_items_for_nf[['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE']].copy()
+            
+            edited_items = st.data_editor(
+                df_to_edit,
+                use_container_width=True,
+                hide_index=True,
+                num_rows='fixed',
+                column_config={
+                    "CODIGO_MATERIAL": st.column_config.TextColumn("Código Material", disabled=True),
+                    "MATERIAL": st.column_config.TextColumn("Descrição Material", disabled=True),
+                    "UN": st.column_config.TextColumn("UN", disabled=True),
+                    "QUANTIDADE": st.column_config.NumberColumn("Qtd. Pedida", disabled=True, format="%d"),
+                    "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Recebida", min_value=0, format="%d"),
+                    "SALDO_PENDENTE": st.column_config.NumberColumn("Saldo Pendente", disabled=True, format="%d")
+                },
+                key="itens_pedido_editor"
+            )
+        
+        else:
+            st.info("Selecione uma Ordem de Compra para visualizar os itens.")
+            edited_items = pd.DataFrame()
+
+
+        enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
+
+        if enviar:
+            if not ordem_compra_nf or ordem_compra_nf == '':
+                st.error("Por favor, selecione uma Ordem de Compra.")
+                st.stop()
+            
+            campos_validos = all([
+                fornecedor_selecionado.strip(), nf_numero.strip(),
+                valor_total_nf.strip() not in ["", "0,00"], doc_nf_links
+            ])
+            
+            if not campos_validos:
+                st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
+            elif edited_items.empty:
+                st.error("Adicione os itens do pedido antes de registrar a nota fiscal.")
+            else:
+                try:
+                    valor_total_float = parse_brazil_number(valor_total_nf)
+                    valor_frete_float = parse_brazil_number(valor_frete_nf)
                     
-                ordem_compra_nf = st.selectbox(
-                    "N° Ordem de Compra*",
-                    options=sorted(ordens_disponiveis),
-                    help="Selecione o número da ordem de compra para vincular a nota.",
-                    key="oc_select"
-                )
-                
-                # Atualizar itens quando uma ordem de compra for selecionada
-                if ordem_compra_nf and ordem_compra_nf != st.session_state.get('last_oc_selected'):
-                    oc_items = st.session_state.df_pedidos[
+                    pedidos_relacionados = st.session_state.df_pedidos[
                         st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
                     ].copy()
-                    if not oc_items.empty:
-                        if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
-                            oc_items['QUANTIDADE_ENTREGUE'] = 0.0
-                        oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
-                        st.session_state.oc_items_for_nf = oc_items
-                    else:
-                        st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
                     
-                    st.session_state.last_oc_selected = ordem_compra_nf
+                    valor_oc_total = (pedidos_relacionados['VALOR_ITEM'] * pedidos_relacionados['QUANTIDADE']).sum()
+                    divergencia = valor_total_float - valor_oc_total
+                    
+                    brasilia_tz = pytz.timezone('America/Sao_Paulo')
+                    agora = datetime.datetime.now(brasilia_tz)
+                    
+                    doc_nf_string = doc_nf_links.replace('\n', ', ')
 
-            with col3_form:
-                valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00", key="valor_total_nf_input")
-                condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"], key="condicao_frete_select")
-                valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00", key="valor_frete_input")
-            
-            doc_nf_links = st.text_area("Links das Notas Fiscais (um por linha)", placeholder="Cole os links de acesso aqui...", key="doc_nf_links_area")
-            
-            observacao = st.text_area("Observações", placeholder="Informações adicionais...", key="observacao_area")
-            vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30), key="vencimento_nf_input")
-            
-            st.markdown("---")
-            st.subheader("Itens do Pedido")
+                    novo_registro_nf = {
+                        "DATA": datetime.date.today(),
+                        "RECEBEDOR": recebedor,
+                        "FORNECEDOR_NF": fornecedor_selecionado,
+                        "NF": nf_numero,
+                        "VOLUME": edited_items['QUANTIDADE_ENTREGUE'].sum(),
+                        "V. TOTAL NF": valor_total_float,
+                        "CONDICAO FRETE": condicao_frete_nf,
+                        "VALOR FRETE": valor_frete_float,
+                        "OBSERVACAO": observacao,
+                        "DOC NF": doc_nf_string,
+                        "VENCIMENTO": vencimento_nf,
+                        "STATUS_FINANCEIRO": "EM ANDAMENTO",
+                        "CONDICAO_PROBLEMA": "N/A",
+                        "ORDEM_COMPRA": ordem_compra_nf,
+                        "REGISTRO_ENVIO": agora,
+                        "REGISTRO_LANCAMENTO": agora
+                    }
 
-            if not st.session_state.oc_items_for_nf.empty:
-                df_to_edit = st.session_state.oc_items_for_nf[['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE']].copy()
-                
-                edited_items = st.data_editor(
-                    df_to_edit,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows='fixed',
-                    column_config={
-                        "CODIGO_MATERIAL": st.column_config.TextColumn("Código Material", disabled=True),
-                        "MATERIAL": st.column_config.TextColumn("Descrição Material", disabled=True),
-                        "UN": st.column_config.TextColumn("UN", disabled=True),
-                        "QUANTIDADE": st.column_config.NumberColumn("Qtd. Pedida", disabled=True, format="%d"),
-                        "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Recebida", min_value=0, format="%d"),
-                        "SALDO_PENDENTE": st.column_config.NumberColumn("Saldo Pendente", disabled=True, format="%d")
-                    },
-                    key="itens_pedido_editor"
-                )
-            
-            else:
-                st.info("Selecione uma Ordem de Compra para visualizar os itens.")
-                edited_items = pd.DataFrame()
+                    if abs(divergencia) > 0.01:
+                        st.session_state['mostrar_popup_divergencia'] = True
+                        st.session_state['novo_registro_nf'] = novo_registro_nf
+                        st.session_state.edited_items = edited_items
+                        st.session_state.valor_oc_total = valor_oc_total
+                        st.session_state.divergencia_oc = divergencia
+                        st.rerun()
+                    else:
+                        salvar_nota_fiscal(novo_registro_nf, edited_items, pedidos_relacionados)
 
-
-            enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
-
-            if enviar:
-                if not ordem_compra_nf or ordem_compra_nf == '':
-                    st.error("Por favor, selecione uma Ordem de Compra.")
-                    st.stop()
-                
-                campos_validos = all([
-                    fornecedor_selecionado.strip(), nf_numero.strip(),
-                    valor_total_nf.strip() not in ["", "0,00"], doc_nf_links
-                ])
-                
-                if not campos_validos:
-                    st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
-                elif edited_items.empty:
-                    st.error("Adicione os itens do pedido antes de registrar a nota fiscal.")
-                else:
-                    try:
-                        valor_total_float = parse_brazil_number(valor_total_nf)
-                        valor_frete_float = parse_brazil_number(valor_frete_nf)
-                        
-                        pedidos_relacionados = st.session_state.df_pedidos[
-                            st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
-                        ].copy()
-                        
-                        valor_oc_total = (pedidos_relacionados['VALOR_ITEM'] * pedidos_relacionados['QUANTIDADE']).sum()
-                        divergencia = valor_total_float - valor_oc_total
-                        
-                        brasilia_tz = pytz.timezone('America/Sao_Paulo')
-                        agora = datetime.datetime.now(brasilia_tz)
-                        
-                        doc_nf_string = doc_nf_links.replace('\n', ', ')
-
-                        novo_registro_nf = {
-                            "DATA": datetime.date.today(),
-                            "RECEBEDOR": recebedor,
-                            "FORNECEDOR_NF": fornecedor_selecionado,
-                            "NF": nf_numero,
-                            "VOLUME": edited_items['QUANTIDADE_ENTREGUE'].sum(),
-                            "V. TOTAL NF": valor_total_float,
-                            "CONDICAO FRETE": condicao_frete_nf,
-                            "VALOR FRETE": valor_frete_float,
-                            "OBSERVACAO": observacao,
-                            "DOC NF": doc_nf_string,
-                            "VENCIMENTO": vencimento_nf,
-                            "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                            "CONDICAO_PROBLEMA": "N/A",
-                            "ORDEM_COMPRA": ordem_compra_nf,
-                            "REGISTRO_ENVIO": agora,
-                            "REGISTRO_LANCAMENTO": agora
-                        }
-
-                        if abs(divergencia) > 0.01:
-                            st.session_state['mostrar_popup_divergencia'] = True
-                            st.session_state['novo_registro_nf'] = novo_registro_nf
-                            st.session_state.edited_items = edited_items
-                            st.session_state.valor_oc_total = valor_oc_total
-                            st.session_state.divergencia_oc = divergencia
-                            st.rerun()
-                        else:
-                            salvar_nota_fiscal(novo_registro_nf, edited_items, pedidos_relacionados)
-
-                    except ValueError:
-                        st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
+                except ValueError:
+                    st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
     
     if st.session_state.get('mostrar_popup_divergencia'):
         handle_divergence_popup()
