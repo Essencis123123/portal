@@ -472,6 +472,9 @@ else:
             df_display['REGISTRO_LANCAMENTO_VISUAL'] = df_display['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
             # --- FIM DA CORREÇÃO ---
 
+            # Garante que a coluna de valor seja float para a edição funcionar corretamente
+            df_display['V_TOTAL_NF'] = df_display['V_TOTAL_NF'].astype(float)
+            
             edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
@@ -480,7 +483,7 @@ else:
                     "FORNECEDOR": "Fornecedor",
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
-                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=False),
+                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f"),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
                     "DIAS_VENCIMENTO_VISUAL": st.column_config.Column("Dias Vencimento", disabled=True),
                     "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=list(status_map.values()), default="🟡 EM ANDAMENTO"),
@@ -533,6 +536,7 @@ else:
                         updated_df.loc[index, 'CONDICAO_PROBLEMA'] = str(row['PROBLEMA_VISUAL']).replace('🔴 ', '')
                         updated_df.loc[index, 'VALOR_JUROS'] = row['VALOR_JUROS']
                         updated_df.loc[index, 'VALOR_FRETE'] = row['VALOR_FRETE']
+                        updated_df.loc[index, 'V_TOTAL_NF'] = row['V_TOTAL_NF']
                         
                 st.session_state.df = updated_df
 
