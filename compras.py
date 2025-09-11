@@ -219,7 +219,7 @@ def get_gspread_client():
         
         client = gspread.authorize(creds)
         
-        # Removendo a chamada de teste para evitar erros de versão
+        # Removendo a chamada de teste que causou o erro em algumas versões de biblioteca
         # try:
         #     client.list_spreadsheet_files()
         #     return client
@@ -1276,40 +1276,40 @@ def render_main_app():
         st.subheader("Filtros de Período")
         col_filtro1, col_filtro2 = st.columns(2)
         
-        if not df_analise['DATA'].isnull().all():
-            meses_disponiveis = df_analise['DATA'].dt.month.unique()
-            anos_disponiveis = df_analise['DATA'].dt.year.unique()
+        # Cria uma lista de datas válidas para a filtragem
+        df_valid_dates = df_analise.dropna(subset=['DATA'])
+        
+        # CORREÇÃO: Verifique se há datas válidas antes de criar os filtros
+        if not df_valid_dates.empty:
+            meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
+            anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 
                            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             
             with col_filtro1:
-                # CORREÇÃO: Garante que o valor padrão seja uma lista vazia, evitando o erro de tipo
-                default_meses = [x for x in sorted(meses_disponiveis) if x in meses_disponiveis]
+                # Garante que o valor padrão seja uma lista vazia se não houver meses
+                default_meses = sorted(meses_disponiveis)
                 mes_selecionado = st.multiselect(
                     "Selecione o Mês", 
-                    sorted(meses_disponiveis), 
+                    default_meses, 
                     format_func=lambda x: meses_nomes.get(x), 
-                    default=default_meses if default_meses else []
+                    default=default_meses if default_meses.any() else []
                 )
             
             with col_filtro2:
                 ano_selecionado = st.selectbox("Selecione o Ano", sorted(anos_disponiveis, reverse=True))
+
+            # Aplicar os filtros se eles foram definidos
+            if mes_selecionado and ano_selecionado:
+                df_filtrado_dash = df_analise[(df_analise['DATA'].dt.month.isin(mes_selecionado)) & (df_analise['DATA'].dt.year == ano_selecionado)]
+            else:
+                df_filtrado_dash = pd.DataFrame()
         else:
-            mes_selecionado = []
-            ano_selecionado = None
+            # Caso não haja datas válidas no DataFrame, exibe um aviso e interrompe
             st.info("Nenhum dado com data válida para filtragem.")
             st.stop()
         
-        # VERIFICAÇÃO ADICIONAL: para evitar que o código continue com filtros vazios
-        if not mes_selecionado or ano_selecionado is None:
-             st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
-             st.stop()
-
-        if mes_selecionado and ano_selecionado:
-            df_filtrado_dash = df_analise[(df_analise['DATA'].dt.month.isin(mes_selecionado)) & (df_analise['DATA'].dt.year == ano_selecionado)]
-        else:
-            df_filtrado_dash = pd.DataFrame()
-        
+        # Outra checagem para evitar erros caso os filtros sejam desmarcados
         if df_filtrado_dash.empty:
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
@@ -1535,6 +1535,7 @@ def render_main_app():
         ano_selecionado_p = None
         
         df_valid_dates_p = df_performance.dropna(subset=['DATA'])
+        
         if not df_valid_dates_p.empty:
             meses_disponiveis_p = df_valid_dates_p['DATA'].dt.month.unique()
             anos_disponiveis_p = df_valid_dates_p['DATA'].dt.year.unique()
