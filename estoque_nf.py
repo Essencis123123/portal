@@ -867,14 +867,15 @@ def render_consultar_nfs_page():
                     (df_consulta['DATA'].dt.date <= data_fim_consulta)
                 ]
         
-        st.subheader(f"📋 Resultados da Consulta ({len(df_consulta)} notas encontradas)")
+        st.subheader(f"🛠️ Editar Notas Fiscais ({len(df_consulta)} notas encontradas)")
         
         if not df_consulta.empty:
-            df_editavel = df_consulta[[
-                'NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'V. TOTAL NF', 'STATUS_FINANCEIRO'
-            ]].copy()
+            df_editavel = df_consulta[['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'V. TOTAL NF', 'STATUS_FINANCEIRO']].copy()
             
-            df_editavel = st.data_editor(
+            # Formata a coluna "V. TOTAL NF" para exibir com duas casas decimais
+            df_editavel['V. TOTAL NF'] = df_editavel['V. TOTAL NF'].astype(float)
+
+            edited_df = st.data_editor(
                 df_editavel,
                 use_container_width=True,
                 hide_index=True,
@@ -891,7 +892,7 @@ def render_consultar_nfs_page():
             
             st.markdown("---")
             if st.button("💾 Salvar Alterações"):
-                for index, row in df_editavel.iterrows():
+                for index, row in edited_df.iterrows():
                     original_index = df_consulta.index[index]
                     st.session_state.df_almoxarifado.loc[original_index, 'V. TOTAL NF'] = row['V. TOTAL NF']
                     st.session_state.df_almoxarifado.loc[original_index, 'STATUS_FINANCEIRO'] = row['STATUS']
