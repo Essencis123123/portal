@@ -178,12 +178,12 @@ def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
     
-def _clean_string(s):
-    """Limpa uma string removendo espaços extras e quebras de linha."""
-    if pd.isna(s):
-        return ''
-    # Substitui quebras de linha e múltiplos espaços por um único espaço
-    return re.sub(r'[\r\n\s]+', ' ', str(s)).strip()
+def _clean_string_column(series):
+    """Limpa strings removendo espaços extras e quebras de linha."""
+    if not series.empty:
+        # Substitui quebras de linha e múltiplos espaços por um único espaço
+        return series.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
+    return series
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
@@ -425,7 +425,6 @@ def render_registrar_nf_page():
                 
                 ordens_disponiveis = ['']
                 if fornecedor_selecionado:
-                    # A lógica de filtragem agora usa strip() para remover espaços, garantindo a correspondência
                     pedidos_filtrados = st.session_state.df_pedidos[
                         st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado
                     ]
@@ -439,7 +438,6 @@ def render_registrar_nf_page():
                 )
                 
                 if ordem_compra_nf and st.session_state.get('last_oc_selected') != ordem_compra_nf:
-                    # Usamos a mesma lógica de limpeza para garantir a correspondência
                     oc_items = st.session_state.df_pedidos[
                         st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
                     ].copy()
