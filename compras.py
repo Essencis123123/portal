@@ -403,7 +403,7 @@ def carregar_dados_solicitantes():
             return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
             
         sheet = gc.open("dados_pedido")
-        # CORREÇÃO: Índice da aba de Solicitantes é 3
+        # CORRIGIDO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -424,7 +424,7 @@ def salvar_dados_solicitantes(df):
             return
             
         sheet = gc.open("dados_pedido")
-        # CORREÇÃO: Índice da aba de Solicitantes é 3
+        # CORRIGIDO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
 
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
@@ -461,7 +461,7 @@ def carregar_dados_almoxarifado():
             return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
             
         sheet = gc.open("dados_pedido")
-        # CORREÇÃO: Índice da aba de Almoxarifado é 1
+        # CORRIGIDO: O índice correto para "Almoxarifado" é 1
         worksheet = sheet.get_worksheet(1)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -483,7 +483,7 @@ def carregar_dados_materiais():
             return pd.DataFrame(columns=["CODIGO", "DESCRICAO"])
             
         sheet = gc.open("dados_pedido")
-        # CORREÇÃO: Índice da aba de Materiais é 2
+        # CORRIGIDO: O índice correto para "MATERIAIS" é 2
         worksheet = sheet.get_worksheet(2)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -501,7 +501,7 @@ def salvar_dados_materiais(df):
     try:
         gc = get_gspread_client()
         sheet = gc.open("dados_pedido")
-        # CORREÇÃO: Índice da aba de Materiais é 2
+        # CORRIGIDO: O índice correto para "MATERIAIS" é 2
         worksheet = sheet.get_worksheet(2)
 
         df_copy = df.copy()
@@ -1031,7 +1031,7 @@ def render_main_app():
                 "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
                 "UN": st.column_config.TextColumn("UN", disabled=True),
                 "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
-                "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),\
+                "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
                 "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                 "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
@@ -1149,7 +1149,7 @@ def render_main_app():
                     codigo = st.text_input("Código do Material")
                     descricao = st.text_input("Descrição do Material")
                     
-                    if st.form_submit_button("Cadastrar Material"):
+                    if st.form_submit_button("Cadastrar Material"):\
                         if codigo and descricao:
                             novo_material = pd.DataFrame([{"CODIGO": codigo.upper(), "DESCRICAO": descricao.upper()}])
                             st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, novo_material], ignore_index=True)
