@@ -190,14 +190,13 @@ def parse_brazil_number(value_str):
     # Remove 'R$' e espaços.
     cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
     
-    # Assume que a vírgula é sempre o separador decimal.
-    cleaned_value = cleaned_value.replace('.', '')
-    cleaned_value = cleaned_value.replace(',', '.')
+    # Remove os separadores de milhar (ponto) e substitui a vírgula pelo ponto decimal.
+    cleaned_value = cleaned_value.replace('.', '').replace(',', '.')
 
     try:
         return float(cleaned_value)
     except (ValueError, TypeError):
-        return pd.NaT
+        return np.nan # Use np.nan para representar valores inválidos
 
 def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
