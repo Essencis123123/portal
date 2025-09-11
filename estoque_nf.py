@@ -133,6 +133,63 @@ st.markdown(
 )
 
 # ==============================================================================
+# DADOS DE USUÁRIOS E FUNÇÕES DE LOGIN
+# ==============================================================================
+USERS = {
+    "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
+    "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
+    "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
+    "acsouza@essencis.com.br": {"password": "Essencis01", "name": "ANDRE CASTRO DE SOUZA"},
+    "bcampos@essencis.com.br": {"password": "Essencis01", "name": "BARBARA DA SILVA CAMPOS"},
+    "earaujo@essencis.com.br": {"password": "Essencis01", "name": "EMERSON ALMEIDA DE ARAUJO"},
+    "wrezende@essencis.com.br": {"password": "Essencis01", "name": "WELLINGTON CASSIO DE REZENDE"}
+}
+
+def check_password():
+    """Retorna True se o usuário tiver feito login corretamente, False caso contrário."""
+    def login_form():
+        """Formulário de login na sidebar."""
+        with st.sidebar:
+            st.image("http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png", use_container_width=True)
+            st.title("Acesso Almoxarifado")
+            st.markdown("---")
+            st.markdown("Bem-vindo! Por favor, faça login para acessar o painel.")
+            with st.form("login"):
+                st.session_state.email = st.text_input("E-mail", key="email_input").strip()
+                st.session_state.password = st.text_input("Senha", type="password", key="password_input").strip()
+                st.form_submit_button("Entrar")
+
+    def logged_in_info():
+        """Exibe informações do usuário logado na sidebar."""
+        st.sidebar.success(f"Logado como: {st.session_state.username}")
+        if st.sidebar.button("Sair"):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            st.rerun()
+
+    # Verifica se já está logado
+    if st.session_state.get("logged_in", False):
+        logged_in_info()
+        return True
+
+    # Exibe formulário e processa o login
+    login_form()
+    if st.session_state.get("email") and st.session_state.get("password"):
+        email = st.session_state.email
+        password = st.session_state.password
+        if email in USERS and USERS[email]["password"] == password:
+            st.session_state.logged_in = True
+            st.session_state.username = USERS[email]["name"]
+            st.session_state.email = email
+            st.success("Login bem-sucedido! Redirecionando...")
+            st.rerun()
+        else:
+            st.error("E-mail ou senha incorretos.")
+            st.session_state.logged_in = False
+    
+    return False
+
+# ==============================================================================
 # FUNÇÕES DE UTILIDADE E CONEXÃO
 # ==============================================================================
 @st.cache_data(show_spinner=False)
@@ -342,13 +399,9 @@ def carregar_dados_solicitantes():
 
 def filter_oc():
     """Função de callback para filtrar a Ordem de Compra e recarregar o script."""
-    # A re-execução é automática ao usar on_change
-    # O valor do fornecedor já está em st.session_state.fornecedor_nf_select
-    # Isso limpará a seleção de Ordem de Compra anterior
-    if 'oc_select' in st.session_state:
-        st.session_state.oc_select = ''
+    st.session_state.oc_select = ''
     st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
-    
+
 # ==============================================================================
 # INTERFACE PRINCIPAL
 # ==============================================================================
@@ -364,7 +417,7 @@ def render_main_app():
             st.session_state.df_pedidos = carregar_dados_pedidos()
         if 'df_almoxarifado' not in st.session_state:
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
-
+        
         # Sidebar
         with st.sidebar:
             if logo_img:
@@ -377,7 +430,7 @@ def render_main_app():
                 index=0
             )
             st.divider()
-        
+
         # Renderiza a página selecionada
         if menu_option == "📝 Registrar NF":
             render_registrar_nf_page()
@@ -409,7 +462,7 @@ def render_registrar_nf_page():
         st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
     
     # --- Widgets fora do formulário para usar on_change ---
-    col1_form, col2_form, col3_form = st.columns(3)
+    col1_form, col2_form = st.columns(2)
     with col1_form:
         fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
         fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select", on_change=filter_oc)
@@ -607,23 +660,24 @@ def render_registrar_nf_page():
             }
             return f"{cores.get(status, '⚪')} {status}"
         
+        def format_doc_nf(links_str):
+            if not isinstance(links_str, str) or not links_str.strip():
+                return ""
+            links = links_str.split(', ')
+            html_links = [f'<a href="{link.strip()}" target="_blank" title="Clique para baixar"><img src="https://img.icons8.com/material-outlined/24/null/download--v1.png"/></a>' for link in links if link.strip()]
+            return " ".join(html_links)
+
         if 'Status Financeiro' in df_ultimas_nfs_display.columns:
             df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['STATUS_FINANCEIRO'].apply(colorir_status_display)
-        
-        st.dataframe(
-            df_ultimas_nfs_display,
-            use_container_width=True,
-            column_config={
-                "Data": st.column_config.TextColumn("Data"),
-                "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
-                "Anexo NF": st.column_config.TextColumn(
-                    "Anexos NF",
-                    help="Links para abrir as notas fiscais."
-                ),
-                "Registro de Lançamento": st.column_config.TextColumn("Registro de Lançamento")
-            },
-            hide_index=True
+
+        if 'Anexo NF' in df_ultimas_nfs_display.columns:
+            df_ultimas_nfs_display['Anexo NF'] = df_ultimas_nfs_display['Anexo NF'].astype(str).apply(format_doc_nf)
+            
+        st.markdown(
+            df_ultimas_nfs_display.to_html(escape=False),
+            unsafe_allow_html=True
         )
+
     else:
         st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
 
@@ -817,23 +871,23 @@ def render_consultar_nfs_page():
                     "FINALIZADO": "🟢"
                 }
                 return f"{cores.get(status, '⚪')} {status}"
+
+            def format_doc_nf_display(links_str):
+                if not isinstance(links_str, str) or not links_str.strip():
+                    return ""
+                links = links_str.split(', ')
+                html_links = [f'<a href="{link.strip()}" target="_blank" title="Clique para baixar"><img src="https://img.icons8.com/material-outlined/24/null/download--v1.png"/></a>' for link in links if link.strip()]
+                return " ".join(html_links)
             
             if 'STATUS_FINANCEIRO' in df_exibir_consulta.columns:
                 df_exibir_consulta['STATUS_FINANCEIRO'] = df_exibir_consulta['STATUS_FINANCEIRO'].apply(colorir_status)
             
-            st.dataframe(
-                df_exibir_consulta,
-                use_container_width=True,
-                height=400,
-                column_config={
-                    "Data": st.column_config.TextColumn("Data"),
-                    "Valor Total NF": st.column_config.NumberColumn("Valor Total NF", format="R$ %.2f"),
-                    "Anexo NF": st.column_config.TextColumn(
-                        "Anexos NF",
-                        help="Links para abrir as notas fiscais."
-                    )
-                },
-                hide_index=True
+            if 'DOC NF' in df_exibir_consulta.columns:
+                df_exibir_consulta['DOC NF'] = df_exibir_consulta['DOC NF'].astype(str).apply(format_doc_nf_display)
+
+            st.markdown(
+                df_exibir_consulta.to_html(escape=False),
+                unsafe_allow_html=True
             )
             
             csv_consulta = df_exibir_consulta.to_csv(index=False, encoding='utf-8')
@@ -890,8 +944,11 @@ def render_configuracoes_page():
             mime="text/csv",
             help="Clique para baixar uma cópia de segurança dos dados."
         )
-    
+
 # ==============================================================================
 # EXECUÇÃO PRINCIPAL
 # ==============================================================================
-render_main_app()
+if check_password():
+    render_main_app()
+else:
+    st.stop()
