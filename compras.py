@@ -195,7 +195,8 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Conexão e Carregamento de Dados ---
-@st.cache_data(ttl=300)
+# REMOVIDO: A função de cliente do gspread não pode ser armazenada em cache
+# pois o objeto de sessão de autenticação pode se tornar inválido.
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
     try:
@@ -427,10 +428,8 @@ def salvar_dados_solicitantes(df):
         # CORRIGIDO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
 
-        data_to_write = [df.columns.values.tolist()] + df.values.tolist()
-        
-        worksheet.clear()
-        set_with_dataframe(worksheet, df, resize=True, include_column_header=True)
+        df_copy = df.copy()
+        set_with_dataframe(worksheet, df_copy, resize=True, include_column_header=True)
         
         st.success("Solicitante cadastrado na planilha com sucesso!")
     except Exception as e:
