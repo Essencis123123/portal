@@ -338,35 +338,27 @@ def carregar_dados_solicitantes():
 # ==============================================================================
 # INTERFACE PRINCIPAL
 # ==============================================================================
-def render_login_page():
-    """Exibe a página de login."""
-    st.title("🏭 Login do Almoxarifado")
-    with st.form("login_form"):
-        email = st.text_input("E-mail")
-        senha = st.text_input("Senha", type="password")
-        if st.form_submit_button("Entrar"):
-            # Lógica de login real
-            pass
+# REMOVIDO: A função de login, a página de login e a verificação de sessão foram removidas
+# para que o aplicativo seja acessível diretamente.
+# As funções render_login_page e fazer_login também foram removidas.
 
 def render_main_app():
-    """Exibe a interface principal da aplicação após o login."""
+    """Exibe a interface principal da aplicação sem login."""
     try:
         logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
         logo_img = load_logo(logo_url)
         
+        # O carregamento de dados foi movido para o topo do script para garantir que estejam sempre disponíveis
         if 'df_pedidos' not in st.session_state:
             st.session_state.df_pedidos = carregar_dados_pedidos()
         if 'df_almoxarifado' not in st.session_state:
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
-
-        df_solicitantes = carregar_dados_solicitantes()
 
         # Sidebar
         with st.sidebar:
             if logo_img:
                 st.image(logo_img, use_container_width=True)
             
-            st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
             st.title("Menu de Navegação")
             menu_option = st.radio(
                 "Selecione a opção:",
@@ -374,9 +366,7 @@ def render_main_app():
                 index=0
             )
             st.divider()
-            if st.button("Logout"):
-                st.session_state.clear()
-                st.rerun()
+            # O botão de Logout foi removido, pois não há mais login
         
         # Renderiza a página selecionada
         if menu_option == "📝 Registrar NF":
@@ -880,7 +870,4 @@ def render_configuracoes_page():
 # ==============================================================================
 # EXECUÇÃO PRINCIPAL
 # ==============================================================================
-if 'logado' not in st.session_state or not st.session_state['logado']:
-    render_login_page()
-else:
-    render_main_app()
+render_main_app()
