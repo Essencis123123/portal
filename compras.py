@@ -473,7 +473,7 @@ def carregar_dados_materiais():
     try:
         gc = get_gspread_client()
         if gc is None:
-            return pd.DataFrame(columns=["MATERIAL", "DESCRICAO"])
+            return pd.DataFrame(columns=["CODIGO", "DESCRICAO"]) # Corrigido para as colunas corretas
             
         sheet = gc.open("dados_pedido")
         worksheet = sheet.get_worksheet(2)
@@ -482,7 +482,7 @@ def carregar_dados_materiais():
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de materiais: {e}")
-        return pd.DataFrame(columns=["MATERIAL", "DESCRICAO"])
+        return pd.DataFrame(columns=["CODIGO", "DESCRICAO"]) # Corrigido para as colunas corretas
 
 def salvar_dados_materiais(df):
     """Salva os dados de materiais no Google Sheets (terceira aba - MATERIAIS)."""
@@ -580,30 +580,14 @@ def render_main_app():
         
         st.header("📝 Registrar Nova Requisição de Compra")
         
-        solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist()
+        solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist() if not st.session_state.df_solicitantes.empty else [""]
         
-        departamento_selecionado = ""
-        filial_selecionada = ""
-
-        if 'solicitante_selecionado' not in st.session_state:
-            st.session_state.solicitante_selecionado = ""
-        if 'requisicao_numero' not in st.session_state:
-            st.session_state.requisicao_numero = ""
-        if 'data_requisicao' not in st.session_state:
-            st.session_state.data_requisicao = datetime.date.today()
-        if 'tipo_pedido' not in st.session_state:
-            st.session_state.tipo_pedido = "LOCAL"
-        if 'item_codigo' not in st.session_state:
-            st.session_state.item_codigo = ""
-        if 'item_material' not in st.session_state:
-            st.session_state.item_material = ""
-        if 'unidade_medida' not in st.session_state:
-            st.session_state.unidade_medida = "UN"
-        if 'item_quantidade' not in st.session_state:
-            st.session_state.item_quantidade = 1
-
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-        with col1:
+        if st.session_state.df_solicitantes.empty:
+            st.warning("Nenhum solicitante encontrado. Por favor, cadastre um na aba 'Cadastro'.")
+            solicitante_selecionado = ""
+            departamento_selecionado = ""
+            filial_selecionada = ""
+        else:
             solicitante_selecionado = st.selectbox(
                 "Solicitante", 
                 solicitantes_nomes,
@@ -614,13 +598,17 @@ def render_main_app():
                 solicitante_info = st.session_state.df_solicitantes[st.session_state.df_solicitantes['NOME'] == solicitante_selecionado].iloc[0]
                 departamento_selecionado = solicitante_info['DEPARTAMENTO']
                 filial_selecionada = solicitante_info['FILIAL']
-        
+            else:
+                departamento_selecionado = ""
+                filial_selecionada = ""
+
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        with col1:
+            st.text_input("Solicitante", value=solicitante_selecionado, disabled=True)
         with col2:
-            st.text_input("Departamento", value=departamento_selecionado, disabled=True, key="display_departamento")
-        
+            st.text_input("Departamento", value=departamento_selecionado, disabled=True)
         with col3:
-            st.text_input("Filial", value=filial_selecionada, disabled=True, key="display_filial")
-            
+            st.text_input("Filial", value=filial_selecionada, disabled=True)
         with col4:
             requisicao = st.text_input("N° Requisição", key="input_requisicao", value=st.session_state.requisicao_numero)
 
@@ -653,69 +641,61 @@ def render_main_app():
             )
 
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
-        with col_item1:
-            item_codigo = st.text_input("Código do Material", key="input_codigo_material", value=st.session_state.item_codigo)
-        with col_item2:
-            descricao_material = ""
-            if item_codigo and not st.session_state.df_materiais.empty:
-                material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
-                if not material_info.empty:
-                    descricao_material = material_info.iloc[0]['DESCRICAO']
-            
-            item_material = st.text_input(
-                "Descrição do Material", 
-                value=descricao_material, 
-                disabled=True, 
-                key="input_material"
-            )
         
-        with col_item3:
-            unidade_medida = st.selectbox(
-                "Unidade de Medida",
-                [
-                    "UN", "TB", "PÇ", "KIT", "CX", "FR", "GL", "KG", "G", "MG", 
-                    "L", "ML", "M", "CM", "MM", "M2", "M3", "PCT", "RL", "BD", 
-                    "AMP", "SC", "T", "DZ", "CJ", "JG", "PAR", "CXA", "FAR", 
-                    "BL", "CR", "PL", "TON", "LT", "S", "CAP",
-                ],
-                key="select_unidade_medida",
-                index=[
-                    "UN", "TB", "PÇ", "KIT", "CX", "FR", "GL", "KG", "G", "MG", 
-                    "L", "ML", "M", "CM", "MM", "M2", "M3", "PCT", "RL", "BD", 
-                    "AMP", "SC", "T", "DZ", "CJ", "JG", "PAR", "CXA", "FAR", 
-                    "BL", "CR", "PL", "TON", "LT", "S", "CAP",
-                ].index(st.session_state.unidade_medida)
-            )
+        if st.session_state.df_materiais.empty:
+            st.warning("Nenhum material encontrado. Por favor, cadastre um na aba 'Cadastro'.")
+            item_codigo = ""
+            item_material = ""
+            unidade_medida = "UN"
+            item_quantidade = 1
+            st.button("➕ Adicionar Item", key="btn_adicionar_item", disabled=True)
+        else:
+            with col_item1:
+                item_codigo_options = [""] + st.session_state.df_materiais['CODIGO'].unique().tolist()
+                item_codigo = st.selectbox("Código do Material", item_codigo_options, key="select_codigo_material")
 
-        with col_item4:
-            item_quantidade = st.number_input(
-                "Quantidade", 
-                min_value=1, 
-                value=st.session_state.item_quantidade, 
-                key="input_quantidade"
-            )
+            with col_item2:
+                descricao_material = ""
+                if item_codigo:
+                    material_info = st.session_state.df_materiais[st.session_state.df_materiais['CODIGO'] == item_codigo]
+                    if not material_info.empty:
+                        descricao_material = material_info.iloc[0]['DESCRICAO']
+                
+                item_material = st.text_input("Descrição do Material", value=descricao_material, disabled=True, key="display_material")
             
-            if st.button("➕ Adicionar Item", key="btn_adicionar_item"):
-                if item_codigo and item_material and item_quantidade > 0 and unidade_medida:
-                    novo_item = pd.DataFrame([{
-                        "CODIGO_MATERIAL": item_codigo, 
-                        "MATERIAL": item_material, 
-                        "UN": unidade_medida, 
-                        "QUANTIDADE": item_quantidade
-                    }])
-                    st.session_state.itens_requisicao_temp = pd.concat(
-                        [st.session_state.itens_requisicao_temp, novo_item], 
-                        ignore_index=True
-                    )
-                    st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
-                    
-                    st.session_state.item_codigo = ""
-                    st.session_state.item_material = ""
-                    st.session_state.unidade_medida = "UN"
-                    st.session_state.item_quantidade = 1
-                    st.rerun()
-                else:
-                    st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
+            with col_item3:
+                unidade_medida = st.selectbox(
+                    "Unidade de Medida",
+                    [
+                        "UN", "TB", "PÇ", "KIT", "CX", "FR", "GL", "KG", "G", "MG", 
+                        "L", "ML", "M", "CM", "MM", "M2", "M3", "PCT", "RL", "BD", 
+                        "AMP", "SC", "T", "DZ", "CJ", "JG", "PAR", "CXA", "FAR", 
+                        "BL", "CR", "PL", "TON", "LT", "S", "CAP",
+                    ],
+                    key="select_unidade_medida",
+                )
+
+            with col_item4:
+                item_quantidade = st.number_input("Quantidade", min_value=1, value=1, key="input_quantidade")
+                
+                if st.button("➕ Adicionar Item", key="btn_adicionar_item"):
+                    if item_codigo and item_material and item_quantidade > 0:
+                        novo_item = pd.DataFrame([{
+                            "CODIGO_MATERIAL": item_codigo, 
+                            "MATERIAL": item_material, 
+                            "UN": unidade_medida, 
+                            "QUANTIDADE": item_quantidade
+                        }])
+                        st.session_state.itens_requisicao_temp = pd.concat([st.session_state.itens_requisicao_temp, novo_item], ignore_index=True)
+                        st.success("Item adicionado! Você pode editar ou excluir na tabela acima.")
+                        
+                        st.session_state.item_codigo = ""
+                        st.session_state.item_material = ""
+                        st.session_state.unidade_medida = "UN"
+                        st.session_state.item_quantidade = 1
+                        st.rerun()
+                    else:
+                        st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
         
         st.write("---")
         
@@ -791,18 +771,8 @@ def render_main_app():
         
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
-            df_almox_oc = df_almox[['ORDEM_COMPRA', 'DOC NF']].copy()
-            if 'ORDEM_COMPRA' in pedidos_pendentes_oc.columns:
-                pedidos_pendentes_oc = pedidos_pendentes_oc.merge(
-                    df_almox_oc, 
-                    on='ORDEM_COMPRA', 
-                    how='left', 
-                    suffixes=('', '_almox')
-                )
-                
-                if 'DOC NF_almox' in pedidos_pendentes_oc.columns:
-                    pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
-                    pedidos_pendentes_oc.drop(columns=['DOC NF_almox'], inplace=True, errors='ignore')
+            almox_map = df_almox.set_index('ORDEM_COMPRA')['DOC NF'].to_dict()
+            df_history['DOC NF'] = df_history['ORDEM_COMPRA'].map(almox_map).fillna(df_history['DOC NF'])
         
         data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
         for col in data_cols_to_convert:
@@ -1455,7 +1425,7 @@ def render_main_app():
             anos_disponiveis_p = df_valid_dates_p['DATA'].dt.year.unique()
             meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             with col_filtro_p1:
-                mes_selecionado_p = st.multiselect("Selecione o Mês", sorted(meses_disponiveis_p), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis_p))
+                mes_selecionado_p = st.multiselect("Selecione o Mês", sorted(meses_disponiveis_p), format_func=lambda x: meses_nomes.get(x), default=sorted(meses_disponiveis_p) if sorted(meses_disponiveis_p) else [])
             with col_filtro_p2:
                 ano_selecionado_p = st.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
