@@ -133,7 +133,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# DADOS DE USUÁRIOS E FUNÇÕES DE LOGIN
+# DADOS DE USUÁRIOS E FUNÇÕES DE LOGIN (ATUALIZADO)
 # ==============================================================================
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
@@ -145,49 +145,17 @@ USERS = {
     "wrezende@essencis.com.br": {"password": "Essencis01", "name": "WELLINGTON CASSIO DE REZENDE"}
 }
 
-def check_password():
-    """Retorna True se o usuário tiver feito login corretamente, False caso contrário."""
-    def login_form():
-        """Formulário de login na sidebar."""
-        with st.sidebar:
-            st.image("http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png", use_container_width=True)
-            st.title("Acesso Almoxarifado")
-            st.markdown("---")
-            st.markdown("Bem-vindo! Por favor, faça login para acessar o painel.")
-            with st.form("login"):
-                st.session_state.email = st.text_input("E-mail", key="email_input").strip()
-                st.session_state.password = st.text_input("Senha", type="password", key="password_input").strip()
-                st.form_submit_button("Entrar")
-
-    def logged_in_info():
-        """Exibe informações do usuário logado na sidebar."""
-        st.sidebar.success(f"Logado como: {st.session_state.username}")
-        if st.sidebar.button("Sair"):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            st.rerun()
-
-    # Verifica se já está logado
-    if st.session_state.get("logged_in", False):
-        logged_in_info()
-        return True
-
-    # Exibe formulário e processa o login
-    login_form()
-    if st.session_state.get("email") and st.session_state.get("password"):
-        email = st.session_state.email
-        password = st.session_state.password
-        if email in USERS and USERS[email]["password"] == password:
-            st.session_state.logged_in = True
-            st.session_state.username = USERS[email]["name"]
-            st.session_state.email = email
-            st.success("Login bem-sucedido! Redirecionando...")
-            st.rerun()
-        else:
-            st.error("E-mail ou senha incorretos.")
-            st.session_state.logged_in = False
-    
-    return False
+def fazer_login(email, senha):
+    """Função de login unificada como no código do financeiro"""
+    if email in USERS and USERS[email]["password"] == senha:
+        st.session_state['logado'] = True
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.session_state['email'] = email
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
+        time.sleep(1)
+        st.rerun()
+    else:
+        st.error("E-mail ou senha incorretos.")
 
 # ==============================================================================
 # FUNÇÕES DE UTILIDADE E CONEXÃO
@@ -346,7 +314,7 @@ def carregar_dados_pedidos():
         records = data[1:]
         
         df = pd.DataFrame(records, columns=headers)
-
+        
         # Garante que a coluna 'QUANTIDADE_ENTREGUE' existe, preenchendo com 0 se não estiver lá
         if 'QUANTIDADE_ENTREGUE' not in df.columns:
             df['QUANTIDADE_ENTREGUE'] = 0.0
@@ -492,29 +460,52 @@ def highlight_text(text, color):
     return f"<span style='color:{color}; font-weight:bold;'>{text}</span>"
 
 def render_main_app():
-    """Exibe a interface principal da aplicação sem login."""
+    """Exibe a interface principal da aplicação com sidebar estilo financeiro."""
     try:
         logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
         logo_img = load_logo(logo_url)
         
-        # O carregamento de dados foi movido para o topo do script para garantir que estejam sempre disponíveis
+        # Carregamento de dados
         if 'df_pedidos' not in st.session_state:
             st.session_state.df_pedidos = carregar_dados_pedidos()
         if 'df_almoxarifado' not in st.session_state:
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
         
-        # Sidebar
+        # Sidebar estilo financeiro
         with st.sidebar:
             if logo_img:
                 st.image(logo_img, use_container_width=True)
             
-            st.title("Menu de Navegação")
+            st.write(f"**Bem-vindo, {st.session_state.get('nome_colaborador', 'Colaborador')}!**")
+            st.title("🏭 Menu Almoxarifado")
+
             menu_option = st.radio(
-                "Selecione a opção:",
-                ["📝 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"],
-                index=0
+                "📌 Navegação",
+                ["📝 Registrar NF", "📊 Dashboard", "🔍 Consultar NFs", "⚙️ Configurações"]
             )
+            
             st.divider()
+            
+            # Filtros de Período (se aplicável)
+            st.subheader("Filtros de Período")
+            df_almox = st.session_state.df_almoxarifado
+            if 'DATA' in df_almox.columns and not df_almox['DATA'].isnull().all():
+                min_date = df_almox['DATA'].min() if not df_almox['DATA'].isnull().all() else datetime.date.today()
+                max_date = df_almox['DATA'].max() if not df_almox['DATA'].isnull().all() else datetime.date.today()
+                data_minima = st.date_input("De:", value=min_date)
+                data_maxima = st.date_input("Até:", value=max_date)
+            else:
+                st.info("Nenhum dado com data disponível para filtrar.")
+            
+            st.divider()
+            
+            if st.button("Logout"):
+                st.session_state.logado = False
+                st.session_state.nome_colaborador = None
+                st.session_state.email = None
+                st.rerun()
+            
+            st.caption("Sistema Almoxarifado v1.0")
 
         # Renderiza a página selecionada
         if menu_option == "📝 Registrar NF":
@@ -525,6 +516,7 @@ def render_main_app():
             render_consultar_nfs_page()
         elif menu_option == "⚙️ Configurações":
             render_configuracoes_page()
+            
     except Exception as e:
         st.error(f"Erro ao renderizar a página principal: {e}")
         st.info("Por favor, verifique a integridade dos dados nas suas planilhas e tente novamente.")
@@ -969,9 +961,30 @@ def render_configuracoes_page():
         )
 
 # ==============================================================================
-# EXECUÇÃO PRINCIPAL
+# EXECUÇÃO PRINCIPAL (ATUALIZADA)
 # ==============================================================================
-if check_password():
-    render_main_app()
+# Inicialização do estado de login
+if 'logado' not in st.session_state:
+    st.session_state.logado = False
+
+if not st.session_state.logado:
+    # Tela de login centralizada
+    st.markdown("<h1 style='text-align: center; color: #1C4D86;'>Login - Painel de Almoxarifado</h1>", unsafe_allow_html=True)
+    
+    # Criar colunas para centralizar o formulário
+    col_left, col_center, col_right = st.columns([1, 2, 1])
+    
+    with col_center:
+        st.image("http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png", use_container_width=True)
+        st.write("") # Espaço em branco
+        
+        with st.form("login_form"):
+            email = st.text_input("E-mail", placeholder="seu.email@essencis.com.br")
+            senha = st.text_input("Senha", type="password")
+            
+            st.write("") # Espaço em branco
+            if st.form_submit_button("Entrar"):
+                fazer_login(email, senha)
 else:
-    st.stop()
+    # Usuário logado - renderizar aplicação principal
+    render_main_app()
