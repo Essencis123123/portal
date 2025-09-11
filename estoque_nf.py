@@ -178,12 +178,12 @@ def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
     
-def _clean_string_column(series):
-    """Limpa strings removendo espaços extras e quebras de linha."""
-    if not series.empty:
-        # Substitui quebras de linha e múltiplos espaços por um único espaço
-        return series.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
-    return series
+def _clean_string(s):
+    """Limpa uma string removendo espaços extras e quebras de linha."""
+    if pd.isna(s):
+        return ''
+    # Substitui quebras de linha e múltiplos espaços por um único espaço
+    return re.sub(r'[\r\n\s]+', ' ', str(s)).strip()
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
@@ -511,7 +511,7 @@ def render_registrar_nf_page():
                         valor_frete_float = parse_brazil_number(valor_frete_nf)
                         
                         pedidos_relacionados = st.session_state.df_pedidos[
-                            st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip().str.upper() == ordem_compra_nf.strip().upper()
+                            st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
                         ].copy()
                         
                         valor_oc_total = (pedidos_relacionados['VALOR_ITEM'] * pedidos_relacionados['QUANTIDADE']).sum()
@@ -545,6 +545,8 @@ def render_registrar_nf_page():
                             st.session_state['mostrar_popup_divergencia'] = True
                             st.session_state['novo_registro_nf'] = novo_registro_nf
                             st.session_state.edited_items = edited_items
+                            st.session_state.valor_oc_total = valor_oc_total
+                            st.session_state.divergencia_oc = divergencia
                             st.rerun()
                         else:
                             salvar_nota_fiscal(novo_registro_nf, edited_items, pedidos_relacionados)
@@ -621,7 +623,7 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
     
     for index, row in edited_items_df.iterrows():
         original_oc_items = st.session_state.df_pedidos[
-            (st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip() == str(novo_registro_nf['ORDEM_COMPRA']).strip()) &
+            (st.session_state.df_pedidos['ORDEM_COMPRA'] == novo_registro_nf['ORDEM_COMPRA']) &
             (st.session_state.df_pedidos['CODIGO_MATERIAL'].astype(str).str.strip() == str(row['CODIGO_MATERIAL']).strip())
         ]
         
@@ -643,7 +645,7 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
 
     st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso!")
     
-    df_pedidos_pos_salvamento = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip() == str(novo_registro_nf['ORDEM_COMPRA']).strip()].copy()
+    df_pedidos_pos_salvamento = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == novo_registro_nf['ORDEM_COMPRA']].copy()
     for index, row in df_pedidos_pos_salvamento.iterrows():
         saldo_restante = row['QUANTIDADE'] - row.get('QUANTIDADE_ENTREGUE', 0)
         if saldo_restante > 0:
