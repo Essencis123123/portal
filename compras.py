@@ -403,9 +403,11 @@ def carregar_dados_solicitantes():
             return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
             
         sheet = gc.open("dados_pedido")
+        # CORREÇÃO: Índice da aba de Solicitantes é 3
         worksheet = sheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
+        # Verifica se as colunas esperadas existem
         if not all(col in df.columns for col in ["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"]):
              st.error("A planilha de Solicitantes não tem as colunas esperadas: NOME, DEPARTAMENTO, EMAIL, FILIAL.")
              return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
@@ -422,6 +424,7 @@ def salvar_dados_solicitantes(df):
             return
             
         sheet = gc.open("dados_pedido")
+        # CORREÇÃO: Índice da aba de Solicitantes é 3
         worksheet = sheet.get_worksheet(3)
 
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
@@ -458,7 +461,8 @@ def carregar_dados_almoxarifado():
             return pd.DataFrame(columns=['ORDEM_COMPRA', 'DOC NF'])
             
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(2)
+        # CORREÇÃO: Índice da aba de Almoxarifado é 1
+        worksheet = sheet.get_worksheet(1)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
@@ -479,9 +483,11 @@ def carregar_dados_materiais():
             return pd.DataFrame(columns=["CODIGO", "DESCRICAO"])
             
         sheet = gc.open("dados_pedido")
+        # CORREÇÃO: Índice da aba de Materiais é 2
         worksheet = sheet.get_worksheet(2)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
+        # Verifica se as colunas esperadas existem
         if not all(col in df.columns for col in ["CODIGO", "DESCRICAO"]):
             st.error("A planilha de Materiais não tem as colunas esperadas: CODIGO, DESCRICAO.")
             return pd.DataFrame(columns=["CODIGO", "DESCRICAO"])
@@ -495,6 +501,7 @@ def salvar_dados_materiais(df):
     try:
         gc = get_gspread_client()
         sheet = gc.open("dados_pedido")
+        # CORREÇÃO: Índice da aba de Materiais é 2
         worksheet = sheet.get_worksheet(2)
 
         df_copy = df.copy()
@@ -607,7 +614,6 @@ def render_main_app():
         
         st.header("📝 Registrar Nova Requisição de Compra")
         
-        # Lógica para preencher o seletor de solicitantes
         if st.session_state.df_solicitantes is not None and not st.session_state.df_solicitantes.empty:
             solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist()
             with st.container():
@@ -669,7 +675,6 @@ def render_main_app():
 
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         
-        # Lógica para preencher o seletor de materiais
         if st.session_state.df_materiais is not None and not st.session_state.df_materiais.empty:
             item_codigo_options = [""] + st.session_state.df_materiais['CODIGO'].unique().tolist()
             with col_item1:
@@ -1026,7 +1031,7 @@ def render_main_app():
                 "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
                 "UN": st.column_config.TextColumn("UN", disabled=True),
                 "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
-                "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
+                "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),\
                 "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                 "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
@@ -1034,7 +1039,7 @@ def render_main_app():
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
                 "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação", format="DD-MM-YYYY"),
-                "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),
+                "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB"]),\
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD-MM-YYYY"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DOC NF": st.column_config.LinkColumn(
@@ -1334,7 +1339,6 @@ def render_main_app():
         else:
             st.info("Não há pedidos entregues no período para criar o ranking.")
         
-        # --- Curva ABC ---
         st.markdown("---")
         st.header("Análise de Materiais - Curva ABC")
         
