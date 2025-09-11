@@ -257,11 +257,10 @@ def fazer_login_financeiro(email, senha):
     if email in USERS_FINANCEIRO and USERS_FINANCEIRO[email]["password"] == senha:
         st.session_state['logado_financeiro'] = True
         st.session_state['nome_colaborador'] = USERS_FINANCEIRO[email]["name"]
-        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
-        time.sleep(1)
-        st.rerun()
+        return True
     else:
         st.error("E-mail ou senha incorretos.")
+        return False
 
 def render_login_financeiro():
     """Renderiza a tela de login para o painel financeiro."""
@@ -280,7 +279,10 @@ def render_login_financeiro():
             
             st.write("")
             if st.form_submit_button("Entrar no Painel Financeiro"):
-                fazer_login_financeiro(email, senha)
+                if fazer_login_financeiro(email, senha):
+                    st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
+                    time.sleep(1)
+                    st.rerun()
 
 # ==============================================================================
 # INTERFACE PRINCIPAL
@@ -730,7 +732,7 @@ def render_main_app():
 if 'logado_financeiro' not in st.session_state:
     st.session_state.logado_financeiro = False
 
-# Lógica de renderização
+# Lógica de renderização: login OU app principal
 if not st.session_state.logado_financeiro:
     render_login_financeiro()
 else:
