@@ -425,8 +425,8 @@ def render_registrar_nf_page():
                     ]
                     ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
                 else:
-                    # Se nenhum fornecedor selecionado, mostrar todas as ordens
-                    ordens_disponiveis.extend(st.session_state.df_pedidos['ORDEM_COMPRA'].dropna().unique().tolist())
+                    # Se nenhum fornecedor selecionado, mostrar apenas a opção vazia
+                    pass
                 
                 ordem_compra_nf = st.selectbox(
                     "N° Ordem de Compra*",
@@ -436,20 +436,19 @@ def render_registrar_nf_page():
                 )
                 
                 # Atualizar itens quando uma ordem de compra for selecionada
-                if ordem_compra_nf and ordem_compra_nf != '':
-                    if st.session_state.get('last_oc_selected') != ordem_compra_nf:
-                        oc_items = st.session_state.df_pedidos[
-                            st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
-                        ].copy()
-                        if not oc_items.empty:
-                            if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
-                                oc_items['QUANTIDADE_ENTREGUE'] = 0.0
-                            oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
-                            st.session_state.oc_items_for_nf = oc_items
-                        else:
-                            st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
-                        
-                        st.session_state.last_oc_selected = ordem_compra_nf
+                if ordem_compra_nf and ordem_compra_nf != st.session_state.get('last_oc_selected'):
+                    oc_items = st.session_state.df_pedidos[
+                        st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
+                    ].copy()
+                    if not oc_items.empty:
+                        if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
+                            oc_items['QUANTIDADE_ENTREGUE'] = 0.0
+                        oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
+                        st.session_state.oc_items_for_nf = oc_items
+                    else:
+                        st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
+                    
+                    st.session_state.last_oc_selected = ordem_compra_nf
 
             with col3_form:
                 valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00", key="valor_total_nf_input")
