@@ -24,7 +24,7 @@ st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide",
 
 # CSS personalizado para o tema Essencis
 st.markdown(
-    """
+    ""
     <style>
     /* Aumenta o tamanho da fonte de todo o corpo do aplicativo */
     html, body, [data-testid="stAppViewContainer"] {
