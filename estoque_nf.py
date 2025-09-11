@@ -410,7 +410,7 @@ def filter_oc():
 # FUNÇÕES DO POP-UP DE DIVERGÊNCIA
 # ==============================================================================
 
-@st.experimental_dialog("⚠️ Atenção: Divergência de Valor!")
+@st.dialog("⚠️ Atenção: Divergência de Valor!")
 def confirm_divergence_dialog(novo_registro_nf, edited_items, valor_oc_total, divergencia_oc):
     valor_oc_formatado = f"R$ {valor_oc_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     valor_nf_formatado = f"R$ {novo_registro_nf['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
