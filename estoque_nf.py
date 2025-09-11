@@ -432,7 +432,7 @@ def render_registrar_nf_page():
                 
             with col3_form:
                 valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
-                condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB","RETIRAR"])
+                condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
                 valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
             
             doc_nf_links = st.text_area("Links das Notas Fiscais (um por linha)", placeholder="Cole os links de acesso aqui...")
