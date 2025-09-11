@@ -283,15 +283,9 @@ def render_login_financeiro():
                 fazer_login_financeiro(email, senha)
 
 # ==============================================================================
-# EXECUÇÃO PRINCIPAL
+# INTERFACE PRINCIPAL
 # ==============================================================================
-if 'logado_financeiro' not in st.session_state:
-    st.session_state.logado_financeiro = False
-
-if not st.session_state.logado_financeiro:
-    render_login_financeiro()
-else:
-    # Usuário logado - renderizar aplicação principal
+def render_main_app():
     if 'df' not in st.session_state:
         st.session_state.df = carregar_dados()
 
@@ -728,3 +722,16 @@ else:
             st.text_area("Log de Atividades", value=log_text, height=300, disabled=True)
         else:
             st.info("Nenhum log disponível.")
+
+# ==============================================================================
+# EXECUÇÃO PRINCIPAL
+# ==============================================================================
+# Inicialização do estado de login
+if 'logado_financeiro' not in st.session_state:
+    st.session_state.logado_financeiro = False
+
+# Lógica de renderização
+if not st.session_state.logado_financeiro:
+    render_login_financeiro()
+else:
+    render_main_app()
