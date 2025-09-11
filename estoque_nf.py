@@ -438,21 +438,18 @@ def render_registrar_nf_page():
                     key="oc_select"
                 )
                 
-                # Reseta a tabela se a OC mudar
-                if 'last_oc_selected' not in st.session_state or st.session_state.last_oc_selected != ordem_compra_nf:
-                    st.session_state.last_oc_selected = ordem_compra_nf
-                    if ordem_compra_nf:
-                        oc_items = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == ordem_compra_nf.strip()].copy()
-                        if not oc_items.empty:
-                            if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
-                                oc_items['QUANTIDADE_ENTREGUE'] = 0.0
-                            oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
-                            st.session_state.oc_items_for_nf = oc_items
-                        else:
-                            st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
+                if ordem_compra_nf and st.session_state.get('last_oc_selected') != ordem_compra_nf:
+                    oc_items = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == ordem_compra_nf.strip()].copy()
+                    if not oc_items.empty:
+                        if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
+                            oc_items['QUANTIDADE_ENTREGUE'] = 0.0
+                        oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
+                        st.session_state.oc_items_for_nf = oc_items
+                    else:
+                        st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
                     
-                    if ordem_compra_nf:
-                        st.rerun()
+                    st.session_state.last_oc_selected = ordem_compra_nf
+                    st.rerun()
 
             with col3_form:
                 valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00", key="valor_total_nf_input")
