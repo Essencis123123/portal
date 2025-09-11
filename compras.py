@@ -430,7 +430,7 @@ def salvar_dados_solicitantes(df):
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
         
         worksheet.clear()
-        worksheet.update(data_to_write, value_input_option='USER_ENTERED')
+        set_with_dataframe(worksheet, df, resize=True, include_column_header=True)
         
         st.success("Solicitante cadastrado na planilha com sucesso!")
     except Exception as e:
@@ -1149,7 +1149,7 @@ def render_main_app():
                     codigo = st.text_input("Código do Material")
                     descricao = st.text_input("Descrição do Material")
                     
-                    if st.form_submit_button("Cadastrar Material"):\
+                    if st.form_submit_button("Cadastrar Material"):
                         if codigo and descricao:
                             novo_material = pd.DataFrame([{"CODIGO": codigo.upper(), "DESCRICAO": descricao.upper()}])
                             st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, novo_material], ignore_index=True)
