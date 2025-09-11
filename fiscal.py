@@ -260,33 +260,15 @@ def fazer_login(email, senha):
     else:
         st.error("E-mail ou senha incorretos.")
 
-# ==============================================================================
-# EXECUÇÃO PRINCIPAL
-# ==============================================================================
-if 'logado' not in st.session_state:
-    st.session_state.logado = False
-
-if not st.session_state.logado:
-    # Tela de login centralizada (FORMATO ATUALIZADO)
-    st.markdown("<h1 style='text-align: center; color: #1C4D86;'>Login - Painel Financeiro</h1>", unsafe_allow_html=True)
-    
-    # Criar colunas para centralizar o formulário
-    col_left, col_center, col_right = st.columns([1, 2, 1])
-    
-    with col_center:
-        st.image("http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png", use_container_width=True)
-        st.write("") # Espaço em branco
-        
-        with st.form("login_form"):
-            email = st.text_input("E-mail", placeholder="seu.email@essencis.com.br")
-            senha = st.text_input("Senha", type="password")
-            
-            st.write("") # Espaço em branco
-            if st.form_submit_button("Entrar"):
-                fazer_login(email, senha)
-
+# --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
+if 'logado' not in st.session_state or not st.session_state.logado:
+    st.title("Login - Painel de Notas Fiscais")
+    with st.form("login_form"):
+        email = st.text_input("E-mail")
+        senha = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar"):
+            fazer_login(email, senha)
 else:
-    # Usuário logado - renderizar aplicação principal
     if 'df' not in st.session_state:
         st.session_state.df = carregar_dados()
 
@@ -451,7 +433,7 @@ else:
                     if dias_passados > 5:
                         return f"🔴 {row['CONDICAO_PROBLEMA']}"
                 return row['CONDICAO_PROBLEMA']
-                
+            
             df_display['PROBLEMA_VISUAL'] = df_display.apply(lambda row: formatar_problema_visual(row), axis=1)
 
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
