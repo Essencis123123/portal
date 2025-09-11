@@ -24,7 +24,7 @@ import sys
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
 # ==============================================================================
 # Configuração da página com layout wide e ícone
-st.set_page_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
+st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
 # CSS personalizado para o tema Essencis
 st.markdown(
