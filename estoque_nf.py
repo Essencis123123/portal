@@ -917,6 +917,47 @@ def render_consultar_nfs_page():
     else:
         st.info("📝 Nenhum dado disponível para consulta.")
 
+
+# ... (restante do código da função render_consultar_nfs_page) ...
+
+if not df_consulta.empty:
+    st.markdown("---")
+    st.subheader("🛠️ Editar Notas Fiscais")
+    
+    # Use st.data_editor para permitir a edição
+    edited_df = st.data_editor(
+        df_consulta[['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'V. TOTAL NF', 'STATUS_FINANCEIRO']],
+        use_container_width=True,
+        hide_index=True,
+        num_rows='fixed',
+        column_config={
+            "NF": "Número NF",
+            "ORDEM_COMPRA": "Ordem de Compra",
+            "FORNECEDOR_NF": "Fornecedor",
+            "V. TOTAL NF": st.column_config.NumberColumn("Valor Total NF", format="%.2f", disabled=False), # Valor Total NF agora é editável
+            "STATUS_FINANCEIRO": st.column_config.SelectboxColumn("Status", options=['EM ANDAMENTO', 'NF PROBLEMA', 'CAPTURADO', 'FINALIZADO'], required=True)
+        },
+        key="editor_consulta"
+    )
+
+    if st.button("💾 Salvar Alterações"):
+        # Lógica para salvar as alterações de volta no DataFrame principal
+        for index, row in edited_df.iterrows():
+            original_index = df_consulta.index[index]
+            st.session_state.df_almoxarifado.loc[original_index, 'V. TOTAL NF'] = row['V. TOTAL NF']
+            st.session_state.df_almoxarifado.loc[original_index, 'STATUS_FINANCEIRO'] = row['STATUS_FINANCEIRO']
+        
+        # Salva o DataFrame atualizado no Google Sheets
+        if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+            st.success("✅ Alterações salvas com sucesso!")
+            st.cache_data.clear() # Limpa o cache para recarregar com dados novos
+            st.rerun()
+        else:
+            st.error("❌ Erro ao salvar as alterações. Tente novamente.")
+
+else:
+    st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
+
 def render_configuracoes_page():
     """Página de configurações do sistema."""
     st.markdown("""
