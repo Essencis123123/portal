@@ -705,7 +705,7 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
             if nova_quantidade_entregue >= st.session_state.df_pedidos.loc[original_idx, 'QUANTIDADE']:
                 st.session_state.df_pedidos.loc[original_idx, 'STATUS_PEDIDO'] = 'ENTREGUE'
                 st.session_state.df_pedidos.loc[original_idx, 'DATA_ENTREGA'] = pd.to_datetime(novo_registro_nf['DATA'])
-     st.cache_data.clear() # Limpa o cache para forçar a recarga
+                st.cache_data.clear() 
     salvar_dados_pedidos(st.session_state.df_pedidos)
     salvar_dados_almoxarifado(st.session_state.df_almoxarifado)
 
