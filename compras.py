@@ -403,7 +403,7 @@ def carregar_dados_solicitantes():
             return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
             
         sheet = gc.open("dados_pedido")
-        # CORREÇÃO: O índice correto para "Solicitantes" é 3
+        # CORRIGIDO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
@@ -424,7 +424,7 @@ def salvar_dados_solicitantes(df):
             return
             
         sheet = gc.open("dados_pedido")
-        # CORREÇÃO: O índice correto para "Solicitantes" é 3
+        # CORRIGIDO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
 
         data_to_write = [df.columns.values.tolist()] + df.values.tolist()
@@ -500,6 +500,9 @@ def salvar_dados_materiais(df):
     """Salva os dados de materiais no Google Sheets (terceira aba - MATERIAIS)."""
     try:
         gc = get_gspread_client()
+        if gc is None:
+            return
+            
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "MATERIAIS" é 2
         worksheet = sheet.get_worksheet(2)
@@ -956,7 +959,8 @@ def render_main_app():
             meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
             anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
             
-            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 
+                           7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
             
             col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4)
             col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3)
