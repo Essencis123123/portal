@@ -487,6 +487,10 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df):
 # INTERFACE PRINCIPAL
 # ==============================================================================
 
+def highlight_text(text, color):
+    """Retorna um texto formatado com uma cor específica usando HTML."""
+    return f"<span style='color:{color}; font-weight:bold;'>{text}</span>"
+
 def render_main_app():
     """Exibe a interface principal da aplicação sem login."""
     try:
@@ -584,7 +588,7 @@ def render_registrar_nf_page():
     with st.form("formulario_nota", clear_on_submit=False):
         col1_form, col2_form, col3_form = st.columns(3)
         with col1_form:
-            st.write("Fornecedor selecionado: **"+str(fornecedor_selecionado)+"**")
+            st.markdown(f"Fornecedor selecionado: {highlight_text(str(fornecedor_selecionado), '#39FF14')}", unsafe_allow_html=True)
             nf_numero = st.text_input("Número da NF*", key="nf_numero_input")
 
         with col2_form:
@@ -595,7 +599,7 @@ def render_registrar_nf_page():
                 "OUTROS"
             ]
             recebedor = st.selectbox("Recebedor*", sorted(recebedor_options), key="recebedor_select")
-            st.write("Ordem de Compra selecionada: **"+str(ordem_compra_nf)+"**")
+            st.markdown(f"Ordem de Compra selecionada: {highlight_text(str(ordem_compra_nf), '#39FF14')}", unsafe_allow_html=True)
 
         with col3_form:
             valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00", key="valor_total_nf_input")
