@@ -577,16 +577,17 @@ def render_registrar_nf_page():
         fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select", on_change=filter_oc)
 
     with col2_form:
-        ordens_disponiveis = ['']
-        if fornecedor_selecionado and fornecedor_selecionado != '':
-            pedidos_filtrados = st.session_state.df_pedidos[
-                st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado
-            ]
-            ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
+        # Filtra OCs que ainda não foram entregues ou que têm saldo pendente
+        oc_pendentes = st.session_state.df_pedidos[
+            (st.session_state.df_pedidos['QUANTIDADE'] > st.session_state.df_pedidos['QUANTIDADE_ENTREGUE']) &
+            (st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado)
+        ]['ORDEM_COMPRA'].dropna().unique().tolist()
+
+        ordens_disponiveis = [''] + sorted(list(oc_pendentes))
         
         ordem_compra_nf = st.selectbox(
             "N° Ordem de Compra*",
-            options=sorted(ordens_disponiveis),
+            options=ordens_disponiveis,
             help="Selecione o número da ordem de compra para vincular a nota.",
             key="oc_select"
         )
@@ -656,6 +657,24 @@ def render_registrar_nf_page():
                 },
                 key="itens_pedido_editor"
             )
+
+            # Lógica para recalcular o saldo em tempo real
+            if edited_items is not None:
+                df_to_display = edited_items.copy()
+                df_to_display['SALDO_PENDENTE'] = df_to_display['QUANTIDADE'] - (df_to_display['QUANTIDADE_ENTREGUE'] + st.session_state.oc_items_for_nf['QUANTIDADE_ENTREGUE'])
+                st.dataframe(
+                    df_to_display[['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE']],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "CODIGO_MATERIAL": "Código Material",
+                        "MATERIAL": "Descrição Material",
+                        "UN": "UN",
+                        "QUANTIDADE": "Qtd. Pedida",
+                        "QUANTIDADE_ENTREGUE": "Qtd. Recebida*",
+                        "SALDO_PENDENTE": "Saldo Pendente"
+                    }
+                )
         
         else:
             st.info("Selecione uma Ordem de Compra para visualizar os itens.")
