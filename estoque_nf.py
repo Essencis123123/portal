@@ -366,7 +366,6 @@ def render_main_app():
                 index=0
             )
             st.divider()
-            # O botão de Logout foi removido, pois não há mais login
         
         # Renderiza a página selecionada
         if menu_option == "📝 Registrar NF":
