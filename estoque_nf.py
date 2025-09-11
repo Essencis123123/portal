@@ -176,7 +176,7 @@ def parse_brazil_number(value_str):
 
 def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
-    return pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
+    return pd.to_datetime(series, errors="coerce", dayfirst=True)
     
 def _clean_string(s):
     """Limpa uma string removendo espaços extras e quebras de linha."""
@@ -340,15 +340,9 @@ def carregar_dados_solicitantes():
         st.error(f"Erro ao carregar dados de solicitantes: {e}")
         return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
-# Lógica de login e usuários foi removida por ser redundante neste contexto
-# e para focar na lógica principal do almoxarifado.
-
 # ==============================================================================
 # INTERFACE PRINCIPAL
 # ==============================================================================
-# REMOVIDO: A função de login, a página de login e a verificação de sessão foram removidas
-# para que o aplicativo seja acessível diretamente.
-# As funções render_login_page e fazer_login também foram removidas.
 
 def render_main_app():
     """Exibe a interface principal da aplicação sem login."""
@@ -423,12 +417,16 @@ def render_registrar_nf_page():
                 ]
                 recebedor = st.selectbox("Recebedor*", sorted(recebedor_options), key="recebedor_select")
                 
+                # CORREÇÃO: Filtrar ordens de compra baseado no fornecedor selecionado
                 ordens_disponiveis = ['']
-                if fornecedor_selecionado:
+                if fornecedor_selecionado and fornecedor_selecionado != '':
                     pedidos_filtrados = st.session_state.df_pedidos[
                         st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado
                     ]
                     ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
+                else:
+                    # Se nenhum fornecedor selecionado, mostrar todas as ordens
+                    ordens_disponiveis.extend(st.session_state.df_pedidos['ORDEM_COMPRA'].dropna().unique().tolist())
                 
                 ordem_compra_nf = st.selectbox(
                     "N° Ordem de Compra*",
@@ -437,20 +435,21 @@ def render_registrar_nf_page():
                     key="oc_select"
                 )
                 
-                if ordem_compra_nf and st.session_state.get('last_oc_selected') != ordem_compra_nf:
-                    oc_items = st.session_state.df_pedidos[
-                        st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
-                    ].copy()
-                    if not oc_items.empty:
-                        if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
-                            oc_items['QUANTIDADE_ENTREGUE'] = 0.0
-                        oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
-                        st.session_state.oc_items_for_nf = oc_items
-                    else:
-                        st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
-                    
-                    st.session_state.last_oc_selected = ordem_compra_nf
-                    st.rerun()
+                # Atualizar itens quando uma ordem de compra for selecionada
+                if ordem_compra_nf and ordem_compra_nf != '':
+                    if st.session_state.get('last_oc_selected') != ordem_compra_nf:
+                        oc_items = st.session_state.df_pedidos[
+                            st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
+                        ].copy()
+                        if not oc_items.empty:
+                            if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
+                                oc_items['QUANTIDADE_ENTREGUE'] = 0.0
+                            oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
+                            st.session_state.oc_items_for_nf = oc_items
+                        else:
+                            st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
+                        
+                        st.session_state.last_oc_selected = ordem_compra_nf
 
             with col3_form:
                 valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00", key="valor_total_nf_input")
@@ -492,7 +491,7 @@ def render_registrar_nf_page():
             enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
 
             if enviar:
-                if not ordem_compra_nf:
+                if not ordem_compra_nf or ordem_compra_nf == '':
                     st.error("Por favor, selecione uma Ordem de Compra.")
                     st.stop()
                 
