@@ -292,14 +292,16 @@ def render_login_financeiro():
 # INTERFACE PRINCIPAL
 # ==============================================================================
 def render_main_app():
+    # Inicializa ou carrega os dados da planilha
     if 'df' not in st.session_state:
         st.session_state.df = carregar_dados()
 
+    # Inicializa variáveis de estado
     if 'ultimo_salvamento' not in st.session_state:
         st.session_state.ultimo_salvamento = None
     if 'alteracoes_pendentes' not in st.session_state:
         st.session_state.alteracoes_pendentes = False
-
+        
     df = st.session_state.df
 
     # --- LAYOUT E FILTROS DO SIDEBAR ---
@@ -387,10 +389,18 @@ def render_main_app():
                 st.session_state.df = carregar_dados()
                 st.rerun()
         with col4:
+            # Pegar o horário de Brasília para exibir no card
+            brasilia_tz = pytz.timezone('America/Sao_Paulo')
+            agora_brasilia = datetime.datetime.now(brasilia_tz)
+
             if st.session_state.ultimo_salvamento:
-                st.info(f"Último save: {st.session_state.ultimo_salvamento.strftime('%H:%M:%S')}")
+                horario_salvamento_brasilia = st.session_state.ultimo_salvamento.astimezone(brasilia_tz).strftime('%H:%M:%S')
+                st.info(f"Último save: {horario_salvamento_brasilia}")
             elif st.session_state.alteracoes_pendentes:
                 st.warning("Alterações não salvas")
+            else:
+                st.info("Nenhuma alteração pendente")
+
 
         if not df.empty:
             df_filtrado = df.copy()
