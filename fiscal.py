@@ -129,7 +129,6 @@ def _to_datetime(series):
     """Converte para datetime com dayfirst, tolerante a strings, date e NaT."""
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
 
-@st.cache_data(show_spinner=False)
 def carregar_dados() -> pd.DataFrame:
     """
     Carrega os dados da aba 'Almoxarifado' da planilha 'dados_pedido' do Google Sheets
@@ -161,8 +160,6 @@ def carregar_dados() -> pd.DataFrame:
             'FORNECEDOR_NF': 'FORNECEDOR',
             'V. TOTAL NF': 'V_TOTAL_NF',
             'DOC NF': 'DOC_NF',
-            'REGISTRO_ENVIO': 'REGISTRO_ENVIO',
-            'REGISTRO_LANCAMENTO': 'REGISTRO_LANCAMENTO'
         }, errors='ignore')
 
         # Garante que não haja colunas duplicadas
@@ -242,8 +239,8 @@ def salvar_dados(df: pd.DataFrame) -> bool:
         st.error(f"Erro ao salvar dados na planilha: {e}")
         return False
 
-# --- Lógica de Login para o Painel Financeiro ---
-USERS_FINANCEIRO = {
+# --- Lógica de Login (UNIFICADA) ---
+USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
     "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
     "isoares@essencis.com.br": {"password": "Essencis01", "name": "ISABELA CAROLINA DE PAULA SOARES"},
@@ -253,58 +250,36 @@ USERS_FINANCEIRO = {
     "wrezende@essencis.com.br": {"password": "Essencis01", "name": "WELLINGTON CASSIO DE REZENDE"}
 }
 
-def fazer_login_financeiro(email, senha):
-    if email in USERS_FINANCEIRO and USERS_FINANCEIRO[email]["password"] == senha:
-        st.session_state['logado_financeiro'] = True
-        st.session_state['nome_colaborador'] = USERS_FINANCEIRO[email]["name"]
-        return True
+def fazer_login(email, senha):
+    if email in USERS and USERS[email]["password"] == senha:
+        st.session_state['logado'] = True
+        st.session_state['nome_colaborador'] = USERS[email]["name"]
+        st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
+        time.sleep(1)
+        st.rerun()
     else:
-        return False
+        st.error("E-mail ou senha incorretos.")
 
-def render_login_financeiro():
-    """Renderiza a tela de login para o painel financeiro."""
-    st.markdown("<h1 style='text-align: center; color: #1C4D86;'>Login - Painel Financeiro</h1>", unsafe_allow_html=True)
-    
-    col_left, col_center, col_right = st.columns([1, 2, 1])
-    
-    with col_center:
-        if logo_img:
-            st.image(logo_img, use_container_width=True)
-        st.write("")
-        
-        with st.form("login_form_financeiro"):
-            email = st.text_input("E-mail", placeholder="seu.email@essencis.com.br")
-            senha = st.text_input("Senha", type="password")
-            
-            st.write("")
-            submitted = st.form_submit_button("Entrar no Painel Financeiro")
-            
-        # Verifica se o formulário foi submetido após a renderização
-        if submitted:
-            if fazer_login_financeiro(email, senha):
-                st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
-                time.sleep(0.5)  # Pequena pausa para ver a mensagem
-                st.rerun()
-            else:
-                st.error("E-mail ou senha incorretos.")
-
-# ==============================================================================
-# INTERFACE PRINCIPAL
-# ==============================================================================
-def render_main_app():
-    # Inicializa ou carrega os dados da planilha
+# --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
+if 'logado' not in st.session_state or not st.session_state.logado:
+    st.title("Login - Painel de Notas Fiscais")
+    with st.form("login_form"):
+        email = st.text_input("E-mail")
+        senha = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar"):
+            fazer_login(email, senha)
+else:
     if 'df' not in st.session_state:
         st.session_state.df = carregar_dados()
 
-    # Inicializa variáveis de estado
     if 'ultimo_salvamento' not in st.session_state:
         st.session_state.ultimo_salvamento = None
     if 'alteracoes_pendentes' not in st.session_state:
         st.session_state.alteracoes_pendentes = False
-        
+
     df = st.session_state.df
 
-    # --- LAYOUT E FILTROS DO SIDEBAR ---
+    # --- LAYOUT E FILTROS DO SIDEBAR (NOVO) ---
     with st.sidebar:
         if logo_img:
             st.image(logo_img, use_container_width=True)
@@ -352,8 +327,7 @@ def render_main_app():
 
         st.divider()
         if st.button("Logout"):
-            st.session_state.logado_financeiro = False
-            st.session_state.nome_colaborador = None
+            st.session_state.logado = False
             st.rerun()
 
         st.caption("Sistema Financeiro Completo v1.0")
@@ -389,18 +363,10 @@ def render_main_app():
                 st.session_state.df = carregar_dados()
                 st.rerun()
         with col4:
-            # Pegar o horário de Brasília para exibir no card
-            brasilia_tz = pytz.timezone('America/Sao_Paulo')
-            agora_brasilia = datetime.datetime.now(brasilia_tz)
-
             if st.session_state.ultimo_salvamento:
-                horario_salvamento_brasilia = st.session_state.ultimo_salvamento.astimezone(brasilia_tz).strftime('%H:%M:%S')
-                st.info(f"Último save: {horario_salvamento_brasilia}")
+                st.info(f"Último save: {st.session_state.ultimo_salvamento.strftime('%H:%M:%S')}")
             elif st.session_state.alteracoes_pendentes:
                 st.warning("Alterações não salvas")
-            else:
-                st.info("Nenhuma alteração pendente")
-
 
         if not df.empty:
             df_filtrado = df.copy()
@@ -443,7 +409,7 @@ def render_main_app():
             status_map = {
                 'EM ANDAMENTO': '🟡 EM ANDAMENTO',
                 'NF PROBLEMA': '🔴 NF PROBLEMA',
-                'CAPTURADO': '🟣 CAPTURADO',
+                'CAPTURADO': '🟣 CAPTURADO',  # NOVA OPÇÃO ADICIONADA
                 'FINALIZADO': '🟢 FINALIZADO'
             }
             reverse_status_map = {v: k for k, v in status_map.items()}
@@ -500,7 +466,7 @@ def render_main_app():
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
                     "REGISTRO_ENVIO_VISUAL": st.column_config.TextColumn("Reg. Envio (Almox.)", disabled=True),
-                    "REGISTRO_LANCAMENTO_VISUAL": st.column_config.TextColumn("Reg. Lançamento (Fin.)"),
+                    "REGISTRO_LANCAMENTO_VISUAL": st.column_config.TextColumn("Reg. Lançamento (Fin.)"), # EDITÁVEL
                 },
                 column_order=[
                     "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO_VISUAL",
@@ -738,16 +704,3 @@ def render_main_app():
             st.text_area("Log de Atividades", value=log_text, height=300, disabled=True)
         else:
             st.info("Nenhum log disponível.")
-
-# ==============================================================================
-# EXECUÇÃO PRINCIPAL
-# ==============================================================================
-# Inicialização do estado de login
-if 'logado_financeiro' not in st.session_state:
-    st.session_state.logado_financeiro = False
-
-# Lógica de renderização
-if not st.session_state.logado_financeiro:
-    render_login_financeiro()
-else:
-    render_main_app()
