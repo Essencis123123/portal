@@ -346,12 +346,16 @@ def carregar_dados_pedidos():
         records = data[1:]
         
         df = pd.DataFrame(records, columns=headers)
+
+        # Garante que a coluna 'QUANTIDADE_ENTREGUE' existe, preenchendo com 0 se não estiver lá
+        if 'QUANTIDADE_ENTREGUE' not in df.columns:
+            df['QUANTIDADE_ENTREGUE'] = 0.0
         
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df.columns:
                 df[col] = _to_datetime(df[col], dayfirst=True)
         
-        numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE']
+        numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = df[col].apply(parse_brazil_number).fillna(0)
@@ -362,7 +366,7 @@ def carregar_dados_pedidos():
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de pedidos: {e}")
-        return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"])
+        return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "QUANTIDADE_ENTREGUE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"])
 
 
 def salvar_dados_pedidos(df):
@@ -705,7 +709,7 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
             if nova_quantidade_entregue >= st.session_state.df_pedidos.loc[original_idx, 'QUANTIDADE']:
                 st.session_state.df_pedidos.loc[original_idx, 'STATUS_PEDIDO'] = 'ENTREGUE'
                 st.session_state.df_pedidos.loc[original_idx, 'DATA_ENTREGA'] = pd.to_datetime(novo_registro_nf['DATA'])
-                st.cache_data.clear() 
+                st.cache_data.clear()  # Adicionada esta linha
     salvar_dados_pedidos(st.session_state.df_pedidos)
     salvar_dados_almoxarifado(st.session_state.df_almoxarifado)
 
