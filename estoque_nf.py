@@ -400,17 +400,17 @@ def render_registrar_nf_page():
         st.stop()
     
     # Inicializa variáveis de estado
-    if 'selected_oc_items' not in st.session_state:
-        st.session_state.selected_oc_items = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO'])
-
+    if 'oc_items_for_nf' not in st.session_state:
+        st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
+    
     with st.expander("➕ Adicionar Nova Nota Fiscal", expanded=True):
         with st.form("formulario_nota", clear_on_submit=False):
             col1_form, col2_form, col3_form = st.columns(3)
             
             with col1_form:
                 fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
-                fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis))
-                nf_numero = st.text_input("Número da NF*")
+                fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select")
+                nf_numero = st.text_input("Número da NF*", key="nf_numero_input")
 
             with col2_form:
                 recebedor_options = [
@@ -419,43 +419,40 @@ def render_registrar_nf_page():
                     "EMERSON ALMEIDA DE ARAUJO", "GABRIEL PEREIRA MARTINS",
                     "OUTROS"
                 ]
-                recebedor = st.selectbox("Recebedor*", sorted(recebedor_options))
+                recebedor = st.selectbox("Recebedor*", sorted(recebedor_options), key="recebedor_select")
+                
                 ordens_disponiveis = ['']
                 if fornecedor_selecionado:
-                    pedidos_filtrados = st.session_state.df_pedidos[st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado]
+                    pedidos_filtrados = st.session_state.df_pedidos[st.session_state.df_pedidos['FORNECEDOR'].str.strip() == fornecedor_selecionado.strip()]
                     ordens_disponiveis.extend(pedidos_filtrados['ORDEM_COMPRA'].dropna().unique().tolist())
+                
                 ordem_compra_nf = st.selectbox(
                     "N° Ordem de Compra*",
                     options=sorted(ordens_disponiveis),
-                    help="Selecione o número da ordem de compra para vincular a nota."
+                    help="Selecione o número da ordem de compra para vincular a nota.",
+                    key="oc_select"
                 )
                 
-            with col3_form:
-                valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00")
-                condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"])
-                valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00")
-            
-            doc_nf_links = st.text_area("Links das Notas Fiscais (um por linha)", placeholder="Cole os links de acesso aqui...")
-            
-            observacao = st.text_area("Observações", placeholder="Informações adicionais...")
-            vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30))
-            
-            st.markdown("---")
-            st.subheader("Itens do Pedido")
-            
-            if ordem_compra_nf:
-                oc_items = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf].copy()
-                if not oc_items.empty:
-                    # Garante que as colunas existem
-                    if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
-                        oc_items['QUANTIDADE_ENTREGUE'] = 0
+                if ordem_compra_nf and st.session_state.get('last_oc_selected') != ordem_compra_nf:
+                    # Carregar itens do pedido ao selecionar uma OC
+                    oc_items = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == ordem_compra_nf.strip()].copy()
+                    if not oc_items.empty:
+                        if 'QUANTIDADE_ENTREGUE' not in oc_items.columns:
+                            oc_items['QUANTIDADE_ENTREGUE'] = 0.0
+                        
+                        oc_items['SALDO_PENDENTE'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
+                        st.session_state.oc_items_for_nf = oc_items
+                        st.session_state.last_oc_selected = ordem_compra_nf
+                        st.rerun()
+
+                st.markdown("---")
+                st.subheader("Itens do Pedido")
+                
+                if not st.session_state.oc_items_for_nf.empty:
+                    df_to_edit = st.session_state.oc_items_for_nf[['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE']].copy()
                     
-                    # Calcula o saldo existente
-                    oc_items['SALDO'] = oc_items['QUANTIDADE'] - oc_items['QUANTIDADE_ENTREGUE']
-                    
-                    # Exibe a tabela de itens
-                    edited_items = st.data_editor(
-                        oc_items[['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO']],
+                    st.session_state.edited_items = st.data_editor(
+                        df_to_edit,
                         use_container_width=True,
                         hide_index=True,
                         num_rows='fixed',
@@ -463,22 +460,25 @@ def render_registrar_nf_page():
                             "CODIGO_MATERIAL": st.column_config.TextColumn("Código Material", disabled=True),
                             "MATERIAL": st.column_config.TextColumn("Descrição Material", disabled=True),
                             "UN": st.column_config.TextColumn("UN", disabled=True),
-                            "QUANTIDADE": st.column_config.NumberColumn("Qtd. Pedida", disabled=True),
+                            "QUANTIDADE": st.column_config.NumberColumn("Qtd. Pedida", disabled=True, format="%d"),
                             "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Recebida", min_value=0, format="%d"),
-                            "SALDO": st.column_config.NumberColumn("Saldo Pendente", disabled=True, format="%d")
+                            "SALDO_PENDENTE": st.column_config.NumberColumn("Saldo Pendente", disabled=True, format="%d")
                         },
                         key="itens_pedido_editor"
                     )
-                    
-                    # Salva os itens editados para processamento posterior
-                    st.session_state.edited_oc_items = edited_items
                 else:
-                    st.warning("Ordem de Compra não encontrada ou sem itens associados.")
-                    st.session_state.edited_oc_items = pd.DataFrame()
-            else:
-                st.session_state.edited_oc_items = pd.DataFrame()
-                st.info("Selecione uma Ordem de Compra para visualizar os itens.")
+                    st.info("Selecione uma Ordem de Compra para visualizar os itens.")
 
+            with col3_form:
+                valor_total_nf = st.text_input("Valor Total NF* (ex: 1234,56)", value="0,00", key="valor_total_nf_input")
+                condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"], key="condicao_frete_select")
+                valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00", key="valor_frete_input")
+            
+            doc_nf_links = st.text_area("Links das Notas Fiscais (um por linha)", placeholder="Cole os links de acesso aqui...", key="doc_nf_links_area")
+            
+            observacao = st.text_area("Observações", placeholder="Informações adicionais...", key="observacao_area")
+            vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30), key="vencimento_nf_input")
+            
             enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
             
             if enviar:
@@ -506,7 +506,7 @@ def render_registrar_nf_page():
                         
                         doc_nf_string = doc_nf_links.replace('\n', ', ')
 
-                        if st.session_state.edited_oc_items.empty:
+                        if st.session_state.edited_items.empty:
                             st.error("Adicione os itens do pedido antes de registrar a nota fiscal.")
                         else:
                             novo_registro_nf = {
@@ -514,7 +514,7 @@ def render_registrar_nf_page():
                                 "RECEBEDOR": recebedor,
                                 "FORNECEDOR_NF": fornecedor_selecionado,
                                 "NF": nf_numero,
-                                "VOLUME": st.session_state.edited_oc_items['QUANTIDADE_ENTREGUE'].sum(),
+                                "VOLUME": st.session_state.edited_items['QUANTIDADE_ENTREGUE'].sum(),
                                 "V. TOTAL NF": valor_total_float,
                                 "CONDICAO FRETE": condicao_frete_nf,
                                 "VALOR FRETE": valor_frete_float,
@@ -533,11 +533,11 @@ def render_registrar_nf_page():
                                 st.session_state['novo_registro_nf'] = novo_registro_nf
                                 st.rerun()
                             else:
-                                salvar_nota_fiscal(novo_registro_nf, st.session_state.edited_oc_items, oc_items)
+                                salvar_nota_fiscal(novo_registro_nf, st.session_state.edited_items, pedidos_relacionados)
 
                     except ValueError:
                         st.error("❌ Erro na conversão de valores. Verifique os formatos numéricos.")
-
+    
     if st.session_state.get('mostrar_popup_divergencia'):
         handle_divergence_popup()
     
@@ -603,37 +603,41 @@ def render_registrar_nf_page():
 def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
     """Função para salvar a nota fiscal e atualizar os pedidos relacionados."""
     
-    # 1. Atualizar o DataFrame de pedidos com as quantidades recebidas
+    # Adiciona o registro da nota fiscal ao DataFrame de almoxarifado
+    st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
+    
+    # Atualiza o DataFrame de pedidos com as quantidades recebidas
     for index, row in edited_items_df.iterrows():
-        original_row = original_items_df[original_items_df['CODIGO_MATERIAL'] == row['CODIGO_MATERIAL']].iloc[0]
-        # Pega a quantidade entregue que já existia e adiciona a nova
-        quantidade_entregue_anterior = original_row.get('QUANTIDADE_ENTREGUE', 0)
-        nova_quantidade_entregue = quantidade_entregue_anterior + row['QUANTIDADE_ENTREGUE']
+        original_oc_items = st.session_state.df_pedidos[
+            (st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == novo_registro_nf['ORDEM_COMPRA'].strip()) &
+            (st.session_state.df_pedidos['CODIGO_MATERIAL'] == row['CODIGO_MATERIAL'])
+        ]
         
-        # Encontra o índice original no DataFrame principal e atualiza
-        original_idx = st.session_state.df_pedidos[(st.session_state.df_pedidos['ORDEM_COMPRA'] == novo_registro_nf['ORDEM_COMPRA']) & 
-                                                   (st.session_state.df_pedidos['CODIGO_MATERIAL'] == row['CODIGO_MATERIAL'])].index
-        
-        if not original_idx.empty:
+        if not original_oc_items.empty:
+            original_idx = original_oc_items.index[0]
+            
+            # Pega a quantidade total já entregue para o item e adiciona a nova
+            quantidade_entregue_anterior = st.session_state.df_pedidos.loc[original_idx, 'QUANTIDADE_ENTREGUE']
+            nova_quantidade_entregue = quantidade_entregue_anterior + row['QUANTIDADE_ENTREGUE']
+            
             st.session_state.df_pedidos.loc[original_idx, 'QUANTIDADE_ENTREGUE'] = nova_quantidade_entregue
             st.session_state.df_pedidos.loc[original_idx, 'DOC NF'] = novo_registro_nf['DOC NF']
             
             # Atualiza o status se a quantidade total já foi entregue
-            if nova_quantidade_entregue >= original_row['QUANTIDADE']:
+            if nova_quantidade_entregue >= st.session_state.df_pedidos.loc[original_idx, 'QUANTIDADE']:
                 st.session_state.df_pedidos.loc[original_idx, 'STATUS_PEDIDO'] = 'ENTREGUE'
                 st.session_state.df_pedidos.loc[original_idx, 'DATA_ENTREGA'] = pd.to_datetime(novo_registro_nf['DATA'])
-
-    # 2. Salvar o registro da nota fiscal no DataFrame de almoxarifado
-    st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
-
-    # 3. Salvar as alterações em ambas as planilhas
+    
+    # Salva as alterações em ambas as planilhas
     salvar_dados_pedidos(st.session_state.df_pedidos)
     salvar_dados_almoxarifado(st.session_state.df_almoxarifado)
 
-    # 4. Exibir mensagem e verificar saldo
+    # Exibir mensagem e verificar saldo
     st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso!")
     
-    for index, row in st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == novo_registro_nf['ORDEM_COMPRA']].iterrows():
+    # Recalcular o saldo para exibição
+    df_pedidos_pos_salvamento = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == novo_registro_nf['ORDEM_COMPRA'].strip()].copy()
+    for index, row in df_pedidos_pos_salvamento.iterrows():
         saldo_restante = row['QUANTIDADE'] - row.get('QUANTIDADE_ENTREGUE', 0)
         if saldo_restante > 0:
             st.warning(f"⚠️ **Atenção:** O item '{row['MATERIAL']}' ainda tem um saldo pendente de **{saldo_restante}** unidades.")
@@ -660,7 +664,7 @@ def handle_divergence_popup():
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             if st.form_submit_button("✅ Sim, Salvar Nota Fiscal"):
-                salvar_nota_fiscal(st.session_state['novo_registro_nf'], st.session_state.edited_oc_items, st.session_state.edited_oc_items) # Passando a tabela editada como original
+                salvar_nota_fiscal(st.session_state['novo_registro_nf'], st.session_state.edited_items, st.session_state.oc_items_for_nf)
         with col_btn2:
             if st.form_submit_button("❌ Não, Corrigir Valores"):
                 st.session_state['mostrar_popup_divergencia'] = False
