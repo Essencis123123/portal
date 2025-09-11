@@ -196,7 +196,7 @@ def parse_brazil_number(value_str):
     try:
         return float(cleaned_value)
     except (ValueError, TypeError):
-        return np.nan # Use np.nan para representar valores inválidos
+        return np.nan
 
 def _to_datetime(series, dayfirst=True):
     """Converte uma Series para datetime, retornando NaT para erros."""
@@ -899,64 +899,48 @@ def render_consultar_nfs_page():
             if 'DOC NF' in df_exibir_consulta.columns:
                 df_exibir_consulta['DOC NF'] = df_exibir_consulta['DOC NF'].astype(str).apply(format_doc_nf_display)
 
-            st.markdown(
-                df_exibir_consulta.to_html(escape=False),
-                unsafe_allow_html=True
+            # Use st.data_editor para permitir a edição
+            edited_df = st.data_editor(
+                df_exibir_consulta,
+                use_container_width=True,
+                hide_index=True,
+                num_rows='fixed',
+                column_config={
+                    "DATA": st.column_config.TextColumn("Data", disabled=True),
+                    "FORNECEDOR_NF": st.column_config.TextColumn("Fornecedor", disabled=True),
+                    "NF": st.column_config.TextColumn("Número NF", disabled=True),
+                    "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra", disabled=True),
+                    "VOLUME": st.column_config.NumberColumn("Volume", disabled=True),
+                    "V. TOTAL NF": st.column_config.NumberColumn("Valor Total NF", format="%.2f", disabled=False), # Valor Total NF agora é editável
+                    "STATUS_FINANCEIRO": st.column_config.SelectboxColumn("Status Financeiro", options=['EM ANDAMENTO', 'NF PROBLEMA', 'CAPTURADO', 'FINALIZADO'], required=True),
+                    "DOC NF": st.column_config.TextColumn("Anexo NF", disabled=True)
+                },
+                key="editor_consulta"
             )
             
-            csv_consulta = df_exibir_consulta.to_csv(index=False, encoding='utf-8')
-            st.download_button(
-                label="📥 Download Resultados",
-                data=csv_consulta,
-                file_name="consulta_nfs.csv",
-                mime="text/csv",
-                help="Clique para baixar os dados da tabela filtrada."
-            )
+            if st.button("💾 Salvar Alterações"):
+                # Lógica para salvar as alterações de volta no DataFrame principal
+                for index, row in edited_df.iterrows():
+                    # Mapeia o índice do data_editor de volta para o DataFrame original
+                    original_index = df_consulta.index[index]
+                    
+                    # Atualiza o DataFrame principal com os valores editados
+                    st.session_state.df_almoxarifado.loc[original_index, 'V. TOTAL NF'] = row['Valor Total NF']
+                    
+                    # Remove o emoji e o espaço antes de salvar o status
+                    status_sem_emoji = re.sub(r'^\S\s', '', row['Status Financeiro'])
+                    st.session_state.df_almoxarifado.loc[original_index, 'STATUS_FINANCEIRO'] = status_sem_emoji
+                    
+                if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
+                    st.success("✅ Alterações salvas com sucesso!")
+                    st.cache_data.clear() # Limpa o cache para recarregar com dados novos
+                    st.rerun()
+                else:
+                    st.error("❌ Erro ao salvar as alterações. Tente novamente.")
         else:
             st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
     else:
         st.info("📝 Nenhum dado disponível para consulta.")
-
-
-# ... (restante do código da função render_consultar_nfs_page) ...
-
-    if not df_consulta.empty:
-        st.markdown("---")
-        st.subheader("🛠️ Editar Notas Fiscais")
-        
-        # Use st.data_editor para permitir a edição
-        edited_df = st.data_editor(
-            df_consulta[['NF', 'ORDEM_COMPRA', 'FORNECEDOR_NF', 'V. TOTAL NF', 'STATUS_FINANCEIRO']],
-            use_container_width=True,
-            hide_index=True,
-            num_rows='fixed',
-            column_config={
-                "NF": "Número NF",
-                "ORDEM_COMPRA": "Ordem de Compra",
-                "FORNECEDOR_NF": "Fornecedor",
-                "V. TOTAL NF": st.column_config.NumberColumn("Valor Total NF", format="%.2f", disabled=False), # Valor Total NF agora é editável
-                "STATUS_FINANCEIRO": st.column_config.SelectboxColumn("Status", options=['EM ANDAMENTO', 'NF PROBLEMA', 'CAPTURADO', 'FINALIZADO'], required=True)
-            },
-            key="editor_consulta"
-        )
-    
-        if st.button("💾 Salvar Alterações"):
-            # Lógica para salvar as alterações de volta no DataFrame principal
-            for index, row in edited_df.iterrows():
-                original_index = df_consulta.index[index]
-                st.session_state.df_almoxarifado.loc[original_index, 'V. TOTAL NF'] = row['V. TOTAL NF']
-                st.session_state.df_almoxarifado.loc[original_index, 'STATUS_FINANCEIRO'] = row['STATUS_FINANCEIRO']
-            
-            # Salva o DataFrame atualizado no Google Sheets
-            if salvar_dados_almoxarifado(st.session_state.df_almoxarifado):
-                st.success("✅ Alterações salvas com sucesso!")
-                st.cache_data.clear() # Limpa o cache para recarregar com dados novos
-                st.rerun()
-            else:
-                st.error("❌ Erro ao salvar as alterações. Tente novamente.")
-    
-    else:
-        st.warning("⚠️ Nenhuma nota fiscal encontrada com os filtros aplicados.")
 
 def render_configuracoes_page():
     """Página de configurações do sistema."""
