@@ -659,7 +659,7 @@ def render_registrar_nf_page():
                 "FINALIZADO": "🟢"
             }
             return f"{cores.get(status, '⚪')} {status}"
-        
+
         def format_doc_nf(links_str):
             if not isinstance(links_str, str) or not links_str.strip():
                 return ""
@@ -667,8 +667,9 @@ def render_registrar_nf_page():
             html_links = [f'<a href="{link.strip()}" target="_blank" title="Clique para baixar"><img src="https://img.icons8.com/material-outlined/24/null/download--v1.png"/></a>' for link in links if link.strip()]
             return " ".join(html_links)
 
+        # APLICAR AS FUNÇÕES DE FORMATAÇÃO APÓS A RENOMEAÇÃO DA COLUNA
         if 'Status Financeiro' in df_ultimas_nfs_display.columns:
-            df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['STATUS_FINANCEIRO'].apply(colorir_status_display)
+            df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
 
         if 'Anexo NF' in df_ultimas_nfs_display.columns:
             df_ultimas_nfs_display['Anexo NF'] = df_ultimas_nfs_display['Anexo NF'].astype(str).apply(format_doc_nf)
