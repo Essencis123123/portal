@@ -429,7 +429,7 @@ def salvar_dados_solicitantes(df):
         worksheet = sheet.get_worksheet(3)
 
         df_copy = df.copy()
-        set_with_dataframe(worksheet, df_copy, resize=True, include_column_header=True)
+        set_with_dataframe(worksheet, df_copy, include_index=False)
         
         st.success("Solicitante cadastrado na planilha com sucesso!")
     except Exception as e:
@@ -678,9 +678,8 @@ def render_main_app():
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         
         if st.session_state.df_materiais is not None and not st.session_state.df_materiais.empty:
-            item_codigo_options = [""] + st.session_state.df_materiais['CODIGO'].unique().tolist()
             with col_item1:
-                item_codigo = st.selectbox("Código do Material", item_codigo_options, key="select_codigo_material")
+                item_codigo = st.text_input("Código do Material", key="input_codigo_material", value=st.session_state.item_codigo)
 
             with col_item2:
                 descricao_material = ""
@@ -1435,7 +1434,7 @@ def render_main_app():
                     "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                     "MATERIAL": st.column_config.TextColumn("Material"),
                     "VALOR_TOTAL": st.column_config.NumberColumn("Custo Total (R$)", format="R$ %.2f"),
-                    "PARTICIPACAO_ACUMULADA": st.column_config.NumberColumn("Part. Acumulada", format="%.2%")
+                    "PARTICIPACAO_ACUMULada": st.column_config.NumberColumn("Part. Acumulada", format="%.2%")
                 },
                 hide_index=True,
                 use_container_width=True
