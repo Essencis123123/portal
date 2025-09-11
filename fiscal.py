@@ -267,9 +267,10 @@ if 'logado' not in st.session_state:
     st.session_state.logado = False
 
 if not st.session_state.logado:
-    # Tela de login centralizada (CÓDIGO NOVO)
-    st.markdown("<h1 style='text-align: center; color: #1C4D86;'>Login - Painel de Notas Fiscais</h1>", unsafe_allow_html=True)
+    # Tela de login centralizada (FORMATO ATUALIZADO)
+    st.markdown("<h1 style='text-align: center; color: #1C4D86;'>Login - Painel Financeiro</h1>", unsafe_allow_html=True)
     
+    # Criar colunas para centralizar o formulário
     col_left, col_center, col_right = st.columns([1, 2, 1])
     
     with col_center:
@@ -283,6 +284,7 @@ if not st.session_state.logado:
             st.write("") # Espaço em branco
             if st.form_submit_button("Entrar"):
                 fazer_login(email, senha)
+
 else:
     # Usuário logado - renderizar aplicação principal
     if 'df' not in st.session_state:
