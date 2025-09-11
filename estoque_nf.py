@@ -525,7 +525,7 @@ def render_registrar_nf_page():
             condicao_frete_nf = st.selectbox("Condição de Frete", ["CIF", "FOB"], key="condicao_frete_select")
             valor_frete_nf = st.text_input("Valor Frete (ex: 123,45)", value="0,00", key="valor_frete_input")
         
-        doc_nf_links = st.text_area("Links das Notas Fiscais (um por linha)", placeholder="Cole os links de acesso aqui...", key="doc_nf_links_area")
+        doc_nf_links = st.text_area("Links das Notas Fiscais (um por linha)*", placeholder="Cole os links de acesso aqui...", key="doc_nf_links_area")
         
         observacao = st.text_area("Observações", placeholder="Informações adicionais...", key="observacao_area")
         vencimento_nf = st.date_input("Vencimento da Fatura", datetime.date.today() + datetime.timedelta(days=30), key="vencimento_nf_input")
@@ -546,7 +546,7 @@ def render_registrar_nf_page():
                     "MATERIAL": st.column_config.TextColumn("Descrição Material", disabled=True),
                     "UN": st.column_config.TextColumn("UN", disabled=True),
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd. Pedida", disabled=True, format="%d"),
-                    "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Recebida", min_value=0, format="%d"),
+                    "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Recebida*", min_value=0, format="%d"),
                     "SALDO_PENDENTE": st.column_config.NumberColumn("Saldo Pendente", disabled=True, format="%d")
                 },
                 key="itens_pedido_editor"
@@ -564,15 +564,19 @@ def render_registrar_nf_page():
                 st.error("Por favor, selecione uma Ordem de Compra.")
                 st.stop()
             
+            # Validação dos campos obrigatórios
             campos_validos = all([
                 fornecedor_selecionado.strip(), nf_numero.strip(),
                 valor_total_nf.strip() not in ["", "0,00"], doc_nf_links
             ])
             
+            # Adiciona a validação da quantidade recebida
+            quantidade_recebida_total = edited_items['QUANTIDADE_ENTREGUE'].sum() if not edited_items.empty else 0
+            
             if not campos_validos:
                 st.error("⚠️ Preencha todos os campos obrigatórios marcados com *")
-            elif edited_items.empty:
-                st.error("Adicione os itens do pedido antes de registrar a nota fiscal.")
+            elif quantidade_recebida_total == 0:
+                st.error("⚠️ A 'Quantidade Recebida' não pode ser zero. Por favor, preencha os itens da nota fiscal.")
             else:
                 try:
                     valor_total_float = parse_brazil_number(valor_total_nf)
@@ -595,7 +599,7 @@ def render_registrar_nf_page():
                         "RECEBEDOR": recebedor,
                         "FORNECEDOR_NF": fornecedor_selecionado,
                         "NF": nf_numero,
-                        "VOLUME": edited_items['QUANTIDADE_ENTREGUE'].sum(),
+                        "VOLUME": quantidade_recebida_total, # Usando a quantidade validada
                         "V. TOTAL NF": valor_total_float,
                         "CONDICAO FRETE": condicao_frete_nf,
                         "VALOR FRETE": valor_frete_float,
