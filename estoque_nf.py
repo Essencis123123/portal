@@ -210,7 +210,7 @@ def carregar_dados_almoxarifado():
         for col in colunas_essenciais:
             if col not in df.columns:
                 df[col] = ''
-            
+        
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df.columns:
                 df[col] = df[col].replace('', np.nan).replace(0, np.nan).replace('0', np.nan)
@@ -220,6 +220,10 @@ def carregar_dados_almoxarifado():
             if col in df.columns:
                 df[col] = df[col].apply(parse_brazil_number).fillna(0)
         
+        # Limpar espaços em branco na coluna de fornecedor da NF
+        if 'FORNECEDOR_NF' in df.columns:
+            df['FORNECEDOR_NF'] = df['FORNECEDOR_NF'].astype(str).str.strip()
+
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do almoxarifado: {e}")
@@ -229,6 +233,7 @@ def carregar_dados_almoxarifado():
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL",
             "ORDEM_COMPRA", "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ])
+
 def salvar_dados_almoxarifado(df):
     """Salva os dados do DataFrame no Google Sheets (segunda aba - Almoxarifado)."""
     try:
@@ -293,7 +298,11 @@ def carregar_dados_pedidos():
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
-            
+        
+        # Limpar espaços em branco na coluna de fornecedor
+        if 'FORNECEDOR' in df.columns:
+            df['FORNECEDOR'] = df['FORNECEDOR'].astype(str).str.strip()
+
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados de pedidos: {e}")
@@ -609,8 +618,8 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
     
     for index, row in edited_items_df.iterrows():
         original_oc_items = st.session_state.df_pedidos[
-            (st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == novo_registro_nf['ORDEM_COMPRA'].strip()) &
-            (st.session_state.df_pedidos['CODIGO_MATERIAL'] == row['CODIGO_MATERIAL'])
+            (st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip() == str(novo_registro_nf['ORDEM_COMPRA']).strip()) &
+            (st.session_state.df_pedidos['CODIGO_MATERIAL'].astype(str).str.strip() == str(row['CODIGO_MATERIAL']).strip())
         ]
         
         if not original_oc_items.empty:
@@ -631,7 +640,7 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df, original_items_df):
 
     st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso!")
     
-    df_pedidos_pos_salvamento = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].str.strip() == novo_registro_nf['ORDEM_COMPRA'].strip()].copy()
+    df_pedidos_pos_salvamento = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'].astype(str).str.strip() == str(novo_registro_nf['ORDEM_COMPRA']).strip()].copy()
     for index, row in df_pedidos_pos_salvamento.iterrows():
         saldo_restante = row['QUANTIDADE'] - row.get('QUANTIDADE_ENTREGUE', 0)
         if saldo_restante > 0:
