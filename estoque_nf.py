@@ -407,29 +407,50 @@ def filter_oc():
     st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
 
 # ==============================================================================
-# FUNÇÕES DO POP-UP DE DIVERGÊNCIA
+# FUNÇÕES DO POP-UP DE DIVERGÊNCIA E SALDO PENDENTE
 # ==============================================================================
 
-@st.dialog("⚠️ Atenção: Divergência de Valor!")
+@st.dialog("⚠️ Confirmação Necessária")
 def confirm_divergence_dialog(novo_registro_nf, edited_items, valor_oc_total, divergencia_oc):
-    valor_oc_formatado = f"R$ {valor_oc_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    valor_nf_formatado = f"R$ {novo_registro_nf['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    divergencia_formatada = f"R$ {divergencia_oc:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
-    st.write(f"O **Valor da Ordem de Compra** é: **{valor_oc_formatado}**")
-    st.write(f"O **Valor da Nota Fiscal** digitado é: **{valor_nf_formatado}**")
-    st.write(f"A **diferença** é de: **{divergencia_formatada}**")
+    col_v_1, col_v_2 = st.columns(2)
     
-    st.write("Você está ciente e concorda em registrar a nota fiscal com essa divergência?")
+    with col_v_1:
+        if abs(divergencia_oc) > 0.01:
+            valor_oc_formatado = f"R$ {valor_oc_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            valor_nf_formatado = f"R$ {novo_registro_nf['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            divergencia_formatada = f"R$ {divergencia_oc:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            
+            st.warning(f"**Atenção: Divergência de Valor!**")
+            st.write(f"O **Valor da Ordem de Compra** é: **{valor_oc_formatado}**")
+            st.write(f"O **Valor da Nota Fiscal** digitado é: **{valor_nf_formatado}**")
+            st.write(f"A **diferença** é de: **{divergencia_formatada}**")
+
+    itens_com_saldo = edited_items[edited_items['SALDO_PENDENTE'] > 0]
+    if not itens_com_saldo.empty:
+        with col_v_2:
+            st.warning("**Atenção: Saldo Pendente!**")
+            st.write("A entrega dos seguintes itens não foi total. Confirme a entrega parcial.")
+            st.dataframe(
+                itens_com_saldo[['CODIGO_MATERIAL', 'MATERIAL', 'SALDO_PENDENTE']].rename(columns={
+                    'CODIGO_MATERIAL': 'Cód. Material',
+                    'MATERIAL': 'Descrição Material',
+                    'SALDO_PENDENTE': 'Saldo Pendente'
+                }),
+                hide_index=True
+            )
+
+    st.markdown("---")
+    st.write("Você está ciente e concorda em registrar a nota fiscal com estas informações?")
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if st.button("✅ Sim, Salvar Nota Fiscal"):
             salvar_nota_fiscal(novo_registro_nf, edited_items)
-            st.rerun() # Fecha o diálogo e recarrega a página
+            st.rerun()
     with col_btn2:
         if st.button("❌ Não, Corrigir Valores"):
-            st.rerun() # Fecha o diálogo sem salvar
+            st.rerun()
 
 
 def salvar_nota_fiscal(novo_registro_nf, edited_items_df):
@@ -460,15 +481,7 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df):
     salvar_dados_almoxarifado(st.session_state.df_almoxarifado)
 
     st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso!")
-    
-    df_pedidos_pos_salvamento = st.session_state.df_pedidos[st.session_state.df_pedidos['ORDEM_COMPRA'] == novo_registro_nf['ORDEM_COMPRA']].copy()
-    for index, row in df_pedidos_pos_salvamento.iterrows():
-        saldo_restante = row['QUANTIDADE'] - row.get('QUANTIDADE_ENTREGUE', 0)
-        if saldo_restante > 0:
-            st.warning(f"⚠️ **Atenção:** O item '{row['MATERIAL']}' ainda tem um saldo pendente de **{saldo_restante}** unidades.")
-        else:
-            st.info(f"✅ O item '{row['MATERIAL']}' foi totalmente recebido.")
-
+    st.rerun()
 
 # ==============================================================================
 # INTERFACE PRINCIPAL
@@ -653,31 +666,11 @@ def render_registrar_nf_page():
                     valor_oc_total = (pedidos_relacionados['VALOR_ITEM'] * pedidos_relacionados['QUANTIDADE']).sum()
                     divergencia = valor_total_float - valor_oc_total
                     
-                    brasilia_tz = pytz.timezone('America/Sao_Paulo')
-                    agora = datetime.datetime.now(brasilia_tz)
-                    
-                    doc_nf_string = doc_nf_links.replace('\n', ', ')
+                    # Checa por divergência de valor ou saldo pendente
+                    tem_divergencia_valor = abs(divergencia) > 0.01
+                    tem_saldo_pendente = edited_items['SALDO_PENDENTE'].sum() > 0
 
-                    novo_registro_nf = {
-                        "DATA": datetime.date.today(),
-                        "RECEBEDOR": recebedor,
-                        "FORNECEDOR_NF": fornecedor_selecionado,
-                        "NF": nf_numero,
-                        "VOLUME": quantidade_recebida_total,
-                        "V. TOTAL NF": valor_total_float,
-                        "CONDICAO FRETE": condicao_frete_nf,
-                        "VALOR FRETE": valor_frete_float,
-                        "OBSERVACAO": observacao,
-                        "DOC NF": doc_nf_string,
-                        "VENCIMENTO": vencimento_nf,
-                        "STATUS_FINANCEIRO": "EM ANDAMENTO",
-                        "CONDICAO_PROBLEMA": "N/A",
-                        "ORDEM_COMPRA": ordem_compra_nf,
-                        "REGISTRO_ENVIO": agora,
-                        "REGISTRO_LANCAMENTO": agora
-                    }
-
-                    if abs(divergencia) > 0.01:
+                    if tem_divergencia_valor or tem_saldo_pendente:
                         confirm_divergence_dialog(novo_registro_nf, edited_items, valor_oc_total, divergencia)
                     else:
                         salvar_nota_fiscal(novo_registro_nf, edited_items)
