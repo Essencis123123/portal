@@ -377,11 +377,17 @@ def salvar_dados_pedidos(df):
         worksheet = sheet.get_worksheet(0)
 
         df_to_save = df.copy()
-        
-        for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
+
+        # CONVERSÃO PARA DATETIME E FORMATO DD-MM-YYYY
+        date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+        for col in date_cols:
             if col in df_to_save.columns:
+                # Converte para datetime primeiro, lidando com erros
+                df_to_save[col] = pd.to_datetime(df_to_save[col], errors='coerce', dayfirst=True)
+                # Agora, formata para string no formato DD-MM-YYYY
                 df_to_save[col] = df_to_save[col].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else '')
-        
+
+        # CONVERSÃO DE NÚMEROS
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
