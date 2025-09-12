@@ -579,9 +579,11 @@ def render_registrar_nf_page():
     with col2_form:
         # Filtra OCs que ainda não foram entregues ou que têm saldo pendente
         oc_pendentes = st.session_state.df_pedidos[
-            st.session_state.df_pedidos['QUANTIDADE'] > st.session_state.df_pedidos['QUANTIDADE_ENTREGUE']
-        ]
-        ordens_disponiveis = [''] + sorted(list(oc_pendentes['ORDEM_COMPRA'].dropna().unique()))
+            (st.session_state.df_pedidos['QUANTIDADE'] > st.session_state.df_pedidos['QUANTIDADE_ENTREGUE']) &
+            (st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado)
+        ]['ORDEM_COMPRA'].dropna().unique().tolist()
+
+        ordens_disponiveis = [''] + sorted(list(oc_pendentes))
         
         ordem_compra_nf = st.selectbox(
             "N° Ordem de Compra*",
@@ -655,7 +657,6 @@ def render_registrar_nf_page():
                 },
                 key="itens_pedido_editor"
             )
-
         else:
             st.info("Selecione uma Ordem de Compra para visualizar os itens.")
             edited_items = pd.DataFrame()
