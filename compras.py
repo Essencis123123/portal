@@ -15,7 +15,12 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import json
 import re
+import pytz
+import sys
 
+# ==============================================================================
+# CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
+# ==============================================================================
 # Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
 
@@ -302,13 +307,17 @@ def carregar_dados_pedidos():
         
         data = sheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
         
+        if not data:
+            st.warning("A planilha está vazia.")
+            return criar_dataframe_pedidos_vazio()
+
         headers = data[0]
         records = data[1:]
 
         if not records:
-            st.warning("A planilha está vazia ou não contém dados.")
+            st.warning("A planilha de pedidos não contém registros.")
             return criar_dataframe_pedidos_vazio()
-        
+            
         df = pd.DataFrame(records, columns=headers)
 
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
@@ -320,8 +329,9 @@ def carregar_dados_pedidos():
         for col in numeric_cols:
             if col in df.columns:
                 if df[col].dtype == 'object':
-                    df[col] = df[col].apply(lambda x: float(str(x).replace('.', '').replace(',', '.')) 
-                                             if pd.notna(x) and str(x).strip() != '' else 0)
+                    df[col] = df[col].str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float, errors='ignore')
+                    # Segunda tentativa para garantir a conversão
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                 else:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
@@ -343,6 +353,9 @@ def carregar_dados_pedidos():
         if 'CODIGO_MATERIAL' not in df.columns:
             df['CODIGO_MATERIAL'] = ''
 
+        # Certificar-se de que todas as colunas existem
+        df = df.reindex(columns=headers, fill_value='')
+
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
@@ -361,7 +374,7 @@ def salvar_dados_pedidos(df):
         gc = get_gspread_client()
         if gc is None:
             return
-        
+            
         sheet = gc.open("dados_pedido")
         worksheet = sheet.get_worksheet(0)
 
@@ -369,7 +382,7 @@ def salvar_dados_pedidos(df):
         
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_to_save.columns:
-                df_to_save[col] = df_to_save[col].apply(formatar_data_brasil_hifen)
+                df_to_save[col] = df_to_save[col].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else '')
         
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
         for col in numeric_cols_to_save:
@@ -382,6 +395,11 @@ def salvar_dados_pedidos(df):
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
         df_to_save = df_to_save.fillna('')
+        
+        # Obter os cabeçalhos da planilha original
+        original_headers = worksheet.row_values(1)
+        # Reordenar o DataFrame para corresponder à ordem da planilha, preenchendo com valores vazios se necessário
+        df_to_save = df_to_save.reindex(columns=original_headers, fill_value='')
         
         worksheet.clear()
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
@@ -595,6 +613,7 @@ def render_main_app():
         )
         st.divider()
         if st.sidebar.button("Atualizar Dados"):
+            st.cache_data.clear()
             st.session_state.df_pedidos = carregar_dados_pedidos()
             st.session_state.df_solicitantes = carregar_dados_solicitantes()
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
@@ -840,7 +859,7 @@ def render_main_app():
                 column_config={
                     "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                    "DATA": st.column_config.DateColumn("Data da Requisição", disabled=True),
+                    "DATA": st.column_config.DateColumn("Data da Requisição", format="DD-MM-YYYY", disabled=True),
                     "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                     "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
@@ -1334,6 +1353,7 @@ def render_main_app():
                 ranking_fornecedores,
                 x='FORNECEDOR',
                 y='TEMPO_ENTREGA',
+                orientation='h',
                 title='Tempo Médio de Entrega por Fornecedor (dias)',
                 labels={'TEMPO_ENTREGA': 'Tempo Médio (dias)', 'FORNECEDOR': 'Fornecedor'}
             )
@@ -1474,8 +1494,8 @@ def render_main_app():
             st.stop()
         
         if not mes_selecionado_p or ano_selecionado_p is None:
-             st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
-             st.stop()
+              st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
+              st.stop()
 
         if mes_selecionado_p and ano_selecionado_p:
             df_performance_filtrado = df_performance[(df_performance['DATA'].dt.month.isin(mes_selecionado_p)) & (df_performance['DATA'].dt.year == ano_selecionado_p)]
@@ -1501,7 +1521,7 @@ def render_main_app():
         df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
                                                   ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
                                                   0)
-                                                   
+                                                                                            
         df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
         st.subheader("Visão Geral da Performance")
