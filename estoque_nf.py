@@ -521,15 +521,24 @@ def render_main_app():
             # Filtros de Período (se aplicável)
             st.subheader("Filtros de Período")
             df_almox = st.session_state.df_almoxarifado
-            if 'DATA' in df_almox.columns and not df_almox['DATA'].isnull().all():
-                # CORREÇÃO: Usar .dt.date para extrair a data antes de pegar min e max
-                min_date = df_almox['DATA'].dt.date.min() if not df_almox['DATA'].isnull().all() else datetime.date.today()
-                max_date = df_almox['DATA'].dt.date.max() if not df_almox['DATA'].isnull().all() else datetime.date.today()
-                data_minima = st.date_input("De:", value=min_date)
-                data_maxima = st.date_input("Até:", value=max_date)
-            else:
-                st.info("Nenhum dado com data disponível para filtrar.")
             
+            if 'DATA' in df_almox.columns:
+                # Converte a coluna 'DATA' para datetime, se não for
+                df_almox['DATA'] = pd.to_datetime(df_almox['DATA'], errors='coerce')
+                datas_validas = df_almox['DATA'].dropna()
+            
+                if not datas_validas.empty:
+                    min_date = datas_validas.dt.date.min()
+                    max_date = datas_validas.dt.date.max()
+                    data_minima = st.date_input("De:", value=min_date)
+                    data_maxima = st.date_input("Até:", value=max_date)
+                else:
+                    data_minima = datetime.date.today()
+                    data_maxima = datetime.date.today()
+                    st.info("Nenhum dado com data disponível para filtrar.")
+            else:
+                st.info("A coluna 'DATA' não existe nos dados do almoxarifado.")
+
             st.divider()
             
             if st.button("Logout"):
