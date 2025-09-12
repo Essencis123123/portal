@@ -404,9 +404,14 @@ def salvar_dados_pedidos(df):
         original_headers = worksheet.row_values(1)
         # Reordenar o DataFrame para corresponder à ordem da planilha, preenchendo com valores vazios se necessário
         df_to_save = df_to_save.reindex(columns=original_headers, fill_value='')
-        
-        worksheet.clear()
-        set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
+
+        # Se o DataFrame estiver vazio, limpe apenas os dados para evitar o erro.
+        if df_to_save.empty:
+            worksheet.clear()
+            worksheet.update([original_headers])
+        else:
+            worksheet.clear()
+            set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
         st.success("Dados salvos com sucesso!")
         
