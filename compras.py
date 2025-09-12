@@ -200,8 +200,6 @@ logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20
 logo_img = load_logo(logo_url)
 
 # --- Funções de Conexão e Carregamento de Dados ---
-# REMOVIDO: A função de cliente do gspread não pode ser armazenada em cache
-# pois o objeto de sessão de autenticação pode se tornar inválido.
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
     try:
@@ -302,7 +300,7 @@ def carregar_dados_pedidos():
         gc = get_gspread_client()
         if gc is None:
             return criar_dataframe_pedidos_vazio()
-            
+        
         sheet = gc.open("dados_pedido")
         
         data = sheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
@@ -374,7 +372,7 @@ def salvar_dados_pedidos(df):
         gc = get_gspread_client()
         if gc is None:
             return
-            
+        
         sheet = gc.open("dados_pedido")
         worksheet = sheet.get_worksheet(0)
 
@@ -441,7 +439,7 @@ def salvar_dados_solicitantes(df):
         gc = get_gspread_client()
         if gc is None:
             return
-            
+        
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
@@ -679,6 +677,42 @@ def render_main_app():
         
         st.markdown("---")
         st.subheader("Itens da Requisição")
+        
+        # Novo: Upload de requisições em massa
+        st.subheader("⬆️ Upload de Requisições em Massa")
+        uploaded_file = st.file_uploader("Envie um arquivo CSV ou Excel com requisições", type=["csv", "xlsx"])
+
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    df_novo = pd.read_csv(uploaded_file, sep=';', encoding='utf-8')
+                else:
+                    df_novo = pd.read_excel(uploaded_file)
+                
+                # Normaliza os nomes das colunas
+                df_novo.columns = [col.upper().strip() for col in df_novo.columns]
+                
+                # Colunas obrigatórias
+                required_cols = ["REQUISICAO", "SOLICITANTE", "DATA", "TIPO_PEDIDO", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"]
+                if not all(col in df_novo.columns for col in required_cols):
+                    st.error("O arquivo deve conter as colunas: 'REQUISICAO', 'SOLICITANTE', 'DATA', 'TIPO_PEDIDO', 'CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE'")
+                else:
+                    df_novo = df_novo.reindex(columns=st.session_state.df_pedidos.columns, fill_value='')
+                    
+                    df_novo['DATA'] = pd.to_datetime(df_novo['DATA'], dayfirst=True, errors='coerce')
+                    df_novo['QUANTIDADE'] = pd.to_numeric(df_novo['QUANTIDADE'], errors='coerce')
+                    df_novo.dropna(subset=['DATA', 'SOLICITANTE', 'REQUISICAO', 'CODIGO_MATERIAL', 'QUANTIDADE'], inplace=True)
+                    
+                    st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_novo], ignore_index=True)
+                    salvar_dados_pedidos(st.session_state.df_pedidos)
+                    st.success(f"Requisições de {len(df_novo)} linhas adicionadas com sucesso!")
+                    time.sleep(2)
+                    st.rerun()
+
+            except Exception as e:
+                st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
+        
+        st.markdown("---")
         
         if not st.session_state.itens_requisicao_temp.empty:
             st.session_state.itens_requisicao_temp = st.data_editor(
@@ -1519,9 +1553,9 @@ def render_main_app():
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
         df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                  ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                  0)
-                                                                                            
+                                                 ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                 0)
+        
         df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
         st.subheader("Visão Geral da Performance")
