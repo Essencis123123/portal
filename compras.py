@@ -404,7 +404,7 @@ def salvar_dados_pedidos(df):
         worksheet.clear()
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
-        st.success("Dados salvos na planilha com sucesso!")
+        st.success("Dados salvos com sucesso!")
         
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
@@ -449,7 +449,7 @@ def salvar_dados_solicitantes(df):
         df_copy = df.copy()
         set_with_dataframe(worksheet, df_copy, include_index=False)
         
-        st.success("Solicitante cadastrado na planilha com sucesso!")
+        st.success("Solicitante cadastrado com sucesso!")
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
