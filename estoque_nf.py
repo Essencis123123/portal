@@ -642,6 +642,7 @@ def render_registrar_nf_page():
         if not st.session_state.oc_items_for_nf.empty:
             df_to_edit = st.session_state.oc_items_for_nf[['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE']].copy()
             
+            # Use `st.experimental_data_editor` para cálculo dinâmico
             edited_items = st.data_editor(
                 df_to_edit,
                 use_container_width=True,
@@ -655,8 +656,16 @@ def render_registrar_nf_page():
                     "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Recebida*", min_value=0, format="%d"),
                     "SALDO_PENDENTE": st.column_config.NumberColumn("Saldo Pendente", disabled=True, format="%d")
                 },
+                on_change=lambda: st.session_state.get('itens_pedido_editor_modified', False),
                 key="itens_pedido_editor"
             )
+
+            # Atualiza o saldo pendente do DataFrame editado
+            edited_items['SALDO_PENDENTE'] = edited_items['QUANTIDADE'] - edited_items['QUANTIDADE_ENTREGUE']
+            # Reatribui o DataFrame editado à variável de estado para uso futuro
+            st.session_state.oc_items_for_nf = edited_items
+            st.dataframe(edited_items, use_container_width=True, hide_index=True)
+
         else:
             st.info("Selecione uma Ordem de Compra para visualizar os itens.")
             edited_items = pd.DataFrame()
