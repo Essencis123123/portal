@@ -1004,8 +1004,14 @@ def render_main_app():
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             df_history[col] = df_history[col].apply(parse_brazilian_date)
         
+        # --- CORREÇÃO APLICADA AQUI ---
+        # Converte as colunas para numéricas antes de calcular e arredondar
+        for col in ['QUANTIDADE', 'VALOR_ITEM']:
+            df_history[col] = pd.to_numeric(df_history[col], errors='coerce').fillna(0)
+
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
         df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)
+        # -----------------------------
     
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
@@ -1313,6 +1319,10 @@ def render_main_app():
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
         
+        # Converte as colunas para numéricas antes de calcular o total
+        df_filtrado_dash['QUANTIDADE'] = pd.to_numeric(df_filtrado_dash['QUANTIDADE'], errors='coerce').fillna(0)
+        df_filtrado_dash['VALOR_ITEM'] = pd.to_numeric(df_filtrado_dash['VALOR_ITEM'], errors='coerce').fillna(0)
+        
         df_filtrado_dash['VALOR_TOTAL'] = df_filtrado_dash['QUANTIDADE'] * df_filtrado_dash['VALOR_ITEM']
         
         st.subheader("Visão Geral")
@@ -1550,6 +1560,12 @@ def render_main_app():
         if df_performance_filtrado.empty:
             st.warning("Nenhum dado disponível para o período selecionado.")
             st.stop()
+        
+        # Converte as colunas para numéricas antes de calcular a economia
+        df_performance_filtrado['VALOR_RENEGOCIADO'] = pd.to_numeric(df_performance_filtrado['VALOR_RENEGOCIADO'], errors='coerce').fillna(0)
+        df_performance_filtrado['VALOR_ITEM'] = pd.to_numeric(df_performance_filtrado['VALOR_ITEM'], errors='coerce').fillna(0)
+        df_performance_filtrado['QUANTIDADE'] = pd.to_numeric(df_performance_filtrado['QUANTIDADE'], errors='coerce').fillna(0)
+
 
         df_negociados = df_performance_filtrado.copy()
         df_negociados = df_negociados[
