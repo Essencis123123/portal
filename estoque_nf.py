@@ -522,8 +522,9 @@ def render_main_app():
             st.subheader("Filtros de Período")
             df_almox = st.session_state.df_almoxarifado
             if 'DATA' in df_almox.columns and not df_almox['DATA'].isnull().all():
-                min_date = df_almox['DATA'].min() if not df_almox['DATA'].isnull().all() else datetime.date.today()
-                max_date = df_almox['DATA'].max() if not df_almox['DATA'].isnull().all() else datetime.date.today()
+                # CORREÇÃO: Usar .dt.date para extrair a data antes de pegar min e max
+                min_date = df_almox['DATA'].dt.date.min() if not df_almox['DATA'].isnull().all() else datetime.date.today()
+                max_date = df_almox['DATA'].dt.date.max() if not df_almox['DATA'].isnull().all() else datetime.date.today()
                 data_minima = st.date_input("De:", value=min_date)
                 data_maxima = st.date_input("Até:", value=max_date)
             else:
