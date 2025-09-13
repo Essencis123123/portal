@@ -312,7 +312,6 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
 
             if response:
                 st.success("✅ Arquivo enviado com sucesso para o Supabase!")
-                # Retorna o nome do arquivo (ID) em vez da URL assinada
                 return unique_file_name
             else:
                 st.error("❌ Falha ao enviar o arquivo")
@@ -348,7 +347,6 @@ def load_reembolsos_data():
             if 'VALOR' in df.columns:
                 df['VALOR'] = df['VALOR'].astype(str).str.replace(',', '.', regex=False)
                 df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce')
-            # Remove a coluna 'ID_COMPROVANTE' se ela existir para evitar erros de visualização
             if 'ID_COMPROVANTE' in df.columns:
                 df = df.drop(columns=['ID_COMPROVANTE'])
             return df
@@ -375,7 +373,6 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
         data_formatada = data.strftime('%d/%m/%Y')
         valor_formatado = f"{valor:.2f}".replace('.', ',')
         try:
-            # AQUI ESTÁ A LINHA CORRIGIDA
             row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, id_comprovante, email]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
@@ -395,7 +392,6 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 <li><b>Justificativa:</b> {justificativa}</li>
             </ul>
             """
-            # Geramos a URL assinada para o e-mail usando o ID do comprovante
             comprovante_link = get_signed_url(id_comprovante) if id_comprovante else None
             if comprovante_link:
                 body_user += f"<p>Clique aqui para baixar a notinha: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
@@ -501,27 +497,35 @@ if not st.session_state.logged_in:
 
     elif selected_page == "Cadastre-se":
         st.header("Cadastrar Novo Usuário")
+        # ADICIONADO: Mensagem de orientação para a senha
+        st.info("💡 **Dica de segurança:** Crie uma senha forte com no mínimo 8 caracteres, usando letras maiúsculas e minúsculas, números e símbolos.")
         with st.form("cadastro_form"):
             nome = st.text_input("Nome Completo")
             matricula = st.text_input("Matrícula")
             email = st.text_input("E-mail Essencis")
             password_cad = st.text_input("Crie uma Senha", type="password")
+            # ADICIONADO: Campo para confirmação de senha
+            confirm_password_cad = st.text_input("Confirme a Senha", type="password")
             submitted_cad = st.form_submit_button("Cadastrar")
             if submitted_cad:
-                if nome and matricula and email and password_cad:
-                    df_usuarios = load_usuarios_data()
-                    if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and (df_usuarios['EMAIL'].str.lower() == email.lower()).any():
-                        st.error("Este e-mail já está cadastrado.")
+                if nome and matricula and email and password_cad and confirm_password_cad:
+                    # ADICIONADO: Verificação se as senhas coincidem
+                    if password_cad != confirm_password_cad:
+                        st.error("As senhas digitadas não coincidem. Por favor, tente novamente.")
                     else:
-                        sheet = get_usuarios_sheet()
-                        if sheet:
-                            try:
-                                row = [nome, matricula, email, password_cad]
-                                sheet.append_row(row)
-                                st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
-                                load_usuarios_data.clear()
-                            except Exception as e:
-                                st.error(f"Erro ao cadastrar usuário: {e}")
+                        df_usuarios = load_usuarios_data()
+                        if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and (df_usuarios['EMAIL'].str.lower() == email.lower()).any():
+                            st.error("Este e-mail já está cadastrado.")
+                        else:
+                            sheet = get_usuarios_sheet()
+                            if sheet:
+                                try:
+                                    row = [nome, matricula, email, password_cad]
+                                    sheet.append_row(row)
+                                    st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
+                                    load_usuarios_data.clear()
+                                except Exception as e:
+                                    st.error(f"Erro ao cadastrar usuário: {e}")
                 else:
                     st.error("Por favor, preencha todos os campos.")
 
