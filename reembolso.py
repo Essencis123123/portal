@@ -9,10 +9,11 @@ from pandas.errors import EmptyDataError
 import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
+import pickle
 import base64
+from google.auth.transport.requests import Request
+from google.auth.credentials import Credentials
+from googleapiclient.discovery import build
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import io
@@ -237,25 +238,25 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
+# --- ATUALIZADO: Lendo o token das secrets do Streamlit ---
 @st.cache_resource(ttl=3600)
 def get_gmail_service():
-    creds = None
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            st.warning("O arquivo 'token.pickle' não foi encontrado ou é inválido. Por favor, execute o script de autenticação localmente.")
-            return None
-    
-    return build('gmail', 'v1', credentials=creds)
+    if "GMAIL_TOKEN" not in st.secrets:
+        st.warning("O segredo 'GMAIL_TOKEN' não foi configurado. O envio de e-mail não funcionará.")
+        return None
+        
+    try:
+        creds_bytes = st.secrets["GMAIL_TOKEN"].encode("utf-8")
+        creds_object = pickle.loads(base64.b64decode(creds_bytes))
+        return build('gmail', 'v1', credentials=creds_object)
+    except Exception as e:
+        st.error(f"Erro ao carregar as credenciais do Gmail: {e}")
+        return None
 
 # Instância do cliente gspread e do serviço Gmail
 gs_client = get_gspread_client()
 st.session_state.gmail_service = get_gmail_service()
+
 
 def get_reembolsos_sheet():
     try:
