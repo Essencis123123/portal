@@ -187,7 +187,7 @@ st.markdown(
 
 # Carregar a imagem do logo a partir da URL
 def load_logo(url):
-    """Carrega a imagem de um URL."""
+    """Carrega la imagen de un URL."""
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -244,7 +244,7 @@ def parse_date_input(date_value):
     suportando formatos comuns (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD).
     Retorna pd.NaT para valores inválidos.
     """
-    if pd.isna(date_value) or date_value == '':
+    if pd.isna(date_value) or date_value == '' or date_value is None:
         return pd.NaT
     
     if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
@@ -254,21 +254,26 @@ def parse_date_input(date_value):
         return datetime.datetime.combine(date_value, datetime.time())
     
     if isinstance(date_value, str):
+        # Remove espaços em branco
+        date_value = date_value.strip()
+        
         # Tenta converter com dayfirst=True para DD/MM/YYYY ou DD-MM-YYYY
-        dt = pd.to_datetime(date_value, dayfirst=True, errors='coerce')
-        if pd.notna(dt):
-            return dt
-        # Se falhar, tenta formatos específicos (ex: YYYY-MM-DD)
         try:
-            return datetime.datetime.strptime(date_value, '%Y-%m-%d')
-        except ValueError:
-            pass # Continua para o próximo formato se falhar
-        try: # Caso seja DD-MM-YYYY mas sem o dayfirst
-            return datetime.datetime.strptime(date_value, '%d-%m-%Y')
-        except ValueError:
+            dt = pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+            if pd.notna(dt):
+                return dt
+        except:
             pass
-            
-    return pd.NaT # Para qualquer outro tipo ou formato que não possa ser convertido
+        
+        # Tenta formatos específicos
+        formats = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
+        for fmt in formats:
+            try:
+                return datetime.datetime.strptime(date_value, fmt)
+            except ValueError:
+                continue
+                
+    return pd.NaT
 
 def formatar_data_brasil_barra(data):
     """Formata datetime para exibição no formato DD/MM/YYYY. Retorna string vazia para NaT."""
@@ -293,9 +298,10 @@ def carregar_dados_pedidos():
         
         sheet = gc.open("dados_pedido")
         
+        # Obtém todos os valores sem formatação
         data = sheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
         
-        if not data or len(data) <= 1: # Verifica se há cabeçalhos e pelo menos uma linha de dados
+        if not data or len(data) <= 1:
             return criar_dataframe_pedidos_vazio()
 
         headers = data[0]
@@ -303,34 +309,33 @@ def carregar_dados_pedidos():
 
         df = pd.DataFrame(records, columns=headers)
 
+        # Garante que todas as colunas padrão existam
+        for col in COLUNA_ORDEM_PADRAO:
+            if col not in df.columns:
+                df[col] = ''
+
+        # Processa colunas de data
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns:
-                df[col] = df[col].apply(parse_date_input) # Usa a função robusta de parse
+                # Converte para datetime usando nossa função robusta
+                df[col] = df[col].apply(parse_date_input)
         
+        # Processa colunas numéricas
         numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO", "QUANTIDADE_ENTREGUE"]
         for col in numeric_cols:
             if col in df.columns:
                 if df[col].dtype == 'object':
+                    # Remove pontos de milhar e converte vírgula decimal para ponto
                     df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                 else:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # Garante que as colunas existam e estejam na ordem padrão
+        # Garante a ordem padrão das colunas
         df = df.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
 
-        # Colunas que podem precisar de tratamento específico se vierem vazias
-        for col in ['DOC NF', 'UN', 'CODIGO_MATERIAL', 'PREVISAO_ENTREGA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
-            if col not in df.columns or df[col].isnull().all():
-                if col in date_cols:
-                    df[col] = pd.NaT
-                elif col in numeric_cols:
-                    df[col] = 0
-                else:
-                    df[col] = ''
-        
-        # Recalcular STATUS_PEDIDO
+        # Recalcular STATUS_PEDIDO baseado na DATA_ENTREGA
         df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
             lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
         )
@@ -338,7 +343,6 @@ def carregar_dados_pedidos():
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
-        st.info("Criando um DataFrame vazio. Verifique suas credenciais e a planilha.")
         return criar_dataframe_pedidos_vazio()
 
 def formatar_numero_brasileiro(valor, casas_decimais=2):
@@ -348,7 +352,7 @@ def formatar_numero_brasileiro(valor, casas_decimais=2):
     return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
 
 def salvar_dados_pedidos(df):
-    """Salva o DataFrame de pedidos no Google Sheets, garantindo formato DD/MM/YYYY para datas e ordem padrão."""
+    """Salva o DataFrame de pedidos no Google Sheets, garantindo formato DD/MM/YYYY para datas."""
     try:
         gc = get_gspread_client()
         if gc is None:
@@ -363,42 +367,37 @@ def salvar_dados_pedidos(df):
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df_to_save.columns:
-                # Primeiro, converte para datetime de forma robusta
+                # Converte para datetime primeiro
                 df_to_save[col] = pd.to_datetime(df_to_save[col], errors='coerce', dayfirst=True)
-                # Agora, formata para string NO FORMATO DESEJADO DD/MM/YYYY
-                df_to_save[col] = df_to_save[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+                # Formata para string no formato DD/MM/YYYY
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
+                )
 
-        # CONVERSÃO DE NÚMEROS (para strings com vírgula decimal para o GSheets)
+        # CONVERSÃO DE NÚMEROS (para strings com vírgula decimal)
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
-                df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0) # Garante que é numérico
+                # Garante que é numérico
+                df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0)
+                # Formata com vírgula decimal
                 df_to_save[col] = df_to_save[col].apply(
-                    lambda x: str(f"{x:.2f}").replace('.', ',') if pd.notna(x) and x != '' else ''
+                    lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00'
                 )
         
+        # Remove coluna temporária se existir
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
-        df_to_save = df_to_save.fillna('') # Preenche quaisquer NaNs restantes com string vazia
+        # Preenche NaNs com string vazia
+        df_to_save = df_to_save.fillna('')
         
-        # Reindexar para garantir a ordem padrão das colunas antes de salvar
+        # Garante a ordem padrão das colunas
         df_to_save = df_to_save.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
 
-        # Verificar se a planilha está vazia (primeiro upload)
-        existing_data = worksheet.get_all_values()
-        is_sheet_empty = not existing_data or (len(existing_data) == 1 and all(not cell for cell in existing_data[0]))
-        
-        if is_sheet_empty:
-            # Se estiver vazia, usa set_with_dataframe para criar a planilha com cabeçalhos
-            st.info("Primeiro upload detectado. Criando planilha com cabeçalhos.")
-            set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
-        else:
-            # Se já houver dados, limpa tudo e reescreve com os dados atualizados
-            # Importante: se a ordem das colunas no COLUNA_ORDEM_PADRAO mudou, a planilha será reescrita
-            # com a nova ordem e cabeçalhos. Se não, apenas o conteúdo é atualizado.
-            worksheet.clear()
-            set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
+        # Limpa a planilha e escreve os novos dados
+        worksheet.clear()
+        set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
         st.success("Dados salvos com sucesso!")
         
@@ -420,7 +419,7 @@ def carregar_dados_solicitantes():
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "Solicitantes" é 3
         worksheet = sheet.get_worksheet(3)
-        data = worksheet.get_all_records()
+        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         df = pd.DataFrame(data)
         # Verifica se as colunas esperadas existem
         if not all(col in df.columns for col in ["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"]):
@@ -476,7 +475,7 @@ def carregar_dados_almoxarifado():
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "Almoxarifado" é 1
         worksheet = sheet.get_worksheet(1)
-        data = worksheet.get_all_records()
+        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         df = pd.DataFrame(data)
 
         ordem_colunas = ['ORDEM_COMPRA', 'DOC NF']
@@ -498,7 +497,7 @@ def carregar_dados_materiais():
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "MATERIAIS" é 2
         worksheet = sheet.get_worksheet(2)
-        data = worksheet.get_all_records()
+        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         df = pd.DataFrame(data)
         # Verifica se as colunas esperadas existem
         if not all(col in df.columns for col in ["CODIGO", "DESCRICAO"]):
@@ -874,7 +873,7 @@ def render_main_app():
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
                     "UN": st.column_config.TextColumn("UN", disabled=True),
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
-                    "TIPO_PEDIDO": st.column_config.TextColumn("Tipo Pedido", disabled=True),
+                    "TIPO_PEDido": st.column_config.TextColumn("Tipo Pedido", disabled=True),
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
@@ -924,8 +923,9 @@ def render_main_app():
                             break
                     
                     if row_changed:
-                        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']: # Inclui DATA_ENTREGA aqui também para o parse
-                            edited_row[col] = parse_date_input(edited_row[col]) # Usa a função robusta de parse
+                        # Garante o parsing correto das datas
+                        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']:
+                            edited_row[col] = parse_date_input(edited_row[col])
     
                         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
                             if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
@@ -978,7 +978,7 @@ def render_main_app():
         df_history = st.session_state.df_pedidos.copy()
         
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
-            df_history[col] = df_history[col].apply(parse_date_input) # Usa a função robusta de parse
+            df_history[col] = df_history[col].apply(parse_date_input)
         
         # --- CORREÇÃO APLICADA AQUI ---
         # Converte as colunas para numéricas antes de calcular e arredondar
@@ -1116,7 +1116,7 @@ def render_main_app():
             data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
             
             for col in data_cols_history:
-                edited_history_df[col] = edited_history_df[col].apply(parse_date_input) # Usa a função robusta de parse
+                edited_history_df[col] = edited_history_df[col].apply(parse_date_input)
             
             def calcular_dias_atraso(row):
                 if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
