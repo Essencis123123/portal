@@ -520,7 +520,7 @@ if not st.session_state.logged_in:
                             sheet = get_usuarios_sheet()
                             if sheet:
                                 try:
-                                    row = [nome, matricula, email, password_cad]
+                                    row = [nome, matricula, email, str(password_cad)]
                                     sheet.append_row(row)
                                     st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
                                     load_usuarios_data.clear()
