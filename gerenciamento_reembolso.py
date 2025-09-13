@@ -538,9 +538,9 @@ if st.session_state.current_user['EMAIL'].lower() == "earaujo@essencis.com.br":
                         try:
                             signed_url = get_signed_url(row['ID_COMPROVANTE'])
                             if signed_url:
-                                if row['CAMINHO_RECIBO'].lower().endswith(('.png', '.jpg', '.jpeg')):
+                                if row['ID_COMPROVANTE'].lower().endswith(('.png', '.jpg', '.jpeg')):
                                     st.image(signed_url, caption="Comprovante", use_column_width=True)
-                                elif row['CAMINHO_RECIBO'].lower().endswith('.pdf'):
+                                elif row['ID_COMPROVANTE'].lower().endswith('.pdf'):
                                     st.markdown(f"[📄 Baixar PDF]({signed_url})")
                                 else:
                                     st.markdown(f"[📎 Baixar Arquivo]({signed_url})")
