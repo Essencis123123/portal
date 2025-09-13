@@ -703,81 +703,90 @@ def render_main_app():
                 # Normaliza os nomes das colunas
                 df_novo.columns = [col.upper().strip() for col in df_novo.columns]
                 
-                # Colunas obrigatórias
-                required_cols = ["REQUISICAO", "SOLICITANTE", "DATA", "TIPO_PEDIDO", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"]
-                if not all(col in df_novo.columns for col in required_cols):
-                    st.error("O arquivo deve conter as colunas: 'REQUISICAO', 'SOLICITANTE', 'DATA', 'TIPO_PEDIDO', 'CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE'")
-                else:
-                    # Pega as colunas necessárias e padroniza
-                    df_novo = df_novo[required_cols].copy()
-                    
-                    # Adiciona colunas que podem estar faltando
-                    for col in st.session_state.df_pedidos.columns:
-                        if col not in df_novo.columns:
-                            df_novo[col] = ''
-                    
-                    # Garante a ordem das colunas
-                    df_novo = df_novo.reindex(columns=st.session_state.df_pedidos.columns)
+                # Colunas obrigatórias para um pedido inicial
+                required_initial_cols = ["REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "DATA", "TIPO_PEDIDO", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"]
+                
+                # Colunas adicionais que podem vir ou precisam ser inicializadas
+                all_possible_cols = st.session_state.df_pedidos.columns.tolist()
+                
+                # Garante que todas as colunas necessárias para um pedido existam no df_novo
+                for col in all_possible_cols:
+                    if col not in df_novo.columns:
+                        df_novo[col] = '' # Inicializa com string vazia
+                
+                # Reordena as colunas para coincidir com a planilha existente
+                df_novo = df_novo.reindex(columns=all_possible_cols, fill_value='')
 
-                    # Processa e valida os dados
-                    df_novo['DATA'] = pd.to_datetime(df_novo['DATA'], dayfirst=True, errors='coerce')
-                    df_novo['QUANTIDADE'] = pd.to_numeric(df_novo['QUANTIDADE'], errors='coerce')
-                    
-                    # Remove linhas que tenham valores nulos (NaN) nas colunas essenciais
-                    df_novo.dropna(subset=['DATA', 'SOLICITANTE', 'REQUISICAO', 'CODIGO_MATERIAL', 'QUANTIDADE'], inplace=True)
-                    
-                    # Salva o novo DataFrame diretamente na planilha
-                    try:
-                        gc = get_gspread_client()
-                        if gc:
-                            sheet = gc.open("dados_pedido")
-                            worksheet = sheet.get_worksheet(0)
-                            
-                            # Formata datas e números para a planilha
-                            df_novo_to_save = df_novo.copy()
-                            
-                            date_cols_save = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
-                            for col in date_cols_save:
-                                if col in df_novo_to_save.columns:
-                                    # Converte para datetime primeiro para evitar o erro de 'str'
-                                    df_novo_to_save[col] = pd.to_datetime(df_novo_to_save[col], errors='coerce', dayfirst=True)
-                                    # Agora, formata para string no formato DD/MM/YYYY
-                                    df_novo_to_save[col] = df_novo_to_save[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
-                            
-                            numeric_cols_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
-                            for col in numeric_cols_save:
-                                if col in df_novo_to_save.columns:
-                                    df_novo_to_save[col] = df_novo_to_save[col].apply(
-                                        lambda x: str(x).replace('.', ',') if pd.notna(x) and x != '' else ''
-                                    )
-                            df_novo_to_save.fillna('', inplace=True)
-                            
-                            # === Lógica para o primeiro upload vs. uploads subsequentes ===
-                            existing_data = worksheet.get_all_values()
-                            is_sheet_empty = not existing_data or (len(existing_data) == 1 and all(not cell for cell in existing_data[0]))
+                # Valida colunas essenciais para o upload
+                if not all(col in df_novo.columns for col in required_initial_cols):
+                    st.error(f"O arquivo deve conter as colunas essenciais: {', '.join(required_initial_cols)}")
+                    st.stop()
+                
+                # Processa e valida os dados
+                # Datas
+                date_cols_upload = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
+                for col in date_cols_upload:
+                    if col in df_novo.columns:
+                        # Tenta converter para datetime, usando dayfirst=True para formato DD/MM/YYYY ou DD-MM-YYYY
+                        df_novo[col] = pd.to_datetime(df_novo[col], errors='coerce', dayfirst=True)
+                        # Preenche NaT com string vazia para evitar problemas no GSheets
+                        df_novo[col] = df_novo[col].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else '')
+                
+                # Numéricos
+                numeric_cols_upload = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
+                for col in numeric_cols_upload:
+                    if col in df_novo.columns:
+                        # Substitui vírgula por ponto para conversão para float e remove pontos de milhar
+                        df_novo[col] = df_novo[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        df_novo[col] = pd.to_numeric(df_novo[col], errors='coerce').fillna(0)
+                        # Converte de volta para string com vírgula como separador decimal para o GSheets
+                        df_novo[col] = df_novo[col].apply(lambda x: str(x).replace('.', ',') if pd.notna(x) and x != '' else '')
+                
+                # Outras colunas
+                for col in ['STATUS_PEDIDO', 'CONDICAO_FRETE', 'DOC NF', 'FORNECEDOR', 'ORDEM_COMPRA', 'VALOR_TOTAL']:
+                    if col not in df_novo.columns:
+                        df_novo[col] = ''
+                
+                # Remove linhas que tenham valores nulos (NaN) nas colunas essenciais
+                df_novo.dropna(subset=['DATA', 'SOLICITANTE', 'REQUISICAO', 'CODIGO_MATERIAL', 'QUANTIDADE'], inplace=True)
+                
+                # Garante que o DataFrame final para salvar tenha todas as colunas na ordem correta
+                df_novo = df_novo.reindex(columns=st.session_state.df_pedidos.columns, fill_value='')
+                df_novo = df_novo.fillna('') # Garante que não haverá NaN's ao salvar
 
-                            if is_sheet_empty:
-                                # Primeiro upload: Inclui cabeçalhos
-                                st.info("Primeiro upload em massa detectado. Criando planilha com cabeçalhos.")
-                                set_with_dataframe(worksheet, df_novo_to_save, resize=True, include_column_header=True)
-                            else:
-                                # Uploads subsequentes: Apenas adiciona as linhas de dados
-                                st.info("Planilha já existente. Adicionando novas requisições.")
-                                # Garantir que as colunas do df_novo_to_save estejam na mesma ordem dos headers da planilha
-                                original_headers = worksheet.row_values(1)
-                                df_novo_to_save = df_novo_to_save.reindex(columns=original_headers, fill_value='')
-                                records_to_add = df_novo_to_save.values.tolist()
-                                worksheet.append_rows(records_to_add)
-                            
-                            # Limpa o cache para que os dados atualizados sejam carregados
-                            st.cache_data.clear()
-                            
-                            st.success(f"Requisições de {len(df_novo)} linhas adicionadas com sucesso!")
-                            time.sleep(2)
-                            st.rerun()
+                # Salva o novo DataFrame diretamente na planilha
+                try:
+                    gc = get_gspread_client()
+                    if gc:
+                        sheet = gc.open("dados_pedido")
+                        worksheet = sheet.get_worksheet(0)
+                        
+                        # === Lógica para o primeiro upload vs. uploads subsequentes ===
+                        existing_data = worksheet.get_all_values()
+                        is_sheet_empty = not existing_data or (len(existing_data) == 1 and all(not cell for cell in existing_data[0]))
 
-                    except Exception as e:
-                        st.error(f"Erro ao salvar os dados do arquivo na planilha: {e}")
+                        if is_sheet_empty:
+                            # Primeiro upload: Inclui cabeçalhos
+                            st.info("Primeiro upload em massa detectado. Criando planilha com cabeçalhos.")
+                            set_with_dataframe(worksheet, df_novo, resize=True, include_column_header=True)
+                        else:
+                            # Uploads subsequentes: Apenas adiciona as linhas de dados
+                            st.info("Planilha já existente. Adicionando novas requisições.")
+                            # Garantir que as colunas do df_novo estejam na mesma ordem dos headers da planilha
+                            original_headers = worksheet.row_values(1)
+                            df_to_append = df_novo.reindex(columns=original_headers, fill_value='')
+                            records_to_add = df_to_append.values.tolist()
+                            worksheet.append_rows(records_to_add)
+                        
+                        # Limpa o cache para que os dados atualizados sejam carregados
+                        st.cache_data.clear()
+                        
+                        st.success(f"Requisições de {len(df_novo)} linhas adicionadas com sucesso!")
+                        time.sleep(2)
+                        st.rerun()
+
+                except Exception as e:
+                    st.error(f"Erro ao salvar os dados do arquivo na planilha: {e}")
             
             except Exception as e:
                 st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
