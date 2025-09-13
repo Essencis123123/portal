@@ -25,7 +25,7 @@ st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon=
 
 # --- CSS Personalizado para o Tema Essencis ---
 st.markdown(
-    """
+
     <style>
     /* Aumenta o tamanho da fonte de todo o corpo do aplicativo */
     html, body, [data-testid="stAppViewContainer"] {
