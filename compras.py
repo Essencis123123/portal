@@ -290,7 +290,9 @@ def criar_dataframe_pedidos_vazio():
     return pd.DataFrame(columns=[
         "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
         "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL"
+        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL",
+        # Nova coluna adicionada
+        "QUANTIDADE_ENTREGUE"
     ])
 
 @st.cache_data(ttl=300)
@@ -323,7 +325,7 @@ def carregar_dados_pedidos():
             if col in df.columns:
                 df[col] = df[col].apply(parse_brazilian_date)
         
-        numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO"]
+        numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO", "QUANTIDADE_ENTREGUE"]
         for col in numeric_cols:
             if col in df.columns:
                 if df[col].dtype == 'object':
@@ -388,7 +390,7 @@ def salvar_dados_pedidos(df):
                 df_to_save[col] = df_to_save[col].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else '')
 
         # CONVERSÃO DE NÚMEROS
-        numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+        numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
                 df_to_save[col] = df_to_save[col].apply(
@@ -466,7 +468,7 @@ def validar_dados_pedidos(df):
     """Valida e corrige dados inconsistentes no DataFrame de pedidos"""
     df = df.copy()
     
-    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -744,7 +746,7 @@ def render_main_app():
                                     # Agora, formata para string no formato DD/MM/YYYY
                                     df_novo_to_save[col] = df_novo_to_save[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
                             
-                            numeric_cols_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+                            numeric_cols_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
                             for col in numeric_cols_save:
                                 if col in df_novo_to_save.columns:
                                     df_novo_to_save[col] = df_novo_to_save[col].apply(
@@ -1052,7 +1054,7 @@ def render_main_app():
         
         # --- CORREÇÃO APLICADA AQUI ---
         # Converte as colunas para numéricas antes de calcular e arredondar
-        for col in ['QUANTIDADE', 'VALOR_ITEM']:
+        for col in ['QUANTIDADE', 'VALOR_ITEM', 'QUANTIDADE_ENTREGUE']:
             df_history[col] = pd.to_numeric(df_history[col], errors='coerce').fillna(0)
 
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
@@ -1169,7 +1171,7 @@ def render_main_app():
             column_order=[
                 "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
                 "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF"
+                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF", "QUANTIDADE_ENTREGUE"
             ]
         )
 
