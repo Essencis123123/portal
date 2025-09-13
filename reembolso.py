@@ -19,9 +19,6 @@ import mimetypes
 from supabase import create_client, Client
 import toml
 from streamlit_option_menu import option_menu
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
 
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
@@ -221,28 +218,40 @@ TIPOS_DESPESA = [
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.current_user = None
-if 'creds' not in st.session_state:
-    st.session_state.creds = None
-if 'user_email_oauth' not in st.session_state:
-    st.session_state.user_email_oauth = None
-if 'gmail_service' not in st.session_state:
-    st.session_state.gmail_service = None
 
 # --- Conexão com Google Sheets e APIs ---
 SHEET_ID = secrets_dict["gcp_service_account"]["sheet_id"]
-SCOPES = ['https://www.googleapis.com/auth/gmail.send']
-TOKEN_FILE = 'token.json'
+
+# Adiciona o escopo do Gmail às permissões
+SCOPES = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/gmail.send']
+
+# E-mail da conta de serviço que enviará as notificações
+SENDER_EMAIL = secrets_dict["gcp_service_account"]["client_email"]
 
 @st.cache_resource(ttl=3600)
 def get_gspread_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
         secrets_dict["gcp_service_account"],
-        ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     )
     return gspread.authorize(creds)
 
-# --- Instância do cliente gspread ---
+@st.cache_resource(ttl=3600)
+def get_gmail_service():
+    """Autentica com a conta de serviço para usar a API do Gmail."""
+    try:
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            secrets_dict["gcp_service_account"],
+            SCOPES
+        )
+        return build('gmail', 'v1', credentials=creds)
+    except Exception as e:
+        st.error(f"Erro ao autenticar com a conta de serviço do Gmail: {e}")
+        return None
+
+# Instância do cliente gspread e do serviço Gmail
 gs_client = get_gspread_client()
+st.session_state.gmail_service = get_gmail_service()
 
 def get_reembolsos_sheet():
     try:
@@ -279,7 +288,6 @@ def create_message(sender, to, subject, message_text):
 def send_message(service, user_id, message):
     try:
         message = service.users().messages().send(userId=user_id, body=message).execute()
-        # st.success(f"E-mail enviado com sucesso!") # Removido para não poluir a UI em cada envio
         return message
     except Exception as e:
         st.error(f"Ocorreu um erro ao enviar e-mail: {e}")
@@ -305,7 +313,6 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
 
             if response:
                 st.success("✅ Arquivo enviado com sucesso para o Supabase!")
-                # Gera a URL assinada e retorna para salvar na planilha
                 signed_url = get_signed_url(unique_file_name, bucket_name)
                 if signed_url:
                     return signed_url
@@ -344,10 +351,8 @@ def load_reembolsos_data():
             if 'DATA' in df.columns:
                 df['DATA'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce').dt.date
             if 'VALOR' in df.columns:
-                # Converte para string, substitui vírgula por ponto e depois para numérico
                 df['VALOR'] = df['VALOR'].astype(str).str.replace(',', '.', regex=False)
                 df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce')
-            # Remove a coluna 'CAMINHO_RECIBO' se ela existir
             if 'CAMINHO_RECIBO' in df.columns:
                 df = df.drop(columns=['CAMINHO_RECIBO'])
             return df
@@ -361,10 +366,9 @@ def load_usuarios_data():
         df = pd.DataFrame(data)
         if not df.empty:
             df.columns = df.columns.str.upper()
-            # Certifica que as colunas esperadas existam
             for col in ['NOME', 'MATRICULA', 'EMAIL', 'SENHA']:
                 if col not in df.columns:
-                    df[col] = None # Adiciona a coluna com None se não existir
+                    df[col] = None
             return df
     return pd.DataFrame()
 
@@ -373,17 +377,12 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
-        valor_formatado = f"{valor:.2f}".replace('.', ',') # Formato Brasileiro
+        valor_formatado = f"{valor:.2f}".replace('.', ',')
         try:
-            # Inclui o caminho do recibo (que pode ser None) na linha
             row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, caminho_recibo, email]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
-
-            # Limpa o cache para recarregar a tabela com o novo item
             load_reembolsos_data.clear()
-
-            sender_email = st.session_state.user_email_oauth if st.session_state.user_email_oauth else "noreply@essencis.com.br"
 
             # 1. Envia e-mail para o usuário
             subject_user = "CONFIRMACAO DE ENVIO - PEDIDO DE REEMBOLSO"
@@ -403,14 +402,14 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 body_user += f"<p>Clique aqui para baixar a notinha: <a href='{caminho_recibo}'>Baixar Comprovante</a></p>"
             body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
 
-            message_user = create_message(sender_email, email, subject_user, body_user)
+            message_user = create_message(SENDER_EMAIL, email, subject_user, body_user)
             if st.session_state.gmail_service:
                 send_message(st.session_state.gmail_service, 'me', message_user)
             else:
                 st.warning("Serviço Gmail não inicializado. E-mail de confirmação para o usuário não enviado.")
 
             # 2. Envia e-mail para o administrador
-            admin_email = "earaujo@essencis.com.br" # Altere para o e-mail do administrador, se necessário
+            admin_email = "earaujo@essencis.com.br"
             subject_admin = f"Novo Reembolso Pendente de {nome}"
             body_admin = f"""
             <p>Olá, Administrador(a)!</p>
@@ -429,7 +428,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{caminho_recibo}'>Baixar Comprovante</a></p>"
             body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
 
-            message_admin = create_message(sender_email, admin_email, subject_admin, body_admin)
+            message_admin = create_message(SENDER_EMAIL, admin_email, subject_admin, body_admin)
             if st.session_state.gmail_service:
                 send_message(st.session_state.gmail_service, 'me', message_admin)
             else:
@@ -442,14 +441,12 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
 def login(email, password):
     df_usuarios = load_usuarios_data()
     if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and 'SENHA' in df_usuarios.columns:
-        # Verifica se o e-mail está na base de usuários (ignorando case)
         user_exists = (df_usuarios['EMAIL'].str.lower() == email.lower()).any()
 
         if not user_exists:
             st.error("Este e-mail não está cadastrado em nosso sistema.")
             return
 
-        # Se o usuário existe, tenta autenticar com a senha
         user_data = df_usuarios[
             (df_usuarios['EMAIL'].str.lower() == email.lower()) &
             (df_usuarios['SENHA'] == password)
@@ -457,7 +454,7 @@ def login(email, password):
 
         if not user_data.empty:
             st.session_state.logged_in = True
-            st.session_state.current_user = user_data.iloc[0] # Armazena a linha inteira do usuário
+            st.session_state.current_user = user_data.iloc[0]
             st.success("Login bem-sucedido!")
             st.rerun()
         else:
@@ -469,82 +466,7 @@ def logout():
     st.session_state.logged_in = False
     st.session_state.current_user = None
     st.info("Você foi desconectado.")
-    # Limpa o token do Google OAuth para forçar uma nova autorização na próxima vez
-    if os.path.exists(TOKEN_FILE):
-        os.remove(TOKEN_FILE)
     st.rerun()
-
-# --- Autenticação OAuth (com persistência) ---
-TOKEN_FILE = 'token.json'
-if os.path.exists(TOKEN_FILE):
-    try:
-        st.session_state.creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-        if st.session_state.creds and st.session_state.creds.expired and st.session_state.creds.refresh_token:
-            st.session_state.creds.refresh(Request())
-    except Exception as e:
-        st.error(f"Erro ao carregar token: {e}")
-        st.session_state.creds = None
-
-# Só solicita autorização OAuth se o usuário estiver logado
-if st.session_state.logged_in and (not st.session_state.creds or not st.session_state.creds.valid):
-    st.info("Para que o aplicativo possa enviar e-mails, você precisa autorizá-lo.")
-
-    try:
-        # Define redirect_uri_oob para que o código seja exibido no navegador
-        redirect_uri_oob = "urn:ietf:wg:oauth:2.0:oob"
-        flow = InstalledAppFlow.from_client_config(
-            {
-                "installed": {
-                    "client_id": secrets_dict["google_oauth"]["client_id"],
-                    "client_secret": secrets_dict["google_oauth"]["client_secret"],
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            }, SCOPES, redirect_uri=redirect_uri_oob)
-
-        auth_url, _ = flow.authorization_url(prompt='consent')
-
-        # Usa markdown para criar um link clicável para autorização
-        st.markdown(f"Por favor, **[clique aqui para autorizar o acesso](%s)**." % auth_url)
-
-        authorization_code = st.text_input("Cole o código de autorização que apareceu na tela aqui:")
-
-        if authorization_code:
-            try:
-                flow.fetch_token(code=authorization_code)
-                if flow.credentials:
-                    st.session_state.creds = flow.credentials
-                    with open(TOKEN_FILE, 'w') as token:
-                        token.write(st.session_state.creds.to_json())
-
-                    # Tenta obter o email do usuário através do token ID
-                    if hasattr(st.session_state.creds, 'id_token') and st.session_state.creds.id_token:
-                        st.session_state.user_email_oauth = st.session_state.creds.id_token.get('email')
-                    else:
-                        # Se não conseguir, usa um email padrão ou avisa
-                        st.warning("Token ID não disponível. Usando email padrão para envio de notificações.")
-                        st.session_state.user_email_oauth = "noreply@essencis.com.br" # Email padrão para envio
-
-                    st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-                    st.success("Autorização bem-sucedida! Agora você pode usar o aplicativo.")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao obter o token: {e}")
-    except Exception as e:
-        st.error(f"Erro no fluxo de autenticação: {e}")
-
-# Só constrói o serviço se as credenciais forem válidas e o email do usuário tiver sido obtido
-if st.session_state.creds and st.session_state.creds.valid:
-    try:
-        st.session_state.gmail_service = build('gmail', 'v1', credentials=st.session_state.creds)
-        if not st.session_state.user_email_oauth: # Garante que o email do remetente esteja definido
-            if hasattr(st.session_state.creds, 'id_token') and st.session_state.creds.id_token:
-                st.session_state.user_email_oauth = st.session_state.creds.id_token.get('email')
-            else:
-                st.session_state.user_email_oauth = "noreply@essencis.com.br" # Email padrão para envio
-    except Exception as e:
-        st.error(f"Erro ao construir serviço Gmail: {e}")
-        st.session_state.gmail_service = None
 
 # --- Layout do Aplicativo ---
 st.markdown("""
@@ -555,7 +477,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if not st.session_state.logged_in:
-    # Adiciona o logo no sidebar
     with st.sidebar:
         if logo_img:
             st.image(logo_img, use_container_width=True)
@@ -570,7 +491,6 @@ if not st.session_state.logged_in:
     )
     if selected_page == "Login":
         st.header("Login")
-        # Aplica a classe CSS ao container do formulário de login
         with st.form("login_form", clear_on_submit=True):
             st.markdown('<div class="login-form-container">', unsafe_allow_html=True)
             email_login = st.text_input("E-mail")
@@ -591,7 +511,6 @@ if not st.session_state.logged_in:
             if submitted_cad:
                 if nome and matricula and email and password_cad:
                     df_usuarios = load_usuarios_data()
-                    # Verifica se o email já existe na planilha (ignorando case)
                     if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and (df_usuarios['EMAIL'].str.lower() == email.lower()).any():
                         st.error("Este e-mail já está cadastrado.")
                     else:
@@ -601,7 +520,6 @@ if not st.session_state.logged_in:
                                 row = [nome, matricula, email, password_cad]
                                 sheet.append_row(row)
                                 st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
-                                # Limpa o cache dos usuários após adicionar um novo
                                 load_usuarios_data.clear()
                             except Exception as e:
                                 st.error(f"Erro ao cadastrar usuário: {e}")
@@ -609,7 +527,6 @@ if not st.session_state.logged_in:
                     st.error("Por favor, preencha todos os campos.")
 
 else: # Usuário Logado
-    # Adiciona o logo no sidebar
     with st.sidebar:
         if logo_img:
             st.image(logo_img, use_container_width=True)
@@ -637,7 +554,7 @@ else: # Usuário Logado
                 with col2:
                     if 'VALOR' in df_usuario.columns:
                         total_valor = df_usuario['VALOR'].sum()
-                        st.metric("Valor Total", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")) # Formatação BR
+                        st.metric("Valor Total", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 with col3:
                     if 'STATUS' in df_usuario.columns:
                         pendentes = df_usuario[df_usuario['STATUS'] == 'Pendente'].shape[0]
@@ -647,25 +564,24 @@ else: # Usuário Logado
                 if 'DEPARTAMENTO' in df_usuario.columns and 'VALOR' in df_usuario.columns:
                     df_depto = df_usuario.groupby('DEPARTAMENTO')['VALOR'].sum().reset_index()
                     fig_depto = px.bar(df_depto, x='DEPARTAMENTO', y='VALOR',
-                                       title="Custo por Departamento",
-                                       labels={'VALOR': 'Valor (R$)', 'DEPARTAMENTO': 'Departamento'})
+                                        title="Custo por Departamento",
+                                        labels={'VALOR': 'Valor (R$)', 'DEPARTAMENTO': 'Departamento'})
                     st.plotly_chart(fig_depto, use_container_width=True)
 
                 st.subheader("Custo por Tipo de Despesa (Seus Reembolsos)")
                 if 'TIPO_DESPESA' in df_usuario.columns and 'VALOR' in df_usuario.columns:
                     df_despesa = df_usuario.groupby('TIPO_DESPESA')['VALOR'].sum().reset_index()
                     fig_despesa = px.bar(df_despesa, x='TIPO_DESPESA', y='VALOR',
-                                         title="Custo por Tipo de Despesa",
-                                         labels={'VALOR': 'Valor (R$)', 'TIPO_DESPESA': 'Tipo de Despesa'})
+                                          title="Custo por Tipo de Despesa",
+                                          labels={'VALOR': 'Valor (R$)', 'TIPO_DESPESA': 'Tipo de Despesa'})
                     st.plotly_chart(fig_despesa, use_container_width=True)
 
                 if 'STATUS' in df_usuario.columns:
-                    # Agrupa os status para contagem
                     df_status_counts = df_usuario['STATUS'].value_counts().reset_index()
-                    df_status_counts.columns = ['STATUS', 'count'] # Renomeia colunas para Plotly
+                    df_status_counts.columns = ['STATUS', 'count']
                     fig_status = px.bar(df_status_counts, x='STATUS', y='count',
-                                        title="Seus Reembolsos por Status",
-                                        labels={'count': 'Quantidade', 'STATUS': 'Status'})
+                                         title="Seus Reembolsos por Status",
+                                         labels={'count': 'Quantidade', 'STATUS': 'Status'})
                     st.plotly_chart(fig_status)
             else:
                 st.info("Você ainda não tem reembolsos registrados.")
@@ -680,7 +596,6 @@ else: # Usuário Logado
         st.subheader(f"Dados do Solicitante:")
         st.info(f"**Nome:** {nome_funcionario} | **E-mail:** {email_funcionario}")
 
-        # Adicionado um controle para adicionar um ou mais reembolsos
         num_reembolsos = st.number_input("Quantos reembolsos deseja adicionar?", min_value=1, step=1, value=1, key="num_reembolsos_input")
 
         for i in range(int(num_reembolsos)):
@@ -720,8 +635,7 @@ else: # Usuário Logado
                                 st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
 
                         add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado,
-                                      tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
-                        # Limpa o formulário atual após submissão bem-sucedida
+                                        tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
                         st.rerun()
                     else:
                         st.error("Por favor, preencha todos os campos obrigatórios (Valor, Data, Justificativa).")
@@ -733,16 +647,10 @@ else: # Usuário Logado
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             if not df_usuario.empty:
-                # Formata a coluna de valor para o padrão brasileiro
                 df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                # Formata a coluna de data para o padrão brasileiro
                 df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
-
-                # Seleciona e exibe as colunas desejadas
                 colunas_exibir = ['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']
-                # Garante que todas as colunas desejadas existam no DataFrame antes de tentar exibi-las
                 colunas_existentes = [col for col in colunas_exibir if col in df_usuario.columns]
-
                 st.dataframe(df_usuario[colunas_existentes], use_container_width=True)
             else:
                 st.info("Nenhum reembolso encontrado para este e-mail.")
