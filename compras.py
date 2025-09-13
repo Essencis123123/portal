@@ -231,8 +231,12 @@ def get_gspread_client():
 
 # Funções auxiliares para formatação e parsing de datas
 def parse_date_from_editor(date_value):
-    """Converte valores do editor para datetime (suporte a hífen, barra e ISO)"""
-    if date_value is None or pd.isna(date_value) or date_value == '':
+    """
+    Converte valores de data do editor para datetime, suportando formatos comuns
+    brasileiros (DD/MM/YYYY, DD-MM-YYYY) e ISO (YYYY-MM-DD).
+    Retorna pd.NaT para valores inválidos.
+    """
+    if pd.isna(date_value) or date_value == '':
         return pd.NaT
     
     if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
@@ -242,48 +246,54 @@ def parse_date_from_editor(date_value):
         return datetime.datetime.combine(date_value, datetime.time())
     
     if isinstance(date_value, str):
+        # Tenta converter com dayfirst=True para DD/MM/YYYY ou DD-MM-YYYY
+        dt = pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+        if pd.notna(dt):
+            return dt
+        # Se falhar, tenta formatos específicos sem dayfirst (pode ser ISO ou ambíguo)
         try:
-            if '-' in date_value and len(date_value.split('-')) == 3:
-                return datetime.datetime.strptime(date_value, '%d-%m-%Y')
-            elif '/' in date_value and len(date_value.split('/')) == 3:
-                return datetime.datetime.strptime(date_value, '%d/%m/%Y')
-            elif '-' in date_value and len(date_value.split('-')) == 3:
-                return datetime.datetime.strptime(date_value, '%Y-%m-%d')
-            else:
-                return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+            return datetime.datetime.strptime(date_value, '%Y-%m-%d')
         except ValueError:
-            return pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+            return pd.NaT # Se não conseguir, retorna NaT
+            
+    return pd.NaT # Para qualquer outro tipo que não possa ser convertido
+
+def parse_brazilian_date(date_value):
+    """
+    Converte valores de data da planilha (string ou outros) para datetime,
+    suportando formatos comuns brasileiros (DD/MM/YYYY, DD-MM/YYYY) e ISO (YYYY-MM-DD).
+    Retorna pd.NaT para valores inválidos.
+    """
+    if pd.isna(date_value) or date_value == '':
+        return pd.NaT
     
-    return pd.to_datetime(date_value, errors='coerce')
+    if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
+        return date_value
+    
+    if isinstance(date_value, datetime.date):
+        return datetime.datetime.combine(date_value, datetime.time())
+    
+    if isinstance(date_value, str):
+        # Tenta converter com dayfirst=True para DD/MM/YYYY ou DD-MM-YYYY
+        dt = pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+        if pd.notna(dt):
+            return dt
+        # Se falhar, tenta formatos específicos sem dayfirst (pode ser ISO ou ambíguo)
+        try:
+            return datetime.datetime.strptime(date_value, '%Y-%m-%d')
+        except ValueError:
+            return pd.NaT # Se não conseguir, retorna NaT
+            
+    return pd.NaT # Para qualquer outro tipo que não possa ser convertido
 
-def parse_brazilian_date(date_str):
-    """Converte datas em formato brasileiro para datetime"""
-    if pd.isna(date_str) or date_str == '' or date_str is None:
-        return pd.NaT
-    try:
-        formats = ['%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d', '%d-%m-%y', '%d/%m/%y']
-        for fmt in formats:
-            try:
-                return datetime.datetime.strptime(str(date_str), fmt)
-            except ValueError:
-                continue
-        return pd.to_datetime(date_str, dayfirst=True, errors='coerce')
-    except:
-        return pd.NaT
-
-def formatar_data_brasil_hifen(data):
-    """Formata datetime para exibição no formato DD-MM-YYYY"""
-    if pd.isna(data) or data is None:
+def formatar_data_brasil_barra(data):
+    """Formata datetime para exibição no formato DD/MM/YYYY. Retorna string vazia para NaT."""
+    if pd.isna(data):
         return ""
     try:
-        if isinstance(data, str) and '-' in data and len(data.split('-')) == 3:
-            return data
-        elif isinstance(data, (pd.Timestamp, datetime.datetime)):
-            return data.strftime('%d-%m-%Y')
-        else:
-            return str(data)
+        return data.strftime('%d/%m/%Y')
     except:
-        return str(data)
+        return ""
 
 def criar_dataframe_pedidos_vazio():
     """Cria um DataFrame de pedidos vazio com a estrutura correta."""
@@ -324,8 +334,7 @@ def carregar_dados_pedidos():
         for col in numeric_cols:
             if col in df.columns:
                 if df[col].dtype == 'object':
-                    df[col] = df[col].str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float, errors='ignore')
-                    # Segunda tentativa para garantir a conversão
+                    df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                 else:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -364,7 +373,7 @@ def formatar_numero_brasileiro(valor, casas_decimais=2):
     return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
 
 def salvar_dados_pedidos(df):
-    """Salva o DataFrame de pedidos no Google Sheets."""
+    """Salva o DataFrame de pedidos no Google Sheets, garantindo formato DD/MM/YYYY para datas."""
     try:
         gc = get_gspread_client()
         if gc is None:
@@ -375,27 +384,28 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df.copy()
 
-        # CONVERSÃO PARA DATETIME E FORMATO DD-MM-YYYY
+        # CONVERSÃO PARA DATETIME E FORMATO DD/MM/YYYY (com barras)
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df_to_save.columns:
-                # Converte para datetime primeiro, lidando com erros
+                # Primeiro, converte para datetime de forma robusta
                 df_to_save[col] = pd.to_datetime(df_to_save[col], errors='coerce', dayfirst=True)
-                # Agora, formata para string no formato DD-MM-YYYY
-                df_to_save[col] = df_to_save[col].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else '')
+                # Agora, formata para string no formato DD/MM/YYYY
+                df_to_save[col] = df_to_save[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
 
-        # CONVERSÃO DE NÚMEROS
+        # CONVERSÃO DE NÚMEROS (para strings com vírgula decimal para o GSheets)
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
+                df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0) # Garante que é numérico
                 df_to_save[col] = df_to_save[col].apply(
-                    lambda x: str(x).replace('.', ',') if pd.notna(x) and x != '' else ''
+                    lambda x: str(f"{x:.2f}").replace('.', ',') if pd.notna(x) and x != '' else ''
                 )
         
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
-        df_to_save = df_to_save.fillna('')
+        df_to_save = df_to_save.fillna('') # Preenche quaisquer NaNs restantes com string vazia
         
         # Verificar se a planilha está vazia (primeiro upload)
         existing_data = worksheet.get_all_values()
@@ -407,8 +417,8 @@ def salvar_dados_pedidos(df):
             set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         else:
             # Se já houver dados, limpa tudo e reescreve com os dados atualizados
-            # Isso é necessário para edições, garantindo que o DataFrame no Sheets corresponda ao do Streamlit.
             original_headers = worksheet.row_values(1)
+            # Reindexar para garantir a ordem das colunas antes de salvar
             df_to_save = df_to_save.reindex(columns=original_headers, fill_value='')
             worksheet.clear()
             set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
@@ -727,10 +737,10 @@ def render_main_app():
                 date_cols_upload = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
                 for col in date_cols_upload:
                     if col in df_novo.columns:
-                        # Tenta converter para datetime, usando dayfirst=True para formato DD/MM/YYYY ou DD-MM-YYYY
+                        # Tenta converter para datetime primeiro
                         df_novo[col] = pd.to_datetime(df_novo[col], errors='coerce', dayfirst=True)
-                        # Preenche NaT com string vazia para evitar problemas no GSheets
-                        df_novo[col] = df_novo[col].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else '')
+                        # Preenche NaT com string vazia e formata para DD/MM/YYYY
+                        df_novo[col] = df_novo[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
                 
                 # Numéricos
                 numeric_cols_upload = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
@@ -740,7 +750,7 @@ def render_main_app():
                         df_novo[col] = df_novo[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                         df_novo[col] = pd.to_numeric(df_novo[col], errors='coerce').fillna(0)
                         # Converte de volta para string com vírgula como separador decimal para o GSheets
-                        df_novo[col] = df_novo[col].apply(lambda x: str(x).replace('.', ',') if pd.notna(x) and x != '' else '')
+                        df_novo[col] = df_novo[col].apply(lambda x: str(f"{x:.2f}").replace('.', ',') if pd.notna(x) and x != '' else '')
                 
                 # Outras colunas
                 for col in ['STATUS_PEDIDO', 'CONDICAO_FRETE', 'DOC NF', 'FORNECEDOR', 'ORDEM_COMPRA', 'VALOR_TOTAL']:
@@ -972,7 +982,7 @@ def render_main_app():
                 column_config={
                     "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                    "DATA": st.column_config.DateColumn("Data da Requisição", format="DD-MM-YYYY", disabled=True),
+                    "DATA": st.column_config.DateColumn("Data da Requisição", format="DD/MM/YYYY", disabled=True),
                     "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                     "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
@@ -982,8 +992,8 @@ def render_main_app():
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                     "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
-                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD-MM-YYYY"),
+                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
+                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD/MM/YYYY"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]),
                 }
             )
@@ -1163,7 +1173,7 @@ def render_main_app():
             column_config={
                 "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
                 "REQUISICAO": "N° Requisição",
-                "DATA": st.column_config.DateColumn("Data Requisição", format="DD-MM-YYYY", disabled=True),
+                "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=True),
                 "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                 "DEPARTAMENTO": "Departamento",
                 "FILIAL": "Filial",
@@ -1177,10 +1187,10 @@ def render_main_app():
                 "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
                 "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD-MM-YYYY"),
-                "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação", format="DD-MM-YYYY"),
+                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
+                "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação", format="DD/MM/YYYY"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]),
-                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD-MM-YYYY"),
+                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY"),
                 "DIAS_ATRASO": "Dias Atraso",
                 "DOC NF": st.column_config.LinkColumn(
                     "Anexo NF",
