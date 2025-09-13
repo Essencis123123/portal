@@ -9,6 +9,8 @@ from pandas.errors import EmptyDataError
 import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 import base64
 from email.mime.multipart import MIMEMultipart
@@ -222,10 +224,10 @@ if "logged_in" not in st.session_state:
 SHEET_ID = secrets_dict["gcp_service_account"]["sheet_id"]
 
 # Adiciona o escopo do Gmail às permissões
-SCOPES = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/gmail.send']
+SCOPES = ['https://www.googleapis.com/auth/gmail.send']
 
 # E-mail da conta de serviço que enviará as notificações
-SENDER_EMAIL = secrets_dict["gcp_service_account"]["client_email"]
+SENDER_EMAIL = 'suprimentosessencis@gmail.com'
 
 @st.cache_resource(ttl=3600)
 def get_gspread_client():
@@ -237,16 +239,19 @@ def get_gspread_client():
 
 @st.cache_resource(ttl=3600)
 def get_gmail_service():
-    """Autentica com a conta de serviço para usar a API do Gmail."""
-    try:
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(
-            secrets_dict["gcp_service_account"],
-            SCOPES
-        )
-        return build('gmail', 'v1', credentials=creds)
-    except Exception as e:
-        st.error(f"Erro ao autenticar com a conta de serviço do Gmail: {e}")
-        return None
+    creds = None
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            st.warning("O arquivo 'token.pickle' não foi encontrado ou é inválido. Por favor, execute o script de autenticação localmente.")
+            return None
+    
+    return build('gmail', 'v1', credentials=creds)
 
 # Instância do cliente gspread e do serviço Gmail
 gs_client = get_gspread_client()
@@ -442,7 +447,6 @@ def login(email, password):
             st.error("Este e-mail não está cadastrado em nosso sistema.")
             return
 
-        # Aplica strip() para remover espaços e replace() para remover aspas simples
         df_usuarios['SENHA_LIMPA'] = df_usuarios['SENHA'].astype(str).str.strip().str.replace("'", "")
         password_limpa = password.strip()
 
