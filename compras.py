@@ -708,18 +708,61 @@ def render_main_app():
                 if not all(col in df_novo.columns for col in required_cols):
                     st.error("O arquivo deve conter as colunas: 'REQUISICAO', 'SOLICITANTE', 'DATA', 'TIPO_PEDIDO', 'CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE'")
                 else:
-                    df_novo = df_novo.reindex(columns=st.session_state.df_pedidos.columns, fill_value='')
+                    # Pega as colunas necessárias e padroniza
+                    df_novo = df_novo[required_cols].copy()
                     
+                    # Adiciona colunas que podem estar faltando
+                    for col in st.session_state.df_pedidos.columns:
+                        if col not in df_novo.columns:
+                            df_novo[col] = ''
+                    
+                    # Garante a ordem das colunas
+                    df_novo = df_novo.reindex(columns=st.session_state.df_pedidos.columns)
+
+                    # Processa e valida os dados
                     df_novo['DATA'] = pd.to_datetime(df_novo['DATA'], dayfirst=True, errors='coerce')
                     df_novo['QUANTIDADE'] = pd.to_numeric(df_novo['QUANTIDADE'], errors='coerce')
+                    
+                    # Remove linhas inválidas
                     df_novo.dropna(subset=['DATA', 'SOLICITANTE', 'REQUISICAO', 'CODIGO_MATERIAL', 'QUANTIDADE'], inplace=True)
                     
-                    st.session_state.df_pedidos = pd.concat([st.session_state.df_pedidos, df_novo], ignore_index=True)
-                    salvar_dados_pedidos(st.session_state.df_pedidos)
-                    st.success(f"Requisições de {len(df_novo)} linhas adicionadas com sucesso!")
-                    time.sleep(2)
-                    st.rerun()
+                    # Salva o novo DataFrame diretamente na planilha usando append_rows
+                    try:
+                        gc = get_gspread_client()
+                        if gc:
+                            sheet = gc.open("dados_pedido")
+                            worksheet = sheet.get_worksheet(0)
+                            
+                            # Formata datas e números para a planilha
+                            df_novo_to_save = df_novo.copy()
+                            
+                            date_cols_save = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
+                            for col in date_cols_save:
+                                if col in df_novo_to_save.columns:
+                                    df_novo_to_save[col] = df_novo_to_save[col].apply(lambda x: x.strftime('%d-%m-%Y') if pd.notna(x) else '')
+                            
+                            numeric_cols_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO']
+                            for col in numeric_cols_save:
+                                if col in df_novo_to_save.columns:
+                                    df_novo_to_save[col] = df_novo_to_save[col].apply(
+                                        lambda x: str(x).replace('.', ',') if pd.notna(x) and x != '' else ''
+                                    )
+                            df_novo_to_save.fillna('', inplace=True)
+                            
+                            # Adiciona as linhas à planilha
+                            records_to_add = df_novo_to_save.values.tolist()
+                            worksheet.append_rows(records_to_add)
+                            
+                            # Limpa o cache para que os dados atualizados sejam carregados
+                            st.cache_data.clear()
+                            
+                            st.success(f"Requisições de {len(df_novo)} linhas adicionadas com sucesso!")
+                            time.sleep(2)
+                            st.rerun()
 
+                    except Exception as e:
+                        st.error(f"Erro ao salvar os dados do arquivo na planilha: {e}")
+            
             except Exception as e:
                 st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
         
@@ -1012,7 +1055,7 @@ def render_main_app():
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM']
         df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2)
         # -----------------------------
-    
+        
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
             almox_map = df_almox.set_index('ORDEM_COMPRA')['DOC NF'].to_dict()
@@ -1580,8 +1623,8 @@ def render_main_app():
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
         df_negociados['PERC_ECONOMIA'] = np.where((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) > 0, 
-                                                 ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
-                                                 0)
+                                                ((df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])) / (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) * 100, 
+                                                0)
         
         df_performance_local = df_performance_filtrado[df_performance_filtrado['TIPO_PEDIDO'] == 'LOCAL'].copy()
         
