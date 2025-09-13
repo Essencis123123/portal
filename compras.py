@@ -230,10 +230,10 @@ def get_gspread_client():
         return None
 
 # Funções auxiliares para formatação e parsing de datas
-def parse_date_from_editor(date_value):
+def parse_date_input(date_value):
     """
-    Converte valores de data do editor para datetime, suportando formatos comuns
-    brasileiros (DD/MM/YYYY, DD-MM-YYYY) e ISO (YYYY-MM-DD).
+    Converte valores de data de qualquer entrada (editor, string) para datetime,
+    suportando formatos comuns (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD).
     Retorna pd.NaT para valores inválidos.
     """
     if pd.isna(date_value) or date_value == '':
@@ -250,41 +250,17 @@ def parse_date_from_editor(date_value):
         dt = pd.to_datetime(date_value, dayfirst=True, errors='coerce')
         if pd.notna(dt):
             return dt
-        # Se falhar, tenta formatos específicos sem dayfirst (pode ser ISO ou ambíguo)
+        # Se falhar, tenta formatos específicos (ex: YYYY-MM-DD)
         try:
             return datetime.datetime.strptime(date_value, '%Y-%m-%d')
         except ValueError:
-            return pd.NaT # Se não conseguir, retorna NaT
-            
-    return pd.NaT # Para qualquer outro tipo que não possa ser convertido
-
-def parse_brazilian_date(date_value):
-    """
-    Converte valores de data da planilha (string ou outros) para datetime,
-    suportando formatos comuns brasileiros (DD/MM/YYYY, DD-MM/YYYY) e ISO (YYYY-MM-DD).
-    Retorna pd.NaT para valores inválidos.
-    """
-    if pd.isna(date_value) or date_value == '':
-        return pd.NaT
-    
-    if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
-        return date_value
-    
-    if isinstance(date_value, datetime.date):
-        return datetime.datetime.combine(date_value, datetime.time())
-    
-    if isinstance(date_value, str):
-        # Tenta converter com dayfirst=True para DD/MM/YYYY ou DD-MM-YYYY
-        dt = pd.to_datetime(date_value, dayfirst=True, errors='coerce')
-        if pd.notna(dt):
-            return dt
-        # Se falhar, tenta formatos específicos sem dayfirst (pode ser ISO ou ambíguo)
-        try:
-            return datetime.datetime.strptime(date_value, '%Y-%m-%d')
+            pass # Continua para o próximo formato se falhar
+        try: # Caso seja DD-MM-YYYY mas sem o dayfirst
+            return datetime.datetime.strptime(date_value, '%d-%m-%Y')
         except ValueError:
-            return pd.NaT # Se não conseguir, retorna NaT
+            pass
             
-    return pd.NaT # Para qualquer outro tipo que não possa ser convertido
+    return pd.NaT # Para qualquer outro tipo ou formato que não possa ser convertido
 
 def formatar_data_brasil_barra(data):
     """Formata datetime para exibição no formato DD/MM/YYYY. Retorna string vazia para NaT."""
@@ -328,7 +304,7 @@ def carregar_dados_pedidos():
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns:
-                df[col] = df[col].apply(parse_brazilian_date)
+                df[col] = df[col].apply(parse_date_input) # Usa a função robusta de parse
         
         numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO", "QUANTIDADE_ENTREGUE"]
         for col in numeric_cols:
@@ -390,7 +366,7 @@ def salvar_dados_pedidos(df):
             if col in df_to_save.columns:
                 # Primeiro, converte para datetime de forma robusta
                 df_to_save[col] = pd.to_datetime(df_to_save[col], errors='coerce', dayfirst=True)
-                # Agora, formata para string no formato DD/MM/YYYY
+                # Agora, formata para string NO FORMATO DESEJADO DD/MM/YYYY
                 df_to_save[col] = df_to_save[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
 
         # CONVERSÃO DE NÚMEROS (para strings com vírgula decimal para o GSheets)
@@ -484,7 +460,7 @@ def validar_dados_pedidos(df):
     date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
     for col in date_cols:
         if col in df.columns:
-            df[col] = df[col].apply(parse_brazilian_date)
+            df[col] = df[col].apply(parse_date_input)
     
     return df
 
@@ -737,7 +713,7 @@ def render_main_app():
                 date_cols_upload = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
                 for col in date_cols_upload:
                     if col in df_novo.columns:
-                        # Tenta converter para datetime primeiro
+                        # Tenta converter para datetime de forma robusta
                         df_novo[col] = pd.to_datetime(df_novo[col], errors='coerce', dayfirst=True)
                         # Preenche NaT com string vazia e formata para DD/MM/YYYY
                         df_novo[col] = df_novo[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
@@ -944,7 +920,7 @@ def render_main_app():
         
         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
             if col in pedidos_pendentes_oc.columns:
-                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_brazilian_date)
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_date_input)
         
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
@@ -1030,7 +1006,7 @@ def render_main_app():
                     
                     if row_changed:
                         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
-                            edited_row[col] = parse_date_from_editor(edited_row[col])
+                            edited_row[col] = parse_date_input(edited_row[col]) # Usa a função robusta de parse
     
                         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                             if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
@@ -1080,7 +1056,7 @@ def render_main_app():
         df_history = st.session_state.df_pedidos.copy()
         
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
-            df_history[col] = df_history[col].apply(parse_brazilian_date)
+            df_history[col] = df_history[col].apply(parse_date_input) # Usa a função robusta de parse
         
         # --- CORREÇÃO APLICADA AQUI ---
         # Converte as colunas para numéricas antes de calcular e arredondar
@@ -1221,7 +1197,7 @@ def render_main_app():
             data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
             
             for col in data_cols_history:
-                edited_history_df[col] = edited_history_df[col].apply(parse_date_from_editor)
+                edited_history_df[col] = edited_history_df[col].apply(parse_date_input) # Usa a função robusta de parse
             
             def calcular_dias_atraso(row):
                 if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']):
