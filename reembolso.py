@@ -175,13 +175,8 @@ def load_logo(url):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
-# --- Carrega os segredos do arquivo secrets.toml ---
-try:
-    with open(".streamlit/secrets.toml", "r") as f:
-        secrets_dict = toml.load(f)
-except FileNotFoundError:
-    st.error("O arquivo .streamlit/secrets.toml não foi encontrado.")
-    st.stop()
+# --- Carrega os segredos do Streamlit ---
+secrets_dict = st.secrets
 
 # --- Constantes para o formulário ---
 DEPARTAMENTOS = [
@@ -232,9 +227,8 @@ SENDER_EMAIL = 'suprimentosessencis@gmail.com'
 
 @st.cache_resource(ttl=3600)
 def get_gspread_client():
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        secrets_dict["gcp_service_account"],
-        ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_dict(
+        secrets_dict["gcp_service_account"]
     )
     return gspread.authorize(creds)
 
