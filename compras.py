@@ -866,7 +866,7 @@ def render_main_app():
                 column_order=cols_disponiveis, # Usa a nova ordem
                 column_config={
                     "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
-                    "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=True),
+                    "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=False),
                     "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
                     "DEPARTAMENTO": "Departamento",
                     "FILIAL": "Filial",
