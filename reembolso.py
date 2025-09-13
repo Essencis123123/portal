@@ -312,7 +312,7 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
 
             if response:
                 st.success("✅ Arquivo enviado com sucesso para o Supabase!")
-                # Aqui está a alteração: Retorna o nome do arquivo (ID) em vez da URL.
+                # Retorna o nome do arquivo (ID) em vez da URL assinada
                 return unique_file_name
             else:
                 st.error("❌ Falha ao enviar o arquivo")
@@ -395,8 +395,10 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 <li><b>Justificativa:</b> {justificativa}</li>
             </ul>
             """
-            if id_comprovante:
-                body_user += f"<p>Clique aqui para baixar a notinha: <a href='{id_comprovante}'>Baixar Comprovante</a></p>"
+            # Geramos a URL assinada para o e-mail usando o ID do comprovante
+            comprovante_link = get_signed_url(id_comprovante) if id_comprovante else None
+            if comprovante_link:
+                body_user += f"<p>Clique aqui para baixar a notinha: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
             body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
 
             message_user = create_message(SENDER_EMAIL, email, subject_user, body_user)
@@ -421,8 +423,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 <li><b>Justificativa:</b> {justificativa}</li>
             </ul>
             """
-            if id_comprovante:
-                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{id_comprovante}'>Baixar Comprovante</a></p>"
+            if comprovante_link:
+                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
             body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
 
             message_admin = create_message(SENDER_EMAIL, admin_email, subject_admin, body_admin)
@@ -581,9 +583,9 @@ else: # Usuário Logado
                                          labels={'count': 'Quantidade', 'STATUS': 'Status'})
                     st.plotly_chart(fig_status)
             else:
-                st.info("Você ainda não tem reembolsos registrados.")
+                st.info("Nenhum reembolso encontrado para este e-mail.")
         else:
-            st.warning("Não foi possível carregar os dados de reembolso ou a coluna 'EMAIL' não existe na planilha 'Reembolsos'.")
+            st.warning("Não foi possível carregar os dados de reembolso.")
 
     elif menu == "Adicionar Reembolso":
         st.header("Adicionar Novo Reembolso")
