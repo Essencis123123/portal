@@ -136,7 +136,6 @@ st.markdown(
         flex-direction: column;
         align-items: center; /* Centraliza horizontalmente */
         justify-content: center; /* Centraliza verticalmente */
-        /* height: 100%;  Opcional: para ocupar toda a altura disponível */
     }
     .login-form-container .stTextInput,
     .login-form-container .stButton {
@@ -353,8 +352,9 @@ def load_reembolsos_data():
             if 'VALOR' in df.columns:
                 df['VALOR'] = df['VALOR'].astype(str).str.replace(',', '.', regex=False)
                 df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce')
-            if 'CAMINHO_RECIBO' in df.columns:
-                df = df.drop(columns=['CAMINHO_RECIBO'])
+            # Remove a coluna 'ID_COMPROVANTE' se ela existir para evitar erros de visualização
+            if 'ID_COMPROVANTE' in df.columns:
+                df = df.drop(columns=['ID_COMPROVANTE'])
             return df
     return pd.DataFrame()
 
@@ -373,13 +373,14 @@ def load_usuarios_data():
     return pd.DataFrame()
 
 # --- Funções de Adicionar Reembolso e Cadastro ---
-def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justificativa, caminho_recibo, status="Pendente"):
+def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justificativa, id_comprovante, status="Pendente"):
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
         valor_formatado = f"{valor:.2f}".replace('.', ',')
         try:
-            row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, caminho_recibo, email]
+            # AQUI ESTÁ A LINHA CORRIGIDA
+            row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, id_comprovante, email]
             sheet.append_row(row)
             st.success("Reembolso adicionado com sucesso!")
             load_reembolsos_data.clear()
@@ -398,8 +399,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 <li><b>Justificativa:</b> {justificativa}</li>
             </ul>
             """
-            if caminho_recibo:
-                body_user += f"<p>Clique aqui para baixar a notinha: <a href='{caminho_recibo}'>Baixar Comprovante</a></p>"
+            if id_comprovante:
+                body_user += f"<p>Clique aqui para baixar a notinha: <a href='{id_comprovante}'>Baixar Comprovante</a></p>"
             body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
 
             message_user = create_message(SENDER_EMAIL, email, subject_user, body_user)
@@ -424,8 +425,8 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 <li><b>Justificativa:</b> {justificativa}</li>
             </ul>
             """
-            if caminho_recibo:
-                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{caminho_recibo}'>Baixar Comprovante</a></p>"
+            if id_comprovante:
+                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{id_comprovante}'>Baixar Comprovante</a></p>"
             body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
 
             message_admin = create_message(SENDER_EMAIL, admin_email, subject_admin, body_admin)
@@ -628,14 +629,14 @@ else: # Usuário Logado
 
                 if submit_button:
                     if valor_reembolso and data_reembolso and justificativa:
-                        caminho_recibo = None
+                        id_comprovante = None
                         if recibo_anexo:
-                            caminho_recibo = upload_to_supabase(recibo_anexo)
-                            if not caminho_recibo:
+                            id_comprovante = upload_to_supabase(recibo_anexo)
+                            if not id_comprovante:
                                 st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
 
                         add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado,
-                                        tipo_despesa_selecionada, valor_reembolso, justificativa, caminho_recibo)
+                                        tipo_despesa_selecionada, valor_reembolso, justificativa, id_comprovante)
                         st.rerun()
                     else:
                         st.error("Por favor, preencha todos os campos obrigatórios (Valor, Data, Justificativa).")
