@@ -15,6 +15,7 @@ from google.oauth2.service_account import Credentials
 import json
 import re
 import pytz
+import numpy as np # Importe numpy para usar np.nan
 
 # ==============================================================================
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
@@ -129,6 +130,27 @@ def _to_datetime(series):
     """Converte para datetime com dayfirst, tolerante a strings, date e NaT."""
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
 
+# Nova função para interpretar valores numéricos
+def parse_brazil_number(value_str):
+    """
+    Converte uma string de número no formato brasileiro (1.234,56) para float (1234.56).
+    """
+    if not isinstance(value_str, str):
+        return value_str
+    
+    cleaned_value = value_str.strip()
+    
+    # Remove 'R$' e espaços.
+    cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
+    
+    # Remove os separadores de milhar (ponto) e substitui a vírgula pelo ponto decimal.
+    cleaned_value = cleaned_value.replace('.', '').replace(',', '.')
+
+    try:
+        return float(cleaned_value)
+    except (ValueError, TypeError):
+        return np.nan
+
 def carregar_dados() -> pd.DataFrame:
     """
     Carrega os dados da aba 'Almoxarifado' da planilha 'dados_pedido' do Google Sheets
@@ -170,9 +192,12 @@ def carregar_dados() -> pd.DataFrame:
         if not df.empty:
             df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
-        # Tipos numéricos
+        # Tipos numéricos - APLICANDO A FUNÇÃO `parse_brazil_number`
         for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
+            if c in df.columns:
+                df[c] = df[c].apply(parse_brazil_number).fillna(0.0)
+            else:
+                df[c] = 0.0
 
         # Datas
         df["DATA"] = _to_datetime(df["DATA"])
@@ -447,6 +472,9 @@ else:
             df_display['REGISTRO_LANCAMENTO_VISUAL'] = df_display['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
             # --- FIM DA CORREÇÃO ---
 
+            # Garante que a coluna de valor seja float para a edição funcionar corretamente
+            df_display['V_TOTAL_NF'] = df_display['V_TOTAL_NF'].astype(float)
+            
             edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
@@ -455,7 +483,7 @@ else:
                     "FORNECEDOR": "Fornecedor",
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
-                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f", disabled=True),
+                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f"),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
                     "DIAS_VENCIMENTO_VISUAL": st.column_config.Column("Dias Vencimento", disabled=True),
                     "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=list(status_map.values()), default="🟡 EM ANDAMENTO"),
@@ -508,6 +536,7 @@ else:
                         updated_df.loc[index, 'CONDICAO_PROBLEMA'] = str(row['PROBLEMA_VISUAL']).replace('🔴 ', '')
                         updated_df.loc[index, 'VALOR_JUROS'] = row['VALOR_JUROS']
                         updated_df.loc[index, 'VALOR_FRETE'] = row['VALOR_FRETE']
+                        updated_df.loc[index, 'V_TOTAL_NF'] = row['V_TOTAL_NF']
                         
                 st.session_state.df = updated_df
 
@@ -673,7 +702,7 @@ else:
 
             with col_met4:
                 nfs_com_juros = int((df['VALOR_JUROS'] > 0).sum())
-                st.metric("NFs com Juros", f"{nfs_com_juros}")
+                st.metric("Nfs com Juros", f"{nfs_com_juros}")
         else:
             st.info("Nenhum dado disponível.")
 
