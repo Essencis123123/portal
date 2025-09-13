@@ -312,12 +312,8 @@ def upload_to_supabase(file_uploader, bucket_name="reembolsos-anexos"):
 
             if response:
                 st.success("✅ Arquivo enviado com sucesso para o Supabase!")
-                signed_url = get_signed_url(unique_file_name, bucket_name)
-                if signed_url:
-                    return signed_url
-                else:
-                    st.warning("Arquivo enviado mas não foi possível gerar URL. Salvando apenas o nome do arquivo.")
-                    return unique_file_name
+                # Aqui está a alteração: Retorna o nome do arquivo (ID) em vez da URL.
+                return unique_file_name
             else:
                 st.error("❌ Falha ao enviar o arquivo")
                 return None
