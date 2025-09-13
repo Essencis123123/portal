@@ -42,8 +42,8 @@ st.markdown(
     /* Regras para garantir que TODO o texto no sidebar seja branco */
     [data-testid="stSidebar"] *,
     [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] h1,
-    [data.testid="stSidebar"] h2,
+    [data.testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] .st-emotion-cache-1ky8k0j p,
@@ -307,17 +307,12 @@ def carregar_dados_pedidos():
         
         data = sheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
         
-        if not data:
-            st.warning("A planilha está vazia.")
+        if not data or len(data) <= 1: # Verifica se há cabeçalhos e pelo menos uma linha de dados
             return criar_dataframe_pedidos_vazio()
 
         headers = data[0]
         records = data[1:]
 
-        if not records:
-            st.warning("A planilha de pedidos não contém registros.")
-            return criar_dataframe_pedidos_vazio()
-            
         df = pd.DataFrame(records, columns=headers)
 
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
@@ -402,16 +397,19 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df_to_save.fillna('')
         
-        # Obter os cabeçalhos da planilha original
-        original_headers = worksheet.row_values(1)
-        # Reordenar o DataFrame para corresponder à ordem da planilha, preenchendo com valores vazios se necessário
-        df_to_save = df_to_save.reindex(columns=original_headers, fill_value='')
-
-        # Se o DataFrame estiver vazio, limpe apenas os dados para evitar o erro.
-        if df_to_save.empty:
-            worksheet.clear()
-            worksheet.update([original_headers])
+        # Verificar se a planilha está vazia (primeiro upload)
+        existing_data = worksheet.get_all_values()
+        is_sheet_empty = not existing_data or (len(existing_data) == 1 and all(not cell for cell in existing_data[0]))
+        
+        if is_sheet_empty:
+            # Se estiver vazia, usa set_with_dataframe para criar a planilha com cabeçalhos
+            st.info("Primeiro upload detectado. Criando planilha com cabeçalhos.")
+            set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         else:
+            # Se já houver dados, limpa tudo e reescreve com os dados atualizados
+            # Isso é necessário para edições, garantindo que o DataFrame no Sheets corresponda ao do Streamlit.
+            original_headers = worksheet.row_values(1)
+            df_to_save = df_to_save.reindex(columns=original_headers, fill_value='')
             worksheet.clear()
             set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
@@ -725,12 +723,10 @@ def render_main_app():
                     df_novo['DATA'] = pd.to_datetime(df_novo['DATA'], dayfirst=True, errors='coerce')
                     df_novo['QUANTIDADE'] = pd.to_numeric(df_novo['QUANTIDADE'], errors='coerce')
                     
-                    # --- NOVO TRECHO DE CÓDIGO ---
                     # Remove linhas que tenham valores nulos (NaN) nas colunas essenciais
                     df_novo.dropna(subset=['DATA', 'SOLICITANTE', 'REQUISICAO', 'CODIGO_MATERIAL', 'QUANTIDADE'], inplace=True)
-                    # --- FIM DO NOVO TRECHO ---
                     
-                    # Salva o novo DataFrame diretamente na planilha usando append_rows
+                    # Salva o novo DataFrame diretamente na planilha
                     try:
                         gc = get_gspread_client()
                         if gc:
@@ -756,9 +752,22 @@ def render_main_app():
                                     )
                             df_novo_to_save.fillna('', inplace=True)
                             
-                            # Adiciona as linhas à planilha
-                            records_to_add = df_novo_to_save.values.tolist()
-                            worksheet.append_rows(records_to_add)
+                            # === Lógica para o primeiro upload vs. uploads subsequentes ===
+                            existing_data = worksheet.get_all_values()
+                            is_sheet_empty = not existing_data or (len(existing_data) == 1 and all(not cell for cell in existing_data[0]))
+
+                            if is_sheet_empty:
+                                # Primeiro upload: Inclui cabeçalhos
+                                st.info("Primeiro upload em massa detectado. Criando planilha com cabeçalhos.")
+                                set_with_dataframe(worksheet, df_novo_to_save, resize=True, include_column_header=True)
+                            else:
+                                # Uploads subsequentes: Apenas adiciona as linhas de dados
+                                st.info("Planilha já existente. Adicionando novas requisições.")
+                                # Garantir que as colunas do df_novo_to_save estejam na mesma ordem dos headers da planilha
+                                original_headers = worksheet.row_values(1)
+                                df_novo_to_save = df_novo_to_save.reindex(columns=original_headers, fill_value='')
+                                records_to_add = df_novo_to_save.values.tolist()
+                                worksheet.append_rows(records_to_add)
                             
                             # Limpa o cache para que os dados atualizados sejam carregados
                             st.cache_data.clear()
