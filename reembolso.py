@@ -227,8 +227,9 @@ SENDER_EMAIL = 'suprimentosessencis@gmail.com'
 
 @st.cache_resource(ttl=3600)
 def get_gspread_client():
-    creds = ServiceAccountCredentials.from_dict(
-        secrets_dict["gcp_service_account"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        st.secrets["gcp_service_account"],
+        ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     )
     return gspread.authorize(creds)
 
