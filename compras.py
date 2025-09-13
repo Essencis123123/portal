@@ -199,6 +199,14 @@ def load_logo(url):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
+# Ordem padrão das colunas
+COLUNA_ORDEM_PADRAO = [
+    "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+    "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+    "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA",
+    "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "QUANTIDADE_ENTREGUE"
+]
+
 # --- Funções de Conexão e Carregamento de Dados ---
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
@@ -272,18 +280,12 @@ def formatar_data_brasil_barra(data):
         return ""
 
 def criar_dataframe_pedidos_vazio():
-    """Cria um DataFrame de pedidos vazio com a estrutura correta."""
-    return pd.DataFrame(columns=[
-        "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "UN", "QUANTIDADE", "TIPO_PEDIDO",
-        "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-        "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "VALOR_TOTAL", "CODIGO_MATERIAL",
-        # Nova coluna adicionada
-        "QUANTIDADE_ENTREGUE"
-    ])
+    """Cria um DataFrame de pedidos vazio com a estrutura correta e ordem padrão."""
+    return pd.DataFrame(columns=COLUNA_ORDEM_PADRAO)
 
 @st.cache_data(ttl=300)
 def carregar_dados_pedidos():
-    """Carrega o DataFrame de pedidos do Google Sheets."""
+    """Carrega o DataFrame de pedidos do Google Sheets, garantindo a ordem padrão."""
     try:
         gc = get_gspread_client()
         if gc is None:
@@ -315,26 +317,23 @@ def carregar_dados_pedidos():
                 else:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        if 'QUANTIDADE' in df.columns and 'VALOR_ITEM' in df.columns:
-            df['VALOR_TOTAL'] = df['QUANTIDADE'] * df['VALOR_ITEM']
-        
-        if 'DOC NF' not in df.columns:
-            df['DOC NF'] = ""
-        
-        if 'PREVISAO_ENTREGA' not in df.columns:
-            df['PREVISAO_ENTREGA'] = pd.NaT
+        # Garante que as colunas existam e estejam na ordem padrão
+        df = df.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
 
+        # Colunas que podem precisar de tratamento específico se vierem vazias
+        for col in ['DOC NF', 'UN', 'CODIGO_MATERIAL', 'PREVISAO_ENTREGA', 'DATA_APROVACAO', 'DATA_ENTREGA']:
+            if col not in df.columns or df[col].isnull().all():
+                if col in date_cols:
+                    df[col] = pd.NaT
+                elif col in numeric_cols:
+                    df[col] = 0
+                else:
+                    df[col] = ''
+        
+        # Recalcular STATUS_PEDIDO
         df['STATUS_PEDIDO'] = df['DATA_ENTREGA'].apply(
             lambda x: 'ENTREGUE' if pd.notna(x) else 'PENDENTE'
         )
-        
-        if 'UN' not in df.columns:
-            df['UN'] = ''
-        if 'CODIGO_MATERIAL' not in df.columns:
-            df['CODIGO_MATERIAL'] = ''
-
-        # Certificar-se de que todas as colunas existem
-        df = df.reindex(columns=headers, fill_value='')
 
         return df
     except Exception as e:
@@ -349,7 +348,7 @@ def formatar_numero_brasileiro(valor, casas_decimais=2):
     return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
 
 def salvar_dados_pedidos(df):
-    """Salva o DataFrame de pedidos no Google Sheets, garantindo formato DD/MM/YYYY para datas."""
+    """Salva o DataFrame de pedidos no Google Sheets, garantindo formato DD/MM/YYYY para datas e ordem padrão."""
     try:
         gc = get_gspread_client()
         if gc is None:
@@ -383,6 +382,9 @@ def salvar_dados_pedidos(df):
 
         df_to_save = df_to_save.fillna('') # Preenche quaisquer NaNs restantes com string vazia
         
+        # Reindexar para garantir a ordem padrão das colunas antes de salvar
+        df_to_save = df_to_save.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
+
         # Verificar se a planilha está vazia (primeiro upload)
         existing_data = worksheet.get_all_values()
         is_sheet_empty = not existing_data or (len(existing_data) == 1 and all(not cell for cell in existing_data[0]))
@@ -393,9 +395,8 @@ def salvar_dados_pedidos(df):
             set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         else:
             # Se já houver dados, limpa tudo e reescreve com os dados atualizados
-            original_headers = worksheet.row_values(1)
-            # Reindexar para garantir a ordem das colunas antes de salvar
-            df_to_save = df_to_save.reindex(columns=original_headers, fill_value='')
+            # Importante: se a ordem das colunas no COLUNA_ORDEM_PADRAO mudou, a planilha será reescrita
+            # com a nova ordem e cabeçalhos. Se não, apenas o conteúdo é atualizado.
             worksheet.clear()
             set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
@@ -692,16 +693,13 @@ def render_main_app():
                 # Colunas obrigatórias para um pedido inicial
                 required_initial_cols = ["REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "DATA", "TIPO_PEDIDO", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE"]
                 
-                # Colunas adicionais que podem vir ou precisam ser inicializadas
-                all_possible_cols = st.session_state.df_pedidos.columns.tolist()
-                
-                # Garante que todas as colunas necessárias para um pedido existam no df_novo
-                for col in all_possible_cols:
+                # Garante que todas as colunas da ordem padrão existam no df_novo
+                for col in COLUNA_ORDEM_PADRAO:
                     if col not in df_novo.columns:
                         df_novo[col] = '' # Inicializa com string vazia
                 
-                # Reordena as colunas para coincidir com a planilha existente
-                df_novo = df_novo.reindex(columns=all_possible_cols, fill_value='')
+                # Reordena as colunas para coincidir com a ordem padrão
+                df_novo = df_novo.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
 
                 # Valida colunas essenciais para o upload
                 if not all(col in df_novo.columns for col in required_initial_cols):
@@ -728,16 +726,6 @@ def render_main_app():
                         # Converte de volta para string com vírgula como separador decimal para o GSheets
                         df_novo[col] = df_novo[col].apply(lambda x: str(f"{x:.2f}").replace('.', ',') if pd.notna(x) and x != '' else '')
                 
-                # Outras colunas
-                for col in ['STATUS_PEDIDO', 'CONDICAO_FRETE', 'DOC NF', 'FORNECEDOR', 'ORDEM_COMPRA', 'VALOR_TOTAL']:
-                    if col not in df_novo.columns:
-                        df_novo[col] = ''
-                
-                # Remove linhas que tenham valores nulos (NaN) nas colunas essenciais
-                df_novo.dropna(subset=['DATA', 'SOLICITANTE', 'REQUISICAO', 'CODIGO_MATERIAL', 'QUANTIDADE'], inplace=True)
-                
-                # Garante que o DataFrame final para salvar tenha todas as colunas na ordem correta
-                df_novo = df_novo.reindex(columns=st.session_state.df_pedidos.columns, fill_value='')
                 df_novo = df_novo.fillna('') # Garante que não haverá NaN's ao salvar
 
                 # Salva o novo DataFrame diretamente na planilha
@@ -759,8 +747,8 @@ def render_main_app():
                             # Uploads subsequentes: Apenas adiciona as linhas de dados
                             st.info("Planilha já existente. Adicionando novas requisições.")
                             # Garantir que as colunas do df_novo estejam na mesma ordem dos headers da planilha
-                            original_headers = worksheet.row_values(1)
-                            df_to_append = df_novo.reindex(columns=original_headers, fill_value='')
+                            # Aqui, usar COLUNA_ORDEM_PADRAO garante que a ordem sempre será a desejada
+                            df_to_append = df_novo.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
                             records_to_add = df_to_append.values.tolist()
                             worksheet.append_rows(records_to_add)
                         
@@ -867,10 +855,19 @@ def render_main_app():
                         "QUANTIDADE": item_row["QUANTIDADE"],
                         "TIPO_PEDIDO": tipo_pedido,
                         "REQUISICAO": requisicao,
-                        "FORNECEDOR": "", "ORDEM_COMPRA": "", "VALOR_ITEM": 0.0, "VALOR_RENEGOCIADO": 0.0,
-                        "DATA_APROVACAO": pd.NaT, "PREVISAO_ENTREGA": pd.NaT, "CONDICAO_FRETE": "",
-                        "STATUS_PEDIDO": "PENDENTE", "DATA_ENTREGA": pd.NaT,
-                        "DIAS_ATRASO": 0, "DIAS_EMISSAO": 0, "DOC NF": ""
+                        "FORNECEDOR": "",
+                        "ORDEM_COMPRA": "",
+                        "VALOR_ITEM": 0.0,
+                        "VALOR_RENEGOCIADO": 0.0,
+                        "DATA_APROVACAO": pd.NaT,
+                        "PREVISAO_ENTREGA": pd.NaT,
+                        "CONDICAO_FRETE": "",
+                        "STATUS_PEDIDO": "PENDENTE",
+                        "DATA_ENTREGA": pd.NaT,
+                        "DIAS_ATRASO": 0,
+                        "DIAS_EMISSAO": 0,
+                        "DOC NF": "",
+                        "QUANTIDADE_ENTREGUE": 0 # Adicionado
                     }
                     linhas_a_adicionar.append(nova_linha)
                 
@@ -940,10 +937,12 @@ def render_main_app():
         pedidos_pendentes_oc_reset = pedidos_pendentes_oc.reset_index(drop=True)
         pedidos_pendentes_oc_reset['Excluir'] = False
         
+        # Ajuste da ordem das colunas para o editor de dados
         cols_para_editar = [
-            "Excluir", "REQUISICAO", "DATA", "SOLICITANTE", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
-            "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
-            "PREVISAO_ENTREGA", "DATA_APROVACAO", "CONDICAO_FRETE"
+            "Excluir", "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
+            "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO",
+            "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA",
+            "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "QUANTIDADE_ENTREGUE"
         ]
         
         cols_disponiveis = [col for col in cols_para_editar if col in pedidos_pendentes_oc_reset.columns]
@@ -954,23 +953,32 @@ def render_main_app():
                 df_editavel,
                 use_container_width=True,
                 hide_index=True,
-                column_order=cols_disponiveis,
+                column_order=cols_disponiveis, # Usa a nova ordem
                 column_config={
                     "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
-                    "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                    "DATA": st.column_config.DateColumn("Data da Requisição", format="DD/MM/YYYY", disabled=True),
+                    "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=True),
                     "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+                    "DEPARTAMENTO": "Departamento",
+                    "FILIAL": "Filial",
                     "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
                     "UN": st.column_config.TextColumn("UN", disabled=True),
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
+                    "TIPO_PEDIDO": st.column_config.TextColumn("Tipo Pedido", disabled=True),
+                    "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                     "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD/MM/YYYY"),
+                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]),
+                    "STATUS_PEDIDO": st.column_config.TextColumn("Status Pedido", disabled=True),
+                    "DATA_ENTREGA": st.column_config.TextColumn("Data Entrega", disabled=True),
+                    "DIAS_ATRASO": st.column_config.TextColumn("Dias Atraso", disabled=True),
+                    "DIAS_EMISSAO": st.column_config.TextColumn("Dias Emissão", disabled=True),
+                    "DOC NF": st.column_config.TextColumn("Doc NF", disabled=True),
+                    "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Entregue", format="%d"),
                 }
             )
             
@@ -999,20 +1007,22 @@ def render_main_app():
                     row_changed = False
                     
                     for col in edited_row.index:
+                        # Convertendo ambos para string para comparação consistente, especialmente para datas/números
                         if col != 'Excluir' and str(edited_row[col]) != str(original_row[col]):
                             row_changed = True
                             changes_detected = True
                             break
                     
                     if row_changed:
-                        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+                        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']: # Inclui DATA_ENTREGA aqui também para o parse
                             edited_row[col] = parse_date_input(edited_row[col]) # Usa a função robusta de parse
     
-                        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+                        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
                             if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
                                 edited_row[col_val] = 0
                             else:
                                 if isinstance(edited_row[col_val], str):
+                                    # Removendo 'R$' e formatando para float, se for o caso
                                     edited_row[col_val] = float(edited_row[col_val].replace('R$', '').replace('.', '').replace(',', '.').strip())
                                 else:
                                     edited_row[col_val] = float(edited_row[col_val])
@@ -1025,14 +1035,16 @@ def render_main_app():
                                 dias_emissao = 0
     
                         if original_index in st.session_state.df_pedidos.index:
-                            st.session_state.df_pedidos.loc[original_index, 'FORNECEDOR'] = edited_row['FORNECEDOR']
-                            st.session_state.df_pedidos.loc[original_index, 'ORDEM_COMPRA'] = edited_row['ORDEM_COMPRA']
-                            st.session_state.df_pedidos.loc[original_index, 'VALOR_ITEM'] = edited_row['VALOR_ITEM']
-                            st.session_state.df_pedidos.loc[original_index, 'VALOR_RENEGOCIADO'] = edited_row['VALOR_RENEGOCIADO']
-                            st.session_state.df_pedidos.loc[original_index, 'PREVISAO_ENTREGA'] = edited_row['PREVISAO_ENTREGA']
-                            st.session_state.df_pedidos.loc[original_index, 'DATA_APROVACAO'] = edited_row['DATA_APROVACAO']
-                            st.session_state.df_pedidos.loc[original_index, 'CONDICAO_FRETE'] = edited_row['CONDICAO_FRETE']
+                            for col_name in COLUNA_ORDEM_PADRAO: # Itera sobre todas as colunas da ordem padrão
+                                if col_name in edited_row.index: # Se a coluna foi editada
+                                    st.session_state.df_pedidos.loc[original_index, col_name] = edited_row[col_name]
+                                    
                             st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
+                            # Recalcular STATUS_PEDIDO se a data de entrega for atualizada aqui
+                            if pd.notna(edited_row['DATA_ENTREGA']):
+                                st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE': # Se foi marcado como entregue mas a data foi removida
+                                st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'PENDENTE'
     
             if not changes_detected:
                 st.info("Nenhuma alteração detectada.")
@@ -1147,38 +1159,35 @@ def render_main_app():
             hide_index=False,
             key='history_editor',
             column_config={
-                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
-                "REQUISICAO": "N° Requisição",
-                "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=True),
-                "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
+                "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY"),
+                "SOLICITANTE": st.column_config.TextColumn("Solicitante"),
                 "DEPARTAMENTO": "Departamento",
                 "FILIAL": "Filial",
                 "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
-                "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
-                "UN": st.column_config.TextColumn("UN", disabled=True),
-                "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d", disabled=True),
+                "MATERIAL": st.column_config.TextColumn("Material"),
+                "UN": st.column_config.TextColumn("UN"),
+                "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d"),
                 "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]),
+                "REQUISICAO": "N° Requisição",
                 "FORNECEDOR": st.column_config.TextColumn("Fornecedor"),
                 "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
                 "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
-                "VALOR_TOTAL": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f", disabled=True),
                 "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
                 "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação", format="DD/MM/YYYY"),
+                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
                 "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]),
+                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']),
                 "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY"),
                 "DIAS_ATRASO": "Dias Atraso",
+                "DIAS_EMISSAO": "Dias Emissão",
                 "DOC NF": st.column_config.LinkColumn(
                     "Anexo NF",
                     help="Clique para visualizar o anexo",
                     display_text="📥 Anexo"
-                )
+                ),
+                "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Entregue", format="%d")
             },
-            column_order=[
-                "STATUS_PEDIDO", "REQUISICAO", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE",
-                "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_TOTAL", "VALOR_RENEGOCIADO", "DATA", "DATA_APROVACAO",
-                "PREVISAO_ENTREGA", "CONDICAO_FRETE", "DATA_ENTREGA", "DIAS_ATRASO", "DOC NF", "QUANTIDADE_ENTREGUE"
-            ]
+            column_order=COLUNA_ORDEM_PADRAO + ["VALOR_TOTAL"] # Adiciona VALOR_TOTAL no final para exibição
         )
 
         if not edited_history_df.equals(df_for_editor):
@@ -1191,7 +1200,7 @@ def render_main_app():
                 '': ''
             }).fillna(edited_history_df['STATUS_PEDIDO'])
 
-            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
+            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
                 edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2)
             
             data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']
@@ -1213,8 +1222,9 @@ def render_main_app():
             edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
             edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(calcular_dias_emissao, axis=1)
 
-            for col in edited_history_df.columns:
-                if col in st.session_state.df_pedidos.columns:
+            # Garante que o DataFrame final para salvar tenha todas as colunas na ordem correta
+            for col in COLUNA_ORDEM_PADRAO:
+                if col in edited_history_df.columns:
                     st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col]
             
             salvar_dados_pedidos(st.session_state.df_pedidos)
