@@ -238,6 +238,8 @@ def get_gspread_client():
         return None
 
 # Funções auxiliares para formatação e parsing de datas
+# --- Funções de Conexão e Carregamento de Dados ---
+# Mantém a função parse_date_input para o data_editor, mas ela não será mais usada aqui
 def parse_date_input(date_value):
     """
     Converte valores de data de qualquer entrada (editor, string) para datetime,
@@ -275,22 +277,10 @@ def parse_date_input(date_value):
                 
     return pd.NaT
 
-def formatar_data_brasil_barra(data):
-    """Formata datetime para exibição no formato DD/MM/YYYY. Retorna string vazia para NaT."""
-    if pd.isna(data):
-        return ""
-    try:
-        return data.strftime('%d/%m/%Y')
-    except:
-        return ""
-
-def criar_dataframe_pedidos_vazio():
-    """Cria um DataFrame de pedidos vazio com a estrutura correta e ordem padrão."""
-    return pd.DataFrame(columns=COLUNA_ORDEM_PADRAO)
 
 @st.cache_data(ttl=300)
 def carregar_dados_pedidos():
-    """Carrega o DataFrame de pedidos do Google Sheets, garantindo a ordem padrão."""
+    """Carrega o DataFrame de pedidos do Google Sheets usando get_all_records."""
     try:
         gc = get_gspread_client()
         if gc is None:
@@ -298,40 +288,30 @@ def carregar_dados_pedidos():
         
         sheet = gc.open("dados_pedido")
         
-        # Obtém todos os valores sem formatação
-        data = sheet.get_worksheet(0).get_all_values(value_render_option='UNFORMATTED_VALUE')
+        # **CORREÇÃO: Usamos get_all_records() para um parsing mais inteligente**
+        data = sheet.get_worksheet(0).get_all_records()
         
-        if not data or len(data) <= 1:
+        if not data:
             return criar_dataframe_pedidos_vazio()
 
-        headers = data[0]
-        records = data[1:]
-
-        df = pd.DataFrame(records, columns=headers)
+        df = pd.DataFrame(data)
 
         # Garante que todas as colunas padrão existam
         for col in COLUNA_ORDEM_PADRAO:
             if col not in df.columns:
                 df[col] = ''
-
-        # Processa colunas de data
-# Processa colunas de data de forma mais robusta
+        
+        # Agora o Pandas pode converter de forma mais confiável
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns:
-
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # Processa colunas numéricas
         numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO", "QUANTIDADE_ENTREGUE"]
         for col in numeric_cols:
             if col in df.columns:
-                if df[col].dtype == 'object':
-                    # Remove pontos de milhar e converte vírgula decimal para ponto
-                    df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                else:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         # Garante a ordem padrão das colunas
         df = df.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
