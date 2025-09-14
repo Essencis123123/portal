@@ -181,9 +181,25 @@ def is_strong_password(password):
 def format_currency(value):
     """Formata valores monetários corretamente"""
     try:
-        return f"R$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        if isinstance(value, str):
+            # Remove possíveis formatações existentes
+            value = value.replace('R$', '').replace('.', '').replace(',', '.').strip()
+        return f"R$ {float(value):.2f}".replace('.', ',').replace(',', 'X', 1).replace('.', '').replace('X', ',')
     except:
         return "R$ 0,00"
+
+def parse_currency(value):
+    """Converte string monetária para float"""
+    try:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            # Remove R$, pontos e substitui vírgula por ponto
+            value = value.replace('R$', '').replace('.', '').replace(',', '.').strip()
+            return float(value)
+        return 0.0
+    except:
+        return 0.0
 
 # --- Carrega a imagem do logo a partir da URL ---
 @st.cache_data(show_spinner=False)
@@ -330,9 +346,10 @@ def create_message(sender, to, subject, message_text):
 def send_message(service, user_id, message):
     try:
         message = service.users().messages().send(userId=user_id, body=message).execute()
+        st.success("✅ E-mail enviado com sucesso!")
         return message
     except Exception as e:
-        st.error(f"Ocorreu um erro ao enviar e-mail: {e}")
+        st.error(f"❌ Ocorreu um erro ao enviar e-mail: {e}")
         return None
 
 # --- Supabase Integration ---
@@ -388,8 +405,8 @@ def load_reembolsos_data():
             if 'DATA' in df.columns:
                 df['DATA'] = pd.to_datetime(df['DATA'], format='%d/%m/%Y', errors='coerce').dt.date
             if 'VALOR' in df.columns:
-                df['VALOR'] = df['VALOR'].astype(str).str.replace(',', '.', regex=False)
-                df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce')
+                # Corrige a formatação dos valores
+                df['VALOR'] = df['VALOR'].apply(parse_currency)
             if 'ID_COMPROVANTE' in df.columns:
                 df = df.drop(columns=['ID_COMPROVANTE'])
             return df
@@ -414,17 +431,19 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
     sheet = get_reembolsos_sheet()
     if sheet:
         data_formatada = data.strftime('%d/%m/%Y')
+        # Formata o valor corretamente para a planilha (com vírgula)
         valor_formatado = f"{valor:.2f}".replace('.', ',')
+        
         try:
             row = [data_formatada, nome, departamento, tipo_despesa, valor_formatado, justificativa, status, id_comprovante, email]
             sheet.append_row(row)
-            st.success("Reembolso adicionado com sucesso!")
+            st.success("✅ Reembolso adicionado com sucesso!")
             load_reembolsos_data.clear()
 
-            # Tenta enviar emails, mas não falha se não conseguir
+            # Tenta enviar emails
             try:
                 # 1. Envia e-mail para o usuário
-                subject_user = "CONFIRMACAO DE ENVIO - PEDIDO DE REEMBOLSO"
+                subject_user = "CONFIRMAÇÃO DE ENVIO - PEDIDO DE REEMBOLSO"
                 body_user = f"""
                 <p>Olá, {nome}!</p>
                 <p>Seu pedido de reembolso foi enviado com sucesso e está em análise.</p>
@@ -450,13 +469,14 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
 
                 # 2. Envia e-mail para o administrador
                 admin_email = "earaujo@essencis.com.br"
-                subject_admin = f"Novo Reembolso Pendente de {nome}"
+                subject_admin = f"📋 Novo Reembolso Pendente de {nome}"
                 body_admin = f"""
                 <p>Olá, Administrador(a)!</p>
                 <p>Um novo pedido de reembolso foi submetido e está aguardando sua aprovação.</p>
                 <p><b>Detalhes do Reembolso:</b></p>
                 <ul>
                     <li><b>Solicitante:</b> {nome}</li>
+                    <li><b>E-mail:</b> {email}</li>
                     <li><b>Data:</b> {data_formatada}</li>
                     <li><b>Departamento:</b> {departamento}</li>
                     <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
@@ -466,17 +486,17 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                 """
                 if comprovante_link:
                     body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
-                body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
+                body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos Essencis</p>"
 
                 if st.session_state.gmail_service:
                     message_admin = create_message(SENDER_EMAIL, admin_email, subject_admin, body_admin)
                     send_message(st.session_state.gmail_service, 'me', message_admin)
 
             except Exception as email_error:
-                st.warning(f"Reembolso salvo, mas email não enviado: {email_error}")
+                st.warning(f"⚠ Reembolso salvo, mas email não enviado: {str(email_error)}")
 
         except Exception as e:
-            st.error(f"Erro ao adicionar reembolso: {e}")
+            st.error(f"❌ Erro ao adicionar reembolso: {e}")
 
 # --- Funções de Autenticação de Login ---
 def login(email, password):
@@ -485,7 +505,7 @@ def login(email, password):
         user_exists = (df_usuarios['EMAIL'].str.lower().str.strip() == email.lower().strip()).any()
 
         if not user_exists:
-            st.error("Este e-mail não está cadastrado em nosso sistema.")
+            st.error("❌ Este e-mail não está cadastrado em nosso sistema.")
             return
 
         # Hash da senha fornecida
@@ -505,17 +525,17 @@ def login(email, password):
         if not user_data.empty:
             st.session_state.logged_in = True
             st.session_state.current_user = user_data.iloc[0]
-            st.success("Login bem-sucedido!")
+            st.success("✅ Login bem-sucedido!")
             st.rerun()
         else:
-            st.error("Senha incorreta.")
+            st.error("❌ Senha incorreta.")
     else:
-        st.error("Não foi possível carregar os dados de usuário. Verifique a planilha 'Usuarios'.")
+        st.error("❌ Não foi possível carregar os dados de usuário. Verifique a planilha 'Usuarios'.")
 
 def logout():
     st.session_state.logged_in = False
     st.session_state.current_user = None
-    st.info("Você foi desconectado.")
+    st.info("ℹ Você foi desconectado.")
     st.rerun()
 
 # --- Layout do Aplicativo ---
@@ -563,15 +583,15 @@ if not st.session_state.logged_in:
             if submitted_cad:
                 if nome and matricula and email and password_cad and confirm_password_cad:
                     if password_cad != confirm_password_cad:
-                        st.error("As senhas digitadas não coincidem. Por favor, tente novamente.")
+                        st.error("❌ As senhas digitadas não coincidem. Por favor, tente novamente.")
                     elif not is_valid_email(email):
-                        st.error("Por favor, use um e-mail corporativo da Essencis (@essencis.com.br)")
+                        st.error("❌ Por favor, use um e-mail corporativo da Essencis (@essencis.com.br)")
                     elif not is_strong_password(password_cad):
-                        st.error("A senha deve ter pelo menos 8 caracteres, incluindo maiúsculas, minúsculas e números.")
+                        st.error("❌ A senha deve ter pelo menos 8 caracteres, incluindo maiúsculas, minúsculas e números.")
                     else:
                         df_usuarios = load_usuarios_data()
                         if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and (df_usuarios['EMAIL'].str.lower() == email.lower()).any():
-                            st.error("Este e-mail já está cadastrado.")
+                            st.error("❌ Este e-mail já está cadastrado.")
                         else:
                             sheet = get_usuarios_sheet()
                             if sheet:
@@ -580,19 +600,19 @@ if not st.session_state.logged_in:
                                     senha_hash = hash_password(password_cad.strip())
                                     row = [nome, matricula, email, senha_hash]
                                     sheet.append_row(row)
-                                    st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
+                                    st.success(f"✅ Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
                                     load_usuarios_data.clear()
                                 except Exception as e:
-                                    st.error(f"Erro ao cadastrar usuário: {e}")
+                                    st.error(f"❌ Erro ao cadastrar usuário: {e}")
                 else:
-                    st.error("Por favor, preencha todos os campos.")
+                    st.error("❌ Por favor, preencha todos os campos.")
 
 else: # Usuário Logado
     with st.sidebar:
         if logo_img:
             st.image(logo_img, use_container_width=True)
-        st.header(f"Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!")
-        st.sidebar.button("Sair", on_click=logout)
+        st.header(f"👋 Bem-vindo, {st.session_state.current_user['NOME'].split()[0]}!")
+        st.sidebar.button("🚪 Sair", on_click=logout)
 
     menu = option_menu(
         menu_title=None,
@@ -603,12 +623,12 @@ else: # Usuário Logado
         orientation="horizontal",
     )
     if menu == "Dashboard":
-        st.header("Resumo dos Seus Reembolsos")
+        st.header("📊 Resumo dos Seus Reembolsos")
         df_reembolsos = load_reembolsos_data()
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == st.session_state.current_user['EMAIL'].lower()]
             if not df_usuario.empty:
-                st.subheader("Estatísticas")
+                st.subheader("📈 Estatísticas")
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Total de Reembolsos", len(df_usuario))
@@ -621,7 +641,7 @@ else: # Usuário Logado
                         pendentes = df_usuario[df_usuario['STATUS'] == 'Pendente'].shape[0]
                         st.metric("Pendentes", pendentes)
 
-                st.subheader("Custo por Departamento (Seus Reembolsos)")
+                st.subheader("🏢 Custo por Departamento (Seus Reembolsos)")
                 if 'DEPARTAMENTO' in df_usuario.columns and 'VALOR' in df_usuario.columns:
                     df_depto = df_usuario.groupby('DEPARTAMENTO')['VALOR'].sum().reset_index()
                     fig_depto = px.bar(df_depto, x='DEPARTAMENTO', y='VALOR',
@@ -629,7 +649,7 @@ else: # Usuário Logado
                                      labels={'VALOR': 'Valor (R$)', 'DEPARTAMENTO': 'Departamento'})
                     st.plotly_chart(fig_depto, use_container_width=True)
 
-                st.subheader("Custo por Tipo de Despesa (Seus Reembolsos)")
+                st.subheader("💰 Custo por Tipo de Despesa (Seus Reembolsos)")
                 if 'TIPO_DESPESA' in df_usuario.columns and 'VALOR' in df_usuario.columns:
                     df_despesa = df_usuario.groupby('TIPO_DESPESA')['VALOR'].sum().reset_index()
                     fig_despesa = px.bar(df_despesa, x='TIPO_DESPESA', y='VALOR',
@@ -645,22 +665,22 @@ else: # Usuário Logado
                                          labels={'count': 'Quantidade', 'STATUS': 'Status'})
                     st.plotly_chart(fig_status)
             else:
-                st.info("Nenhum reembolso encontrado para este e-mail.")
+                st.info("ℹ Nenhum reembolso encontrado para este e-mail.")
         else:
-            st.warning("Não foi possível carregar os dados de reembolso.")
+            st.warning("⚠ Não foi possível carregar os dados de reembolso.")
 
     elif menu == "Adicionar Reembolso":
-        st.header("Adicionar Novo Reembolso")
+        st.header("➕ Adicionar Novo Reembolso")
         user_info = st.session_state.current_user
         nome_funcionario = user_info['NOME']
         email_funcionario = user_info['EMAIL']
-        st.subheader(f"Dados do Solicitante:")
+        st.subheader(f"👤 Dados do Solicitante:")
         st.info(f"**Nome:** {nome_funcionario} | **E-mail:** {email_funcionario}")
 
         num_reembolsos = st.number_input("Quantos reembolsos deseja adicionar?", min_value=1, step=1, value=1, key="num_reembolsos_input")
 
         for i in range(int(num_reembolsos)):
-            st.markdown(f"### Reembolso #{i + 1}")
+            st.markdown(f"### 📋 Reembolso #{i + 1}")
             with st.form(f"form_reembolso_{i}", clear_on_submit=True):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -685,38 +705,42 @@ else: # Usuário Logado
                 justificativa = st.text_area("Justificativa", key=f"justificativa_{i}")
                 recibo_anexo = st.file_uploader("Comprovante (Imagem ou PDF)", type=["jpg", "jpeg", "png", "pdf"], key=f"recibo_{i}")
 
-                submit_button = st.form_submit_button("Salvar Este Reembolso")
+                submit_button = st.form_submit_button("💾 Salvar Este Reembolso")
 
                 if submit_button:
                     if valor_reembolso and data_reembolso and justificativa:
                         id_comprovante = None
                         if recibo_anexo:
-                            with st.spinner("Enviando arquivo..."):
+                            with st.spinner("📤 Enviando arquivo..."):
                                 id_comprovante = upload_to_supabase(recibo_anexo)
                                 if not id_comprovante:
-                                    st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
+                                    st.warning("⚠ Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
 
                         add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado,
                                         tipo_despesa_selecionada, valor_reembolso, justificativa, id_comprovante)
                         st.rerun()
                     else:
-                        st.error("Por favor, preencha todos os campos obrigatórios (Valor, Data, Justificativa).")
+                        st.error("❌ Por favor, preencha todos os campos obrigatórios (Valor, Data, Justificativa).")
 
     elif menu == "Meu Histórico":
-        st.header("Meu Histórico de Reembolsos")
+        st.header("📋 Meu Histórico de Reembolsos")
         user_email = st.session_state.current_user['EMAIL']
         df_reembolsos = load_reembolsos_data()
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             if not df_usuario.empty:
-                df_usuario['VALOR'] = df_usuario['VALOR'].apply(format_currency)
+                # Formata os valores corretamente
+                df_usuario['VALOR_FORMATADO'] = df_usuario['VALOR'].apply(format_currency)
                 df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
-                colunas_exibir = ['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']
+                
+                colunas_exibir = ['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR_FORMATADO', 'JUSTIFICATIVA', 'STATUS']
                 colunas_existentes = [col for col in colunas_exibir if col in df_usuario.columns]
-                st.dataframe(df_usuario[colunas_existentes], use_container_width=True)
+                
+                st.dataframe(df_usuario[colunas_existentes].rename(columns={'VALOR_FORMATADO': 'VALOR'}), 
+                           use_container_width=True, height=400)
                 
                 # Adicionar filtros
-                st.subheader("Filtrar Reembolsos")
+                st.subheader("🔍 Filtrar Reembolsos")
                 col1, col2 = st.columns(2)
                 with col1:
                     status_filter = st.selectbox("Status", ["Todos"] + list(df_usuario['STATUS'].unique()))
@@ -729,10 +753,11 @@ else: # Usuário Logado
                 if depto_filter != "Todos":
                     filtered_df = filtered_df[filtered_df['DEPARTAMENTO'] == depto_filter]
                 
-                st.write(f"**Resultados filtrados:** {len(filtered_df)} reembolsos")
-                st.dataframe(filtered_df[colunas_existentes], use_container_width=True)
+                st.write(f"**📊 Resultados filtrados:** {len(filtered_df)} reembolsos")
+                st.dataframe(filtered_df[colunas_existentes].rename(columns={'VALOR_FORMATADO': 'VALOR'}), 
+                           use_container_width=True, height=300)
                 
             else:
-                st.info("Nenhum reembolso encontrado para este e-mail.")
+                st.info("ℹ Nenhum reembolso encontrado para este e-mail.")
         else:
-            st.warning("Não foi possível carregar os dados de reembolso.")
+            st.warning("⚠ Não foi possível carregar os dados de reembolso.")
