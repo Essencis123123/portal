@@ -22,6 +22,7 @@ import mimetypes
 from supabase import create_client, Client
 import toml
 from streamlit_option_menu import option_menu
+import hashlib
 
 # --- Configuração do Layout e Tema ---
 st.set_page_config(page_title="Gestão de Reembolsos", layout="wide", page_icon="💰")
@@ -160,6 +161,30 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# --- Funções de Utilidade ---
+def hash_password(password):
+    """Hash da senha usando SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def is_valid_email(email):
+    """Valida se o email é do domínio Essencis"""
+    pattern = r'^[a-zA-Z0-9._%+-]+@essencis\.com\.br$'
+    return re.match(pattern, email) is not None
+
+def is_strong_password(password):
+    """Verifica se a senha é forte"""
+    return (len(password) >= 8 and 
+            any(c.isupper() for c in password) and
+            any(c.islower() for c in password) and
+            any(c.isdigit() for c in password))
+
+def format_currency(value):
+    """Formata valores monetários corretamente"""
+    try:
+        return f"R$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return "R$ 0,00"
+
 # --- Carrega a imagem do logo a partir da URL ---
 @st.cache_data(show_spinner=False)
 def load_logo(url):
@@ -215,6 +240,8 @@ TIPOS_DESPESA = [
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.current_user = None
+if "reembolsos_temp" not in st.session_state:
+    st.session_state.reembolsos_temp = []
 
 # --- Conexão com Google Sheets e APIs ---
 SHEET_ID = secrets_dict["gcp_service_account"]["sheet_id"]
@@ -233,25 +260,40 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-# --- ATUALIZADO: Lendo o token das secrets do Streamlit ---
+# --- ATUALIZADO: Usando Service Account para Gmail ---
 @st.cache_resource(ttl=3600)
 def get_gmail_service():
-    if "GMAIL_TOKEN" not in st.secrets:
-        st.warning("O segredo 'GMAIL_TOKEN' não foi configurado. O envio de e-mail não funcionará.")
-        return None
-        
     try:
-        creds_bytes = st.secrets["GMAIL_TOKEN"].encode("utf-8")
-        creds_object = pickle.loads(base64.b64decode(creds_bytes))
-        return build('gmail', 'v1', credentials=creds_object)
+        # Use as credenciais da service account que já estão configuradas
+        creds_dict = st.secrets["gcp_service_account"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            creds_dict,
+            scopes=['https://www.googleapis.com/auth/gmail.send']
+        )
+        
+        # Delegar autorização para um usuário específico
+        delegated_creds = creds.create_delegated(SENDER_EMAIL)
+        
+        return build('gmail', 'v1', credentials=delegated_creds)
     except Exception as e:
-        st.error(f"Erro ao carregar as credenciais do Gmail: {e}")
+        st.error(f"Erro ao criar serviço Gmail: {e}")
         return None
 
 # Instância do cliente gspread e do serviço Gmail
 gs_client = get_gspread_client()
 st.session_state.gmail_service = get_gmail_service()
 
+# --- Verificação de Configuração ---
+st.sidebar.write("🔧 Configuração do Sistema")
+if "GMAIL_TOKEN" in st.secrets:
+    st.sidebar.success("✓ GMAIL_TOKEN configurado")
+else:
+    st.sidebar.info("ℹ GMAIL_TOKEN não configurado - usando Service Account")
+
+if st.session_state.gmail_service:
+    st.sidebar.success("✓ Serviço Gmail conectado")
+else:
+    st.sidebar.warning("⚠ Serviço Gmail não disponível")
 
 def get_reembolsos_sheet():
     try:
@@ -335,7 +377,7 @@ def get_signed_url(file_path, bucket_name="reembolsos-anexos"):
         return None
 
 # --- Funções de Carregamento de Dados ---
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner="Carregando dados...")
 def load_reembolsos_data():
     sheet = get_reembolsos_sheet()
     if sheet:
@@ -353,7 +395,7 @@ def load_reembolsos_data():
             return df
     return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner="Carregando usuários...")
 def load_usuarios_data():
     sheet = get_usuarios_sheet()
     if sheet:
@@ -379,56 +421,59 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             st.success("Reembolso adicionado com sucesso!")
             load_reembolsos_data.clear()
 
-            # 1. Envia e-mail para o usuário
-            subject_user = "CONFIRMACAO DE ENVIO - PEDIDO DE REEMBOLSO"
-            body_user = f"""
-            <p>Olá, {nome}!</p>
-            <p>Seu pedido de reembolso foi enviado com sucesso e está em análise.</p>
-            <p><b>Detalhes do Pedido:</b></p>
-            <ul>
-                <li><b>Data:</b> {data_formatada}</li>
-                <li><b>Departamento:</b> {departamento}</li>
-                <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
-                <li><b>Valor:</b> R$ {valor_formatado}</li>
-                <li><b>Justificativa:</b> {justificativa}</li>
-            </ul>
-            """
-            comprovante_link = get_signed_url(id_comprovante) if id_comprovante else None
-            if comprovante_link:
-                body_user += f"<p>Clique aqui para baixar a notinha: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
-            body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
+            # Tenta enviar emails, mas não falha se não conseguir
+            try:
+                # 1. Envia e-mail para o usuário
+                subject_user = "CONFIRMACAO DE ENVIO - PEDIDO DE REEMBOLSO"
+                body_user = f"""
+                <p>Olá, {nome}!</p>
+                <p>Seu pedido de reembolso foi enviado com sucesso e está em análise.</p>
+                <p><b>Detalhes do Pedido:</b></p>
+                <ul>
+                    <li><b>Data:</b> {data_formatada}</li>
+                    <li><b>Departamento:</b> {departamento}</li>
+                    <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
+                    <li><b>Valor:</b> R$ {valor_formatado}</li>
+                    <li><b>Justificativa:</b> {justificativa}</li>
+                </ul>
+                """
+                comprovante_link = get_signed_url(id_comprovante) if id_comprovante else None
+                if comprovante_link:
+                    body_user += f"<p>Clique aqui para baixar a notinha: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
+                body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
 
-            message_user = create_message(SENDER_EMAIL, email, subject_user, body_user)
-            if st.session_state.gmail_service:
-                send_message(st.session_state.gmail_service, 'me', message_user)
-            else:
-                st.warning("Serviço Gmail não inicializado. E-mail de confirmação para o usuário não enviado.")
+                if st.session_state.gmail_service:
+                    message_user = create_message(SENDER_EMAIL, email, subject_user, body_user)
+                    send_message(st.session_state.gmail_service, 'me', message_user)
+                else:
+                    st.info("📧 Reembolso salvo, mas serviço de email não disponível")
 
-            # 2. Envia e-mail para o administrador
-            admin_email = "earaujo@essencis.com.br"
-            subject_admin = f"Novo Reembolso Pendente de {nome}"
-            body_admin = f"""
-            <p>Olá, Administrador(a)!</p>
-            <p>Um novo pedido de reembolso foi submetido e está aguardando sua aprovação.</p>
-            <p><b>Detalhes do Reembolso:</b></p>
-            <ul>
-                <li><b>Solicitante:</b> {nome}</li>
-                <li><b>Data:</b> {data_formatada}</li>
-                <li><b>Departamento:</b> {departamento}</li>
-                <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
-                <li><b>Valor:</b> R$ {valor_formatado}</li>
-                <li><b>Justificativa:</b> {justificativa}</li>
-            </ul>
-            """
-            if comprovante_link:
-                body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
-            body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
+                # 2. Envia e-mail para o administrador
+                admin_email = "earaujo@essencis.com.br"
+                subject_admin = f"Novo Reembolso Pendente de {nome}"
+                body_admin = f"""
+                <p>Olá, Administrador(a)!</p>
+                <p>Um novo pedido de reembolso foi submetido e está aguardando sua aprovação.</p>
+                <p><b>Detalhes do Reembolso:</b></p>
+                <ul>
+                    <li><b>Solicitante:</b> {nome}</li>
+                    <li><b>Data:</b> {data_formatada}</li>
+                    <li><b>Departamento:</b> {departamento}</li>
+                    <li><b>Tipo de Despesa:</b> {tipo_despesa}</li>
+                    <li><b>Valor:</b> R$ {valor_formatado}</li>
+                    <li><b>Justificativa:</b> {justificativa}</li>
+                </ul>
+                """
+                if comprovante_link:
+                    body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
+                body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos</p>"
 
-            message_admin = create_message(SENDER_EMAIL, admin_email, subject_admin, body_admin)
-            if st.session_state.gmail_service:
-                send_message(st.session_state.gmail_service, 'me', message_admin)
-            else:
-                st.warning("Serviço Gmail não inicializado. E-mail de notificação para administrador não enviado.")
+                if st.session_state.gmail_service:
+                    message_admin = create_message(SENDER_EMAIL, admin_email, subject_admin, body_admin)
+                    send_message(st.session_state.gmail_service, 'me', message_admin)
+
+            except Exception as email_error:
+                st.warning(f"Reembolso salvo, mas email não enviado: {email_error}")
 
         except Exception as e:
             st.error(f"Erro ao adicionar reembolso: {e}")
@@ -443,12 +488,18 @@ def login(email, password):
             st.error("Este e-mail não está cadastrado em nosso sistema.")
             return
 
-        df_usuarios['SENHA_LIMPA'] = df_usuarios['SENHA'].astype(str).str.strip().str.replace("'", "")
-        password_limpa = password.strip()
+        # Hash da senha fornecida
+        hashed_input = hash_password(password.strip())
+        
+        # Verifica se há senhas em texto plano e as converte para hash
+        if df_usuarios['SENHA'].str.len().max() < 64:  # Se as senhas não estão hasheadas
+            df_usuarios['SENHA_HASH'] = df_usuarios['SENHA'].astype(str).apply(lambda x: hash_password(x.strip().replace("'", "")))
+        else:
+            df_usuarios['SENHA_HASH'] = df_usuarios['SENHA']
 
         user_data = df_usuarios[
             (df_usuarios['EMAIL'].str.lower().str.strip() == email.lower().strip()) &
-            (df_usuarios['SENHA_LIMPA'] == password_limpa)
+            (df_usuarios['SENHA_HASH'] == hashed_input)
         ]
 
         if not user_data.empty:
@@ -501,21 +552,22 @@ if not st.session_state.logged_in:
 
     elif selected_page == "Cadastre-se":
         st.header("Cadastrar Novo Usuário")
-        # ADICIONADO: Mensagem de orientação para a senha
         st.info("💡 **Dica de segurança:** Crie uma senha forte com no mínimo 8 caracteres, usando letras maiúsculas e minúsculas, números e símbolos.")
         with st.form("cadastro_form"):
             nome = st.text_input("Nome Completo")
             matricula = st.text_input("Matrícula")
             email = st.text_input("E-mail Essencis")
             password_cad = st.text_input("Crie uma Senha", type="password")
-            # ADICIONADO: Campo para confirmação de senha
             confirm_password_cad = st.text_input("Confirme a Senha", type="password")
             submitted_cad = st.form_submit_button("Cadastrar")
             if submitted_cad:
                 if nome and matricula and email and password_cad and confirm_password_cad:
-                    # ADICIONADO: Verificação se as senhas coincidem
                     if password_cad != confirm_password_cad:
                         st.error("As senhas digitadas não coincidem. Por favor, tente novamente.")
+                    elif not is_valid_email(email):
+                        st.error("Por favor, use um e-mail corporativo da Essencis (@essencis.com.br)")
+                    elif not is_strong_password(password_cad):
+                        st.error("A senha deve ter pelo menos 8 caracteres, incluindo maiúsculas, minúsculas e números.")
                     else:
                         df_usuarios = load_usuarios_data()
                         if not df_usuarios.empty and 'EMAIL' in df_usuarios.columns and (df_usuarios['EMAIL'].str.lower() == email.lower()).any():
@@ -524,9 +576,9 @@ if not st.session_state.logged_in:
                             sheet = get_usuarios_sheet()
                             if sheet:
                                 try:
-                                    # CORREÇÃO: Remove a aspas simples e espaços da senha antes de salvar
-                                    senha_limpa = password_cad.strip().replace("'", "")
-                                    row = [nome, matricula, email, senha_limpa]
+                                    # Hash da senha antes de salvar
+                                    senha_hash = hash_password(password_cad.strip())
+                                    row = [nome, matricula, email, senha_hash]
                                     sheet.append_row(row)
                                     st.success(f"Usuário {nome} cadastrado com sucesso! Agora você pode fazer o login.")
                                     load_usuarios_data.clear()
@@ -563,7 +615,7 @@ else: # Usuário Logado
                 with col2:
                     if 'VALOR' in df_usuario.columns:
                         total_valor = df_usuario['VALOR'].sum()
-                        st.metric("Valor Total", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                        st.metric("Valor Total", format_currency(total_valor))
                 with col3:
                     if 'STATUS' in df_usuario.columns:
                         pendentes = df_usuario[df_usuario['STATUS'] == 'Pendente'].shape[0]
@@ -639,9 +691,10 @@ else: # Usuário Logado
                     if valor_reembolso and data_reembolso and justificativa:
                         id_comprovante = None
                         if recibo_anexo:
-                            id_comprovante = upload_to_supabase(recibo_anexo)
-                            if not id_comprovante:
-                                st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
+                            with st.spinner("Enviando arquivo..."):
+                                id_comprovante = upload_to_supabase(recibo_anexo)
+                                if not id_comprovante:
+                                    st.warning("Upload do arquivo falhou, mas o reembolso será salvo sem anexo.")
 
                         add_reembolso(data_reembolso, nome_funcionario, email_funcionario, departamento_selecionado,
                                         tipo_despesa_selecionada, valor_reembolso, justificativa, id_comprovante)
@@ -656,11 +709,29 @@ else: # Usuário Logado
         if not df_reembolsos.empty and 'EMAIL' in df_reembolsos.columns:
             df_usuario = df_reembolsos[df_reembolsos['EMAIL'].str.lower() == user_email.lower()]
             if not df_usuario.empty:
-                df_usuario['VALOR'] = df_usuario['VALOR'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                df_usuario['VALOR'] = df_usuario['VALOR'].apply(format_currency)
                 df_usuario['DATA'] = pd.to_datetime(df_usuario['DATA']).dt.strftime('%d/%m/%Y')
                 colunas_exibir = ['DATA', 'DEPARTAMENTO', 'TIPO_DESPESA', 'VALOR', 'JUSTIFICATIVA', 'STATUS']
                 colunas_existentes = [col for col in colunas_exibir if col in df_usuario.columns]
                 st.dataframe(df_usuario[colunas_existentes], use_container_width=True)
+                
+                # Adicionar filtros
+                st.subheader("Filtrar Reembolsos")
+                col1, col2 = st.columns(2)
+                with col1:
+                    status_filter = st.selectbox("Status", ["Todos"] + list(df_usuario['STATUS'].unique()))
+                with col2:
+                    depto_filter = st.selectbox("Departamento", ["Todos"] + list(df_usuario['DEPARTAMENTO'].unique()))
+                
+                filtered_df = df_usuario
+                if status_filter != "Todos":
+                    filtered_df = filtered_df[filtered_df['STATUS'] == status_filter]
+                if depto_filter != "Todos":
+                    filtered_df = filtered_df[filtered_df['DEPARTAMENTO'] == depto_filter]
+                
+                st.write(f"**Resultados filtrados:** {len(filtered_df)} reembolsos")
+                st.dataframe(filtered_df[colunas_existentes], use_container_width=True)
+                
             else:
                 st.info("Nenhum reembolso encontrado para este e-mail.")
         else:
