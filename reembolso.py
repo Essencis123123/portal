@@ -168,7 +168,7 @@ def hash_password(password):
 
 def is_valid_email(email):
     """Valida se o email é do domínio Essencis"""
-    pattern = r'^[a-zA-Z0-9._%+-]+@essencis\.com\.br$'
+    pattern = r'^[a-zA-Z09._%+-]+@essencis\.com\.br$'
     return re.match(pattern, email) is not None
 
 def is_strong_password(password):
@@ -184,7 +184,9 @@ def format_currency(value):
         if isinstance(value, str):
             # Remove possíveis formatações existentes
             value = value.replace('R$', '').replace('.', '').replace(',', '.').strip()
-        return f"R$ {float(value):.2f}".replace('.', ',').replace(',', 'X', 1).replace('.', '').replace('X', ',')
+        formatted = f"R$ {float(value):.2f}"
+        # Formatação brasileira: 1.50 → R$ 1,50
+        return formatted.replace('.', ',')
     except:
         return "R$ 0,00"
 
@@ -276,21 +278,20 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-# --- ATUALIZADO: Usando Service Account para Gmail ---
+# --- CORREÇÃO: Função get_gmail_service simplificada ---
 @st.cache_resource(ttl=3600)
 def get_gmail_service():
     try:
-        # Use as credenciais da service account que já estão configuradas
+        # Use as credenciais da service account
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(
             creds_dict,
             scopes=['https://www.googleapis.com/auth/gmail.send']
         )
         
-        # Delegar autorização para um usuário específico
-        delegated_creds = creds.create_delegated(SENDER_EMAIL)
+        # Use as credenciais diretamente
+        return build('gmail', 'v1', credentials=creds)
         
-        return build('gmail', 'v1', credentials=delegated_creds)
     except Exception as e:
         st.error(f"Erro ao criar serviço Gmail: {e}")
         return None
@@ -345,11 +346,15 @@ def create_message(sender, to, subject, message_text):
 
 def send_message(service, user_id, message):
     try:
+        if service is None:
+            st.warning("Serviço Gmail não disponível para enviar email")
+            return None
+            
         message = service.users().messages().send(userId=user_id, body=message).execute()
         st.success("✅ E-mail enviado com sucesso!")
         return message
     except Exception as e:
-        st.error(f"❌ Ocorreu um erro ao enviar e-mail: {e}")
+        st.error(f"❌ Erro ao enviar e-mail: {str(e)}")
         return None
 
 # --- Supabase Integration ---
