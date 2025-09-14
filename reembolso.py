@@ -168,7 +168,7 @@ def hash_password(password):
 
 def is_valid_email(email):
     """Valida se o email é do domínio Essencis"""
-    pattern = r'^[a-zA-Z09._%+-]+@essencis\.com\.br$'
+    pattern = r'^[a-zA-Z0-9._%+-]+@essencis\.com\.br$'
     return re.match(pattern, email) is not None
 
 def is_strong_password(password):
@@ -431,6 +431,23 @@ def load_usuarios_data():
             return df
     return pd.DataFrame()
 
+# --- CORREÇÃO: Função simplificada de envio de email ---
+def send_email_simple(to_email, subject, body):
+    """Função simplificada de envio de email"""
+    try:
+        service = st.session_state.gmail_service
+        if not service:
+            st.warning("Serviço Gmail não disponível")
+            return False
+            
+        message = create_message(SENDER_EMAIL, to_email, subject, body)
+        result = send_message(service, 'me', message)
+        return result is not None
+        
+    except Exception as e:
+        st.error(f"Falha no envio de email: {e}")
+        return False
+
 # --- Funções de Adicionar Reembolso e Cadastro ---
 def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justificativa, id_comprovante, status="Pendente"):
     sheet = get_reembolsos_sheet()
@@ -445,7 +462,7 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
             st.success("✅ Reembolso adicionado com sucesso!")
             load_reembolsos_data.clear()
 
-            # Tenta enviar emails
+            # Tenta enviar emails usando a função simplificada
             try:
                 # 1. Envia e-mail para o usuário
                 subject_user = "CONFIRMAÇÃO DE ENVIO - PEDIDO DE REEMBOLSO"
@@ -466,11 +483,10 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                     body_user += f"<p>Clique aqui para baixar a notinha: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
                 body_user += "<p>Em breve, você receberá uma notificação sobre o status do seu pedido.</p><p>Atenciosamente,<br>Equipe de Suprimentos Essencis</p>"
 
-                if st.session_state.gmail_service:
-                    message_user = create_message(SENDER_EMAIL, email, subject_user, body_user)
-                    send_message(st.session_state.gmail_service, 'me', message_user)
+                if send_email_simple(email, subject_user, body_user):
+                    st.success("✅ E-mail de confirmação enviado para o usuário")
                 else:
-                    st.info("📧 Reembolso salvo, mas serviço de email não disponível")
+                    st.warning("⚠ Reembolso salvo, mas e-mail não enviado")
 
                 # 2. Envia e-mail para o administrador
                 admin_email = "earaujo@essencis.com.br"
@@ -493,9 +509,10 @@ def add_reembolso(data, nome, email, departamento, tipo_despesa, valor, justific
                     body_admin += f"<p>Clique aqui para baixar o comprovante: <a href='{comprovante_link}'>Baixar Comprovante</a></p>"
                 body_admin += "<p>Atenciosamente,<br>Sistema de Reembolsos Essencis</p>"
 
-                if st.session_state.gmail_service:
-                    message_admin = create_message(SENDER_EMAIL, admin_email, subject_admin, body_admin)
-                    send_message(st.session_state.gmail_service, 'me', message_admin)
+                if send_email_simple(admin_email, subject_admin, body_admin):
+                    st.success("✅ E-mail de notificação enviado para o administrador")
+                else:
+                    st.warning("⚠ E-mail para administrador não enviado")
 
             except Exception as email_error:
                 st.warning(f"⚠ Reembolso salvo, mas email não enviado: {str(email_error)}")
