@@ -315,11 +315,12 @@ def carregar_dados_pedidos():
                 df[col] = ''
 
         # Processa colunas de data
+# Processa colunas de data de forma mais robusta
         date_cols = ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']
         for col in date_cols:
             if col in df.columns:
-                # Converte para datetime usando nossa função robusta
-                df[col] = df[col].astype(str).apply(parse_date_input)
+
+                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         
         # Processa colunas numéricas
         numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO", "QUANTIDADE_ENTREGUE"]
