@@ -15,19 +15,13 @@ from google.oauth2.service_account import Credentials
 import json
 import re
 import pytz
-import numpy as np # Importe numpy para usar np.nan
+import numpy as np
 
-# ==============================================================================
-# CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
-# ==============================================================================
-# Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide", page_icon="💼")
 
-# CSS personalizado para o tema Essencis
 st.markdown(
     """
     <style>
-    /* Aumenta o tamanho da fonte de todo o corpo do aplicativo */
     html, body, [data-testid="stAppViewContainer"] {
         font-size: 1.1rem;
     }
@@ -42,10 +36,8 @@ st.markdown(
 
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span { color: white !important; }
 
-    /* Estilo para o texto do multiselect no sidebar */
     [data-testid="stSidebar"] .stMultiSelect label p { color: white !important; }
     [data-testid="stSidebar"] .stMultiSelect div[role="listbox"] * { color: black !important; }
-    /* Estilo para o texto do date_input no sidebar */
     [data-testid="stSidebar"] .stDateInput label p { color: white !important; }
     [data-testid="stSidebar"] .stDateInput input { color: black !important; }
 
@@ -77,7 +69,6 @@ st.markdown(
     }
     .stButton button:hover { background-color: #007ea7; }
 
-    /* CORREÇÃO: Reduz o tamanho da fonte dos cards de métricas */
     [data-testid="stMetric"] > div {
         background-color: #f0f2f5; color: #1C4D86; padding: 5px; border-radius: 8px;
         box-shadow: 0 1px 4px rgba(0,0,0,0.1);
@@ -94,10 +85,8 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Carregar a imagem do logo a partir da URL
 @st.cache_data(show_spinner=False)
 def load_logo(url: str):
-    """Carrega logo da URL."""
     try:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
@@ -108,10 +97,8 @@ def load_logo(url: str):
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
 
-# --- FUNÇÕES DE CONEXÃO E CARREGAMENTO DA PLANILHA ---
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    """Conecta com o Google Sheets usando os secrets do Streamlit."""
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     credentials_info = st.secrets["gcp_service_account"]
     
@@ -127,23 +114,14 @@ def get_gspread_client():
     return client
 
 def _to_datetime(series):
-    """Converte para datetime com dayfirst, tolerante a strings, date e NaT."""
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
 
-# Nova função para interpretar valores numéricos
 def parse_brazil_number(value_str):
-    """
-    Converte uma string de número no formato brasileiro (1.234,56) para float (1234.56).
-    """
     if not isinstance(value_str, str):
         return value_str
     
     cleaned_value = value_str.strip()
-    
-    # Remove 'R$' e espaços.
     cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
-    
-    # Remove os separadores de milhar (ponto) e substitui a vírgula pelo ponto decimal.
     cleaned_value = cleaned_value.replace('.', '').replace(',', '.')
 
     try:
@@ -152,10 +130,6 @@ def parse_brazil_number(value_str):
         return np.nan
 
 def carregar_dados() -> pd.DataFrame:
-    """
-    Carrega os dados da aba 'Almoxarifado' da planilha 'dados_pedido' do Google Sheets
-    e prepara para o painel financeiro.
-    """
     try:
         client = get_gspread_client()
         sheet = client.open("dados_pedido")
@@ -163,7 +137,6 @@ def carregar_dados() -> pd.DataFrame:
 
         df = pd.DataFrame(worksheet.get_all_records())
 
-        # Adicionei a nova coluna na lista de colunas esperadas
         colunas_obrigatorias = [
             "DATA", "FORNECEDOR_NF", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO",
             "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "OBSERVACAO", "VALOR_JUROS",
@@ -171,7 +144,6 @@ def carregar_dados() -> pd.DataFrame:
             "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
         ]
 
-        # Garante que as colunas existam e renomeia
         for col in colunas_obrigatorias:
             if col not in df.columns:
                 df[col] = None
@@ -184,28 +156,23 @@ def carregar_dados() -> pd.DataFrame:
             'DOC NF': 'DOC_NF',
         }, errors='ignore')
 
-        # Garante que não haja colunas duplicadas
         df = df.loc[:,~df.columns.duplicated()]
 
-        # Remove linhas totalmente vazias, apara espaços
         df = df.dropna(how='all')
         if not df.empty:
             df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
-        # Tipos numéricos - APLICANDO A FUNÇÃO `parse_brazil_number`
         for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
             if c in df.columns:
                 df[c] = df[c].apply(parse_brazil_number).fillna(0.0)
             else:
                 df[c] = 0.0
 
-        # Datas
         df["DATA"] = _to_datetime(df["DATA"])
         df["VENCIMENTO"] = _to_datetime(df["VENCIMENTO"])
         df["REGISTRO_ENVIO"] = _to_datetime(df["REGISTRO_ENVIO"])
         df["REGISTRO_LANCAMENTO"] = _to_datetime(df["REGISTRO_LANCAMENTO"])
 
-        # DIAS_VENCIMENTO (robusto)
         ref = pd.Timestamp.today().normalize()
         df["DIAS_VENCIMENTO"] = (df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
 
@@ -221,7 +188,6 @@ def carregar_dados() -> pd.DataFrame:
         ])
 
 def salvar_dados(df: pd.DataFrame) -> bool:
-    """Salva o DataFrame na aba 'Almoxarifado' do Google Sheets."""
     try:
         client = get_gspread_client()
         sheet = client.open("dados_pedido")
@@ -229,13 +195,11 @@ def salvar_dados(df: pd.DataFrame) -> bool:
 
         df_to_save = df.copy()
 
-        # Garante tipos antes de formatar
         df_to_save["DATA"] = _to_datetime(df_to_save["DATA"])
         df_to_save["VENCIMENTO"] = _to_datetime(df_to_save["VENCIMENTO"])
         df_to_save["REGISTRO_ENVIO"] = _to_datetime(df_to_save["REGISTRO_ENVIO"])
         df_to_save["REGISTRO_LANCAMENTO"] = _to_datetime(df_to_save["REGISTRO_LANCAMENTO"])
 
-        # Mapeia para nomes da planilha
         df_to_save = df_to_save.rename(columns={
             "STATUS": "STATUS_FINANCEIRO",
             "REGISTRO_ADICIONAL": "OBSERVACAO",
@@ -244,7 +208,6 @@ def salvar_dados(df: pd.DataFrame) -> bool:
             "FORNECEDOR": "FORNECEDOR_NF"
         }, errors='ignore')
 
-        # Formata datas como string dd/mm/yyyy
         if "DATA" in df_to_save.columns:
             df_to_save["DATA"] = df_to_save["DATA"].dt.strftime("%d/%m/%Y")
         if "VENCIMENTO" in df_to_save.columns:
@@ -254,17 +217,14 @@ def salvar_dados(df: pd.DataFrame) -> bool:
         if "REGISTRO_LANCAMENTO" in df_to_save.columns:
             df_to_save["REGISTRO_LANCAMENTO"] = df_to_save["REGISTRO_LANCAMENTO"].dt.strftime("%d/%m/%Y %H:%M:%S")
 
-        # Remove colunas de cálculo antes de salvar
         df_to_save = df_to_save.drop(columns=["DIAS_VENCIMENTO"], errors="ignore")
 
-        # Escreve a partir de A1 (não limpa sobra; seguro contra perdas)
         set_with_dataframe(worksheet, df_to_save, include_index=False, resize=True)
         return True
     except Exception as e:
         st.error(f"Erro ao salvar dados na planilha: {e}")
         return False
 
-# --- Lógica de Login (UNIFICADA) ---
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
     "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
@@ -285,7 +245,6 @@ def fazer_login(email, senha):
     else:
         st.error("E-mail ou senha incorretos.")
 
-# --- INICIALIZAÇÃO E LAYOUT DA PÁGINA ---
 if 'logado' not in st.session_state or not st.session_state.logado:
     st.title("Login - Painel de Notas Fiscais")
     with st.form("login_form"):
@@ -304,7 +263,6 @@ else:
 
     df = st.session_state.df
 
-    # --- LAYOUT E FILTROS DO SIDEBAR (NOVO) ---
     with st.sidebar:
         if logo_img:
             st.image(logo_img, use_container_width=True)
@@ -318,7 +276,6 @@ else:
         )
         st.divider()
 
-        # Filtros de Período
         st.subheader("Filtros de Período")
         if 'DATA' in df.columns and not df['DATA'].isnull().all():
             min_date_value = df['DATA'].min() if not df['DATA'].isnull().all() else datetime.date.today()
@@ -330,7 +287,6 @@ else:
             data_maxima = None
             st.info("Nenhum dado com data disponível para filtrar.")
 
-        # Filtros de Dados
         st.subheader("Filtros de Dados")
         filtro_status = ['Todos']
         if 'STATUS' in df.columns and not df.empty:
@@ -356,9 +312,7 @@ else:
             st.rerun()
 
         st.caption("Sistema Financeiro Completo v1.0")
-    # --- FIM DA REORGANIZAÇÃO DO SIDEBAR ---
 
-    # Cabeçalhos por menu
     headers = {
         "📋 Lançamentos": ("📋 VISUALIZAÇÃO DE NOTAS FISCAIS", "Gerenciamento e acompanhamento financeiro de NFs"),
         "💰 Gestão de Juros": ("💰 GESTÃO DE JUROS E MULTAS", "Calcule e gerencie juros para notas em atraso"),
@@ -430,16 +384,14 @@ else:
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
 
-            # Mapeamento para exibição e para conversão de volta - INCLUINDO CAPTURADO
             status_map = {
                 'EM ANDAMENTO': '🟡 EM ANDAMENTO',
                 'NF PROBLEMA': '🔴 NF PROBLEMA',
-                'CAPTURADO': '🟣 CAPTURADO',  # NOVA OPÇÃO ADICIONADA
+                'CAPTURADO': '🟣 CAPTURADO',
                 'FINALIZADO': '🟢 FINALIZADO'
             }
             reverse_status_map = {v: k for k, v in status_map.items()}
 
-            # AQUI: Ajuste para garantir que o mapeamento lide com valores ausentes
             df_display['STATUS_VISUAL'] = df_display['STATUS'].map(status_map).fillna('⚪ DESCONHECIDO')
             
             def formatar_vencimento_visual(dias):
@@ -463,16 +415,12 @@ else:
 
             problema_options = ["N/A", "SEM PEDIDO", "VALOR INCORRETO", "OUTRO", "CHAMADO", "CARTA CORRECAO", "AJUSTE OC", "RECUSA"]
 
-            # --- CORREÇÃO AQUI ---
-            # Converte as colunas de data/hora para datetime, tratando erros, antes de formatar para exibição
             df_display['REGISTRO_ENVIO'] = pd.to_datetime(df_display['REGISTRO_ENVIO'], errors='coerce')
             df_display['REGISTRO_LANCAMENTO'] = pd.to_datetime(df_display['REGISTRO_LANCAMENTO'], errors='coerce')
 
             df_display['REGISTRO_ENVIO_VISUAL'] = df_display['REGISTRO_ENVIO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
             df_display['REGISTRO_LANCAMENTO_VISUAL'] = df_display['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
-            # --- FIM DA CORREÇÃO ---
 
-            # Garante que a coluna de valor seja float para a edição funcionar corretamente
             df_display['V_TOTAL_NF'] = df_display['V_TOTAL_NF'].astype(float)
             
             edited_df = st.data_editor(
@@ -494,7 +442,7 @@ else:
                     "DOC_NF": st.column_config.LinkColumn("DOC NF", display_text="📥"),
                     "RECEBEDOR": "Recebedor",
                     "REGISTRO_ENVIO_VISUAL": st.column_config.TextColumn("Reg. Envio (Almox.)", disabled=True),
-                    "REGISTRO_LANCAMENTO_VISUAL": st.column_config.TextColumn("Reg. Lançamento (Fin.)"), # EDITÁVEL
+                    "REGISTRO_LANCAMENTO_VISUAL": st.column_config.TextColumn("Reg. Lançamento (Fin.)"),
                 },
                 column_order=[
                     "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO", "DIAS_VENCIMENTO_VISUAL",
@@ -504,13 +452,11 @@ else:
                 hide_index=True
             )
 
-            # Verifica se houve alteração na tabela visualizada
             if not edited_df.equals(df_display):
                 st.session_state.alteracoes_pendentes = True
                 
                 updated_df = df.copy()
                 
-                # Definir fuso horário de Brasília
                 brasilia_tz = pytz.timezone('America/Sao_Paulo')
                 
                 for index, row in edited_df.iterrows():
@@ -520,15 +466,12 @@ else:
                     if novo_status_data:
                         status_original = updated_df.loc[index, 'STATUS']
 
-                        # Registrar data/hora quando mudar para FINALIZADO
                         if novo_status_data == 'FINALIZADO' and status_original != 'FINALIZADO':
                             updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now(brasilia_tz)
                         
-                        # Registrar data/hora quando mudar para CAPTURADO
                         if novo_status_data == 'CAPTURADO' and status_original != 'CAPTURADO':
                             updated_df.loc[index, 'REGISTRO_LANCAMENTO'] = datetime.datetime.now(brasilia_tz)
                         
-                        # Registrar envio quando mudar para CAPTURADO (almoxarifado)
                         if novo_status_data == 'CAPTURADO' and status_original != 'CAPTURADO':
                             updated_df.loc[index, 'REGISTRO_ENVIO'] = datetime.datetime.now(brasilia_tz)
                         
