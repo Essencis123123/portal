@@ -20,23 +20,15 @@ import re
 import pytz
 import sys
 
-# ==============================================================================
-# CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
-# ==============================================================================
-# Configuração da página com layout wide e ícone
 st.set_page_config(page_title="Painel Almoxarifado", layout="wide", page_icon="🏭")
 
-# CSS personalizado para o tema Essencis
 st.markdown(
     """
     <style>
-    /* Cor do menu lateral e texto */
     [data-testid="stSidebar"] {
         background-color: #1C4D86;
         color: white;
     }
-    
-    /* Regras para garantir que TODO o texto no sidebar seja branco */
     [data-testid="stSidebar"] *,
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] h1,
@@ -48,20 +40,15 @@ st.markdown(
     .stDownloadButton button p {
         color: white !important;
     }
-
-    /* Estilo para o radio button, garantindo que o texto dele também seja branco */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span {
         color: white !important;
     }
-    
-    /* Estilo para deixar a letra dos botões preta */
     .stButton button p {
         color: black !important;
     }
     .stDownloadButton button p {
         color: white !important;
     }
-
     [data-testid="stSidebar"] img {
         display: block;
         margin-left: auto;
@@ -70,8 +57,6 @@ st.markdown(
         border-radius: 10px;
         padding: 10px 0;
     }
-
-    /* Estilo para o container principal da página */
     .main-container {
         background-color: white;
         padding: 40px;
@@ -79,8 +64,6 @@ st.markdown(
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
         color: #333;
     }
-    
-    /* Estilo para o cabeçalho principal da página */
     .header-container {
         background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
         padding: 25px;
@@ -90,25 +73,19 @@ st.markdown(
         text-align: center;
         color: white;
     }
-    
     .header-container h1 {
         color: white;
         margin: 0;
     }
-
     .header-container p {
         color: white;
         margin: 5px 0 0 0;
         font-size: 18px;
     }
-    
-    /* Estilo para os sub-cabeçalhos dentro da área principal */
     h2, h3 {
         color: #1C4D86;
         font-weight: 600;
     }
-    
-    /* Estilo para os botões de ação */
     .stButton button {
         background-color: #0055a5;
         color: white;
@@ -118,8 +95,6 @@ st.markdown(
     .stButton button:hover {
         background-color: #007ea7;
     }
-    
-    /* Estilo para os cards de métricas */
     [data-testid="stMetric"] > div {
         background-color: #f0f2f5;
         color: #1C4D86;
@@ -132,9 +107,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ==============================================================================
-# DADOS DE USUÁRIOS E FUNÇÕES DE LOGIN (ATUALIZADO)
-# ==============================================================================
 USERS = {
     "eassis@essencis.com.br": {"password": "Essencis01", "name": "EVIANE DAS GRACAS DE ASSIS"},
     "agsantos@essencis.com.br": {"password": "Essencis01", "name": "ARLEY GONCALVES DOS SANTOS"},
@@ -146,7 +118,6 @@ USERS = {
 }
 
 def fazer_login(email, senha):
-    """Função de login unificada como no código do financeiro"""
     if email in USERS and USERS[email]["password"] == senha:
         st.session_state['logado'] = True
         st.session_state['nome_colaborador'] = USERS[email]["name"]
@@ -157,12 +128,8 @@ def fazer_login(email, senha):
     else:
         st.error("E-mail ou senha incorretos.")
 
-# ==============================================================================
-# FUNÇÕES DE UTILIDADE E CONEXÃO
-# ==============================================================================
 @st.cache_data(show_spinner=False)
 def load_logo(url):
-    """Carrega a imagem do logo a partir de uma URL e a armazena em cache."""
     try:
         response = requests.get(url)
         img = Image.open(BytesIO(response.content))
@@ -172,25 +139,17 @@ def load_logo(url):
         return None
 
 def get_gspread_client():
-    """Retorna o cliente gspread autorizado."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     credentials_info = st.secrets["gcp_service_account"]
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     return gspread.authorize(credentials)
 
 def parse_brazil_number(value_str):
-    """
-    Converte uma string de número no formato brasileiro (1.234,56) para float (1234.56).
-    """
     if not isinstance(value_str, str):
         return value_str
 
     cleaned_value = value_str.strip()
-    
-    # Remove 'R$' e espaços.
     cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
-    
-    # Remove os separadores de milhar (ponto) e substitui a vírgula pelo ponto decimal.
     cleaned_value = cleaned_value.replace('.', '').replace(',', '.')
 
     try:
@@ -199,23 +158,19 @@ def parse_brazil_number(value_str):
         return np.nan
 
 def _to_datetime(series, dayfirst=True):
-    """Converte uma Series para datetime, retornando NaT para erros."""
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
     
 def _clean_string(s):
-    """Limpa uma string removendo espaços extras e quebras de linha."""
     if pd.isna(s):
         return ''
-    # Substitui quebras de linha e múltiplos espaços por um único espaço
     return re.sub(r'[\r\n\s]+', ' ', str(s)).strip()
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_almoxarifado():
-    """Carrega dados do Google Sheets (aba de Almoxarifado - segunda aba)."""
     try:
         gc = get_gspread_client()
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(1)  # Segunda aba (índice 1) é Almoxarifado
+        worksheet = sheet.get_worksheet(1)
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
@@ -262,11 +217,10 @@ def carregar_dados_almoxarifado():
         ])
 
 def salvar_dados_almoxarifado(df):
-    """Salva os dados do DataFrame no Google Sheets (segunda aba - Almoxarifado)."""
     try:
         gc = get_gspread_client()
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(1)  # Segunda aba (índice 1) é Almoxarifado
+        worksheet = sheet.get_worksheet(1)
 
         df_copy = df.copy()
 
@@ -297,11 +251,10 @@ def salvar_dados_almoxarifado(df):
 
 @st.cache_data(show_spinner=False)
 def carregar_dados_pedidos():
-    """Carrega os dados de pedidos do Google Sheets (primeira aba)."""
     try:
         gc = get_gspread_client()
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(0)  # Primeira aba (índice 0) é dados_pedido
+        worksheet = sheet.get_worksheet(0)
         
         data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
         
@@ -314,7 +267,6 @@ def carregar_dados_pedidos():
         
         df = pd.DataFrame(records, columns=headers)
         
-        # Garante que a coluna 'QUANTIDADE_ENTREGUE' existe, preenchendo com 0 se não estiver lá
         if 'QUANTIDADE_ENTREGUE' not in df.columns:
             df['QUANTIDADE_ENTREGUE'] = 0.0
         
@@ -335,13 +287,11 @@ def carregar_dados_pedidos():
         st.error(f"Erro ao carregar dados de pedidos: {e}")
         return pd.DataFrame(columns=["DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "MATERIAL", "QUANTIDADE", "QUANTIDADE_ENTREGUE", "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", "DATA_APROVACAO", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", "DOC NF"])
 
-
 def salvar_dados_pedidos(df):
-    """Salva os dados de pedidos no Google Sheets (primeira aba)."""
     try:
         gc = get_gspread_client()
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(0)  # Primeira aba (índice 0) é dados_pedido
+        worksheet = sheet.get_worksheet(0)
 
         df_copy = df.copy()
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
@@ -356,11 +306,10 @@ def salvar_dados_pedidos(df):
         
 @st.cache_data(show_spinner=False)
 def carregar_dados_solicitantes():
-    """Carrega dados dos solicitantes do Google Sheets."""
     try:
         gc = get_gspread_client()
         sheet = gc.open("dados_pedido")
-        worksheet = sheet.get_worksheet(3)  # O índice correto para "Solicitantes" é 3
+        worksheet = sheet.get_worksheet(3)
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
         return df
@@ -369,13 +318,8 @@ def carregar_dados_solicitantes():
         return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"])
 
 def filter_oc():
-    """Função de callback para filtrar a Ordem de Compra e recarregar o script."""
     st.session_state.oc_select = ''
     st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
-
-# ==============================================================================
-# FUNÇÕES DO POP-UP DE DIVERGÊNCIA E SALDO PENDENTE
-# ==============================================================================
 
 @st.dialog("⚠️ Confirmação Necessária")
 def confirm_divergence_dialog(novo_registro_nf, edited_items, valor_oc_total, divergencia_oc):
@@ -434,10 +378,8 @@ def confirm_delete_dialog(nf_numero):
             st.rerun()
 
 def excluir_lancamento(nf_numero):
-    """Função para excluir um lançamento da planilha de Almoxarifado."""
     df = st.session_state.df_almoxarifado
     
-    # Filtra o DataFrame para remover a linha com a NF
     df_atualizado = df[df['NF'].astype(str) != str(nf_numero)].reset_index(drop=True)
     
     if len(df_atualizado) < len(df):
@@ -452,10 +394,7 @@ def excluir_lancamento(nf_numero):
         
     st.rerun()
 
-
 def salvar_nota_fiscal(novo_registro_nf, edited_items_df):
-    """Função para salvar a nota fiscal e atualizar os pedidos relacionados."""
-    
     st.session_state.df_almoxarifado = pd.concat([st.session_state.df_almoxarifado, pd.DataFrame([novo_registro_nf])], ignore_index=True)
     
     for index, row in edited_items_df.iterrows():
@@ -483,27 +422,19 @@ def salvar_nota_fiscal(novo_registro_nf, edited_items_df):
     st.success(f"🎉 Nota fiscal {novo_registro_nf['NF']} registrada com sucesso!")
     st.rerun()
 
-# ==============================================================================
-# INTERFACE PRINCIPAL
-# ==============================================================================
-
 def highlight_text(text, color):
-    """Retorna um texto formatado com uma cor específica usando HTML."""
     return f"<span style='color:{color}; font-weight:bold;'>{text}</span>"
 
 def render_main_app():
-    """Exibe a interface principal da aplicação com sidebar estilo financeiro."""
     try:
         logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
         logo_img = load_logo(logo_url)
         
-        # Carregamento de dados
         if 'df_pedidos' not in st.session_state:
             st.session_state.df_pedidos = carregar_dados_pedidos()
         if 'df_almoxarifado' not in st.session_state:
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
         
-        # Sidebar estilo financeiro
         with st.sidebar:
             if logo_img:
                 st.image(logo_img, use_container_width=True)
@@ -518,12 +449,10 @@ def render_main_app():
             
             st.divider()
             
-            # Filtros de Período (se aplicável)
             st.subheader("Filtros de Período")
             df_almox = st.session_state.df_almoxarifado
             
             if 'DATA' in df_almox.columns:
-                # Converte a coluna 'DATA' para datetime, se não for
                 df_almox['DATA'] = pd.to_datetime(df_almox['DATA'], errors='coerce')
                 datas_validas = df_almox['DATA'].dropna()
             
@@ -549,7 +478,6 @@ def render_main_app():
             
             st.caption("Sistema Almoxarifado v1.0")
 
-        # Renderiza a página selecionada
         if menu_option == "📝 Registrar NF":
             render_registrar_nf_page()
         elif menu_option == "📊 Dashboard":
@@ -564,7 +492,6 @@ def render_main_app():
         st.info("Por favor, verifique a integridade dos dados nas suas planilhas e tente novamente.")
 
 def render_registrar_nf_page():
-    """Página para registrar novas notas fiscais."""
     st.markdown("""
         <div class='header-container'>
             <h1>🏭 REGISTRAR NOTA FISCAL</h1>
@@ -576,18 +503,15 @@ def render_registrar_nf_page():
         st.warning("Nenhum pedido encontrado. Não é possível registrar notas fiscais. Verifique a planilha de pedidos.")
         st.stop()
     
-    # Inicializa variáveis de estado
     if 'oc_items_for_nf' not in st.session_state:
         st.session_state.oc_items_for_nf = pd.DataFrame(columns=['CODIGO_MATERIAL', 'MATERIAL', 'UN', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE', 'SALDO_PENDENTE', 'VALOR_ITEM'])
     
-    # --- Widgets fora do formulário para usar on_change ---
     col1_form, col2_form = st.columns(2)
     with col1_form:
         fornecedores_disponiveis = st.session_state.df_pedidos['FORNECEDOR'].dropna().unique().tolist()
         fornecedor_selecionado = st.selectbox("Fornecedor da NF*", options=[''] + sorted(fornecedores_disponiveis), key="fornecedor_nf_select", on_change=filter_oc)
 
     with col2_form:
-        # Filtra OCs que ainda não foram entregues ou que têm saldo pendente
         oc_pendentes = st.session_state.df_pedidos[
             (st.session_state.df_pedidos['QUANTIDADE'] > st.session_state.df_pedidos['QUANTIDADE_ENTREGUE']) &
             (st.session_state.df_pedidos['FORNECEDOR'] == fornecedor_selecionado)
@@ -602,7 +526,6 @@ def render_registrar_nf_page():
             key="oc_select"
         )
     
-    # Atualizar itens quando uma ordem de compra for selecionada
     if ordem_compra_nf and ordem_compra_nf != st.session_state.get('last_oc_selected'):
         oc_items = st.session_state.df_pedidos[
             st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
@@ -619,7 +542,6 @@ def render_registrar_nf_page():
 
     st.markdown("---")
     
-    # --- Formulário para os demais campos ---
     with st.form("formulario_nota", clear_on_submit=False):
         col1_form, col2_form, col3_form = st.columns(3)
         with col1_form:
@@ -672,7 +594,6 @@ def render_registrar_nf_page():
             st.info("Selecione uma Ordem de Compra para visualizar os itens.")
             edited_items = pd.DataFrame()
 
-
         enviar = st.form_submit_button("✅ Registrar Nota Fiscal")
 
         if enviar:
@@ -680,13 +601,11 @@ def render_registrar_nf_page():
                 st.error("Por favor, selecione uma Ordem de Compra.")
                 st.stop()
             
-            # Validação dos campos obrigatórios
             campos_validos = all([
                 fornecedor_selecionado.strip(), nf_numero.strip(),
                 valor_total_nf.strip() not in ["", "0,00"], doc_nf_links
             ])
             
-            # Recalcula o saldo pendente antes de salvar
             if not edited_items.empty:
                 edited_items['SALDO_PENDENTE'] = edited_items['QUANTIDADE'] - edited_items['QUANTIDADE_ENTREGUE']
                 quantidade_recebida_total = edited_items['QUANTIDADE_ENTREGUE'].sum()
@@ -709,7 +628,6 @@ def render_registrar_nf_page():
                     valor_oc_total = (pedidos_relacionados['VALOR_ITEM'] * pedidos_relacionados['QUANTIDADE']).sum()
                     divergencia = valor_total_float - valor_oc_total
                     
-                    # Checa por divergência de valor ou saldo pendente
                     tem_divergencia_valor = abs(divergencia) > 0.01
                     tem_saldo_pendente = edited_items['SALDO_PENDENTE'].sum() > 0
 
@@ -736,7 +654,6 @@ def render_registrar_nf_page():
                         "REGISTRO_ENVIO": agora,
                         "REGISTRO_LANCAMENTO": agora
                     }
-
 
                     if tem_divergencia_valor or tem_saldo_pendente:
                         confirm_divergence_dialog(novo_registro_nf, edited_items, valor_oc_total, divergencia)
@@ -792,7 +709,6 @@ def render_registrar_nf_page():
             html_links = [f'<a href="{link.strip()}" target="_blank" title="Clique para baixar"><img src="https://img.icons8.com/material-outlined/24/null/download--v1.png"/></a>' for link in links if link.strip()]
             return " ".join(html_links)
 
-        # APLICAR AS FUNÇÕES DE FORMATAÇÃO APÓS A RENOMEAÇÃO DA COLUNA
         if 'Status Financeiro' in df_ultimas_nfs_display.columns:
             df_ultimas_nfs_display['Status Financeiro'] = df_ultimas_nfs_display['Status Financeiro'].apply(colorir_status_display)
 
@@ -808,7 +724,6 @@ def render_registrar_nf_page():
         st.info("Nenhuma nota fiscal registrada ainda. Registre uma acima.")
 
 def render_dashboard_page():
-    """Página do dashboard com visualizações de dados."""
     st.markdown("""
         <div class='header-container'>
             <h1>📊 DASHBOARD ALMOXARIFADO</h1>
@@ -855,7 +770,6 @@ def render_dashboard_page():
         st.write("Nenhum dado disponível.")
 
 def render_consultar_nfs_page():
-    """Página para consultar e filtrar notas fiscais."""
     st.markdown("""
         <div class='header-container'>
             <h1>🔍 CONSULTAR NOTAS FISCAIS</h1>
@@ -963,7 +877,6 @@ def render_consultar_nfs_page():
         st.info("📝 Nenhum dado disponível para consulta.")
 
 def render_configuracoes_page():
-    """Página de configurações do sistema."""
     st.markdown("""
         <div class='header-container'>
             <h1>⚙️ CONFIGURAÇÕES DO SISTEMA</h1>
@@ -1004,7 +917,6 @@ def render_configuracoes_page():
             help="Clique para baixar uma cópia de segurança dos dados."
         )
 
-    # --- Seção para a edição de notas fiscais ---
     st.markdown("---")
     st.subheader("📝 Editar Notas Fiscais")
     
@@ -1044,7 +956,6 @@ def render_configuracoes_page():
     else:
         st.info("📝 Nenhum dado disponível para edição.")
         
-    # --- Seção de Exclusão de Lançamentos ---
     st.markdown("---")
     st.subheader("🗑️ Excluir Lançamento")
     nf_excluir = st.text_input("Número da NF para Exclusão", key="nf_excluir_input")
@@ -1055,32 +966,24 @@ def render_configuracoes_page():
         else:
             st.error("Por favor, digite o número da NF para excluir.")
 
-
-# ==============================================================================
-# EXECUÇÃO PRINCIPAL (ATUALIZADA)
-# ==============================================================================
-# Inicialização do estado de login
 if 'logado' not in st.session_state:
     st.session_state.logado = False
 
 if not st.session_state.logado:
-    # Tela de login centralizada
     st.markdown("<h1 style='text-align: center; color: #1C4D86;'>Login - Painel de Almoxarifado</h1>", unsafe_allow_html=True)
     
-    # Criar colunas para centralizar o formulário
     col_left, col_center, col_right = st.columns([1, 2, 1])
     
     with col_center:
         st.image("http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png", use_container_width=True)
-        st.write("") # Espaço em branco
+        st.write("")
         
         with st.form("login_form"):
             email = st.text_input("E-mail", placeholder="seu.email@essencis.com.br")
             senha = st.text_input("Senha", type="password")
             
-            st.write("") # Espaço em branco
+            st.write("")
             if st.form_submit_button("Entrar"):
                 fazer_login(email, senha)
 else:
-    # Usuário logado - renderizar aplicação principal
     render_main_app()
