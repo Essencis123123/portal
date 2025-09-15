@@ -431,7 +431,7 @@ else:
                     "FORNECEDOR": "Fornecedor",
                     "NF": "N° NF",
                     "ORDEM_COMPRA": "N° Ordem de Compra",
-                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)", format="%.2f"),
+                    "V_TOTAL_NF": st.column_config.NumberColumn("V. Total NF (R$)"),
                     "VENCIMENTO": st.column_config.DateColumn("Vencimento", format="DD/MM/YYYY"),
                     "DIAS_VENCIMENTO_VISUAL": st.column_config.Column("Dias Vencimento", disabled=True),
                     "STATUS_VISUAL": st.column_config.SelectboxColumn("Status", options=list(status_map.values()), default="🟡 EM ANDAMENTO"),
