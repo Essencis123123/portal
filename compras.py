@@ -21,7 +21,7 @@ import sys
 # ==============================================================================
 # CONFIGURAÇÃO INICIAL E ESTILIZAÇÃO CSS
 # ==============================================================================
-# Configuração da página com layout wide e ícone
+# Configuração da página com layout wide and ícone
 st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼")
 
 # --- CSS Personalizado para o Tema Essencis ---
@@ -288,7 +288,7 @@ def converter_para_float_brasileiro(valor_str):
     # Remove possíveis R$ e espaços
     valor_str = valor_str.replace('R$', '').strip()
     
-    # Substitui vírgula por ponto e remove pontos de milhar
+    # Substitui vírgula por ponto and remove pontos de milhar
     if ',' in valor_str and '.' in valor_str:
         # Formato com milhar: 1.234,56 → 1234.56
         valor_str = valor_str.replace('.', '').replace(',', '.')
@@ -382,13 +382,13 @@ def salvar_dados_pedidos(df):
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
 
-        # CONVERSÃO DE NÚMEROS (para strings com vírgula decimal)
+        # CONVERSÃO DE NÚMEROS (para strings with vírgula decimal)
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
                 # Garante que é numérico
                 df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0)
-                # Formata com vírgula decimal
+                # Formata with vírgula decimal
                 df_to_save[col] = df_to_save[col].apply(
                     lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00'
                 )
@@ -397,7 +397,7 @@ def salvar_dados_pedidos(df):
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
-        # Preenche NaNs com string vazia
+        # Preenche NaNs with string vazia
         df_to_save = df_to_save.fillna('')
         
         # Garante a ordem padrão das colunas
@@ -407,7 +407,7 @@ def salvar_dados_pedidos(df):
         worksheet.clear()
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
-        st.success("Dados salvos com sucesso!")
+        st.success("Dados salvos with sucesso!")
         
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
@@ -452,7 +452,7 @@ def salvar_dados_solicitantes(df):
         df_copy = df.copy()
         set_with_dataframe(worksheet, df_copy, include_index=False)
         
-        st.success("Solicitante cadastrado com sucesso!")
+        st.success("Solicitante cadastrado with sucesso!")
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
@@ -460,7 +460,7 @@ def validar_dados_pedidos(df):
     """Valida e corrige dados inconsistentes no DataFrame de pedidos"""
     df = df.copy()
     
-    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRasO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
+    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -621,7 +621,7 @@ def render_main_app():
             st.session_state.df_solicitantes = carregar_dados_solicitantes()
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
             st.session_state.df_materiais = carregar_dados_materiais()
-            st.success("Dados atualizados com sucesso!")
+            st.success("Dados atualizados with sucesso!")
             st.rerun()
         if st.sidebar.button("Logout"):
             st.session_state['logado'] = False
