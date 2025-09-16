@@ -238,8 +238,6 @@ def get_gspread_client():
         return None
 
 # Funções auxiliares para formatação e parsing de datas
-# --- Funções de Conexão e Carregamento de Dados ---
-# Mantém a função parse_date_input para o data_editor, mas ela não será mais usada aqui
 def parse_date_input(date_value):
     """
     Converte valores de data de qualquer entrada (editor, string) para datetime,
@@ -277,6 +275,31 @@ def parse_date_input(date_value):
                 
     return pd.NaT
 
+def converter_para_float_brasileiro(valor_str):
+    """
+    Converte string no formato brasileiro (ex: "5,58") para float (5.58)
+    """
+    if isinstance(valor_str, (int, float)):
+        return float(valor_str)
+    
+    if not isinstance(valor_str, str):
+        return 0.0
+    
+    # Remove possíveis R$ e espaços
+    valor_str = valor_str.replace('R$', '').strip()
+    
+    # Substitui vírgula por ponto e remove pontos de milhar
+    if ',' in valor_str and '.' in valor_str:
+        # Formato com milhar: 1.234,56 → 1234.56
+        valor_str = valor_str.replace('.', '').replace(',', '.')
+    elif ',' in valor_str:
+        # Formato simples com vírgula decimal: 1234,56 → 1234.56
+        valor_str = valor_str.replace(',', '.')
+    
+    try:
+        return float(valor_str)
+    except ValueError:
+        return 0.0
 
 @st.cache_data(ttl=300)
 def carregar_dados_pedidos():
@@ -325,6 +348,10 @@ def carregar_dados_pedidos():
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
         return criar_dataframe_pedidos_vazio()
+
+def criar_dataframe_pedidos_vazio():
+    """Cria um DataFrame vazio com a estrutura de pedidos."""
+    return pd.DataFrame(columns=COLUNA_ORDEM_PADRAO)
 
 def formatar_numero_brasileiro(valor, casas_decimais=2):
     """Formata número no padrão brasileiro (vírgula como separador decimal)"""
@@ -858,7 +885,11 @@ def render_main_app():
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"),
+                    # ALTERAÇÃO AQUI: Troque NumberColumn por TextColumn para VALOR_ITEM
+                    "VALOR_ITEM": st.column_config.TextColumn(
+                        "Valor Unitário (R$)",
+                        help="Digite o valor com vírgula decimal (ex: 5,58)"
+                    ),
                     "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD/MM/YYYY"),
                     "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
@@ -913,8 +944,11 @@ def render_main_app():
                                 edited_row[col_val] = 0
                             else:
                                 if isinstance(edited_row[col_val], str):
-                                    # Removendo 'R$' e formatando para float, se for o caso
-                                    edited_row[col_val] = float(edited_row[col_val].replace('R$', '').replace('.', '').replace(',', '.').strip())
+                                    # ALTERAÇÃO AQUI: Use a função de conversão brasileira
+                                    if col_val == 'VALOR_ITEM':
+                                        edited_row[col_val] = converter_para_float_brasileiro(edited_row[col_val])
+                                    else:
+                                        edited_row[col_val] = float(edited_row[col_val].replace('R$', '').replace('.', '').replace(',', '.').strip())
                                 else:
                                     edited_row[col_val] = float(edited_row[col_val])
                         
@@ -953,7 +987,7 @@ def render_main_app():
             </div>
         """, unsafe_allow_html=True)
         
-        st.header("📜 Visualização e Edição do Histórico")
+        st.header("📜 Visualização and Edição do Histórico")
         st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.")
 
         df_history = st.session_state.df_pedidos.copy()
@@ -1126,6 +1160,294 @@ def render_main_app():
         st.subheader("💰 Resumo do Custo Total")
         total_historico = df_history['VALOR_TOTAL'].sum()
         st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    elif menu == "👤 Cadastro":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>👤 CADASTRO DE SOLICITANTES E MATERIAIS</h1>
+                <p>Gerencie os Cadastros do Sistema</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["👤 Cadastro de Solicitantes", "📦 Cadastro de Materiais"])
+        
+        with tab1:
+            st.header("👤 Cadastro de Solicitantes")
+            
+            with st.form("form_cadastro_solicitante"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    nome_solicitante = st.text_input("Nome Completo")
+                    email_solicitante = st.text_input("E-mail")
+                with col2:
+                    departamento_solicitante = st.text_input("Departamento")
+                    filial_solicitante = st.text_input("Filial")
+                
+                if st.form_submit_button("Cadastrar Solicitante"):
+                    if nome_solicitante and departamento_solicitante and email_solicitante and filial_solicitante:
+                        novo_solicitante = pd.DataFrame([{
+                            "NOME": nome_solicitante,
+                            "DEPARTAMENTO": departamento_solicitante,
+                            "EMAIL": email_solicitante,
+                            "FILIAL": filial_solicitante
+                        }])
+                        
+                        st.session_state.df_solicitantes = pd.concat([st.session_state.df_solicitantes, novo_solicitante], ignore_index=True)
+                        salvar_dados_solicitantes(st.session_state.df_solicitantes)
+                        st.success("Solicitante cadastrado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("Por favor, preencha todos os campos.")
+            
+            st.subheader("Solicitantes Cadastrados")
+            if not st.session_state.df_solicitantes.empty:
+                st.dataframe(st.session_state.df_solicitantes, use_container_width=True)
+            else:
+                st.info("Nenhum solicitante cadastrado ainda.")
+        
+        with tab2:
+            st.header("📦 Cadastro de Materiais")
+            
+            with st.form("form_cadastro_material"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    codigo_material = st.text_input("Código do Material")
+                with col2:
+                    descricao_material = st.text_input("Descrição do Material")
+                
+                if st.form_submit_button("Cadastrar Material"):
+                    if codigo_material and descricao_material:
+                        novo_material = pd.DataFrame([{
+                            "CODIGO": codigo_material,
+                            "DESCRICAO": descricao_material
+                        }])
+                        
+                        st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, novo_material], ignore_index=True)
+                        salvar_dados_materiais(st.session_state.df_materiais)
+                        st.success("Material cadastrado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("Por favor, preencha todos os campos.")
+            
+            st.subheader("Materiais Cadastrados")
+            if not st.session_state.df_materiais.empty:
+                st.dataframe(st.session_state.df_materiais, use_container_width=True)
+            else:
+                st.info("Nenhum material cadastrado ainda.")
+
+    elif menu == "📊 Dashboards ":
+        st.markdown("""
+            <div class='header-container'>
+                <h1>📊 DASHBOARDS E INDICADORES</h1>
+                <p>Análise de Desempenho do Departamento de Compras</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.header("📊 Dashboards e Indicadores de Compras")
+        
+        # Carregar e preparar dados
+        df_dash = st.session_state.df_pedidos.copy()
+        
+        # Converter colunas para tipos adequados
+        df_dash['DATA'] = pd.to_datetime(df_dash['DATA'], errors='coerce')
+        df_dash['VALOR_ITEM'] = pd.to_numeric(df_dash['VALOR_ITEM'], errors='coerce').fillna(0)
+        df_dash['QUANTIDADE'] = pd.to_numeric(df_dash['QUANTIDADE'], errors='coerce').fillna(0)
+        df_dash['VALOR_TOTAL'] = df_dash['VALOR_ITEM'] * df_dash['QUANTIDADE']
+        
+        # Filtros
+        st.subheader("Filtros")
+        col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
+        
+        with col_filtro1:
+            if not df_dash.empty and 'DATA' in df_dash.columns and not df_dash['DATA'].isna().all():
+                datas_validas = df_dash[df_dash['DATA'].notna()]
+                if not datas_validas.empty:
+                    min_date = datas_validas['DATA'].min().date()
+                    max_date = datas_validas['DATA'].max().date()
+                    data_inicio = st.date_input("Data Início", min_date, min_value=min_date, max_value=max_date)
+                    data_fim = st.date_input("Data Fim", max_date, min_value=min_date, max_value=max_date)
+                else:
+                    st.info("Nenhuma data válida para filtrar")
+                    data_inicio = datetime.date.today()
+                    data_fim = datetime.date.today()
+            else:
+                st.info("Nenhuma data disponível para filtrar")
+                data_inicio = datetime.date.today()
+                data_fim = datetime.date.today()
+        
+        with col_filtro2:
+            departamentos = ['Todos'] + df_dash['DEPARTAMENTO'].unique().tolist() if 'DEPARTAMENTO' in df_dash.columns else ['Todos']
+            departamento_selecionado = st.selectbox("Departamento", departamentos)
+        
+        with col_filtro3:
+            status_options = ['Todos'] + df_dash['STATUS_PEDIDO'].unique().tolist() if 'STATUS_PEDIDO' in df_dash.columns else ['Todos']
+            status_selecionado = st.selectbox("Status", status_options)
+        
+        # Aplicar filtros
+        if not df_dash.empty and 'DATA' in df_dash.columns:
+            df_dash = df_dash[(df_dash['DATA'].dt.date >= data_inicio) & (df_dash['DATA'].dt.date <= data_fim)]
+        
+        if departamento_selecionado != 'Todos':
+            df_dash = df_dash[df_dash['DEPARTAMENTO'] == departamento_selecionado]
+        
+        if status_selecionado != 'Todos':
+            df_dash = df_dash[df_dash['STATUS_PEDIDO'] == status_selecionado]
+        
+        if df_dash.empty:
+            st.warning("Nenhum dado disponível para os filtros selecionados.")
+            st.stop()
+        
+        # Métricas principais
+        st.subheader("Métricas Principais")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            total_pedidos = len(df_dash)
+            st.metric("Total de Pedidos", total_pedidos)
+        
+        with col2:
+            total_valor = df_dash['VALOR_TOTAL'].sum()
+            st.metric("Valor Total (R$)", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        
+        with col3:
+            pedidos_entregues = len(df_dash[df_dash['STATUS_PEDIDO'] == 'ENTREGUE']) if 'STATUS_PEDIDO' in df_dash.columns else 0
+            taxa_entrega = (pedidos_entregues / total_pedidos * 100) if total_pedidos > 0 else 0
+            st.metric("Taxa de Entrega", f"{taxa_entrega:.1f}%")
+        
+        with col4:
+            valor_medio = total_valor / total_pedidos if total_pedidos > 0 else 0
+            st.metric("Valor Médio por Pedido", f"R$ {valor_medio:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        
+        st.markdown("---")
+        
+        # Gráfico 1: Custo por Departamento
+        st.subheader("Custo por Departamento")
+        if 'DEPARTAMENTO' in df_dash.columns:
+            custo_por_departamento = df_dash.groupby('DEPARTAMENTO')['VALOR_TOTAL'].sum().reset_index()
+            custo_por_departamento = custo_por_departamento.sort_values('VALOR_TOTAL', ascending=False)
+            
+            fig1 = px.bar(
+                custo_por_departamento,
+                x='DEPARTAMENTO',
+                y='VALOR_TOTAL',
+                title="Custo Total por Departamento",
+                labels={'DEPARTAMENTO': 'Departamento', 'VALOR_TOTAL': 'Custo Total (R$)'}
+            )
+            fig1.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig1, use_container_width=True)
+        else:
+            st.info("Dados de departamento não disponíveis para análise.")
+        
+        st.markdown("---")
+        
+        # Gráfico 2: Solicitações Realizadas vs. Atendidas
+        st.subheader("Solicitações Realizadas vs. Atendidas")
+        if 'STATUS_PEDIDO' in df_dash.columns:
+            status_counts = df_dash['STATUS_PEDIDO'].value_counts().reset_index()
+            status_counts.columns = ['Status', 'Quantidade']
+            
+            fig2 = px.pie(
+                status_counts,
+                values='Quantidade',
+                names='Status',
+                title="Distribuição de Status dos Pedidos"
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("Dados de status não disponíveis para análise.")
+        
+        st.markdown("---")
+        
+        # Gráfico 3: Evolução Temporal de Pedidos
+        st.subheader("Evolução Temporal de Pedidos")
+        if 'DATA' in df_dash.columns:
+            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').astype(str)
+            evolucao_temporal = df_dash.groupby('MES_ANO').agg({
+                'REQUISICAO': 'count',
+                'VALOR_TOTAL': 'sum'
+            }).reset_index()
+            evolucao_temporal.columns = ['Mês', 'Quantidade de Pedidos', 'Valor Total']
+            
+            fig3 = make_subplots(specs=[[{"secondary_y": True}]])
+            
+            fig3.add_trace(
+                go.Bar(
+                    x=evolucao_temporal['Mês'],
+                    y=evolucao_temporal['Quantidade de Pedidos'],
+                    name="Quantidade de Pedidos",
+                    marker_color='#1C4D86'
+                ),
+                secondary_y=False
+            )
+            
+            fig3.add_trace(
+                go.Scatter(
+                    x=evolucao_temporal['Mês'],
+                    y=evolucao_temporal['Valor Total'],
+                    name="Valor Total (R$)",
+                    mode='lines+markers',
+                    line=dict(color='#FF7F0E')
+                ),
+                secondary_y=True
+            )
+            
+            fig3.update_layout(
+                title_text="Evolução Temporal de Pedidos e Valor",
+                xaxis_tickangle=-45
+            )
+            
+            fig3.update_yaxes(title_text="Quantidade de Pedidos", secondary_y=False)
+            fig3.update_yaxes(title_text="Valor Total (R$)", secondary_y=True)
+            
+            st.plotly_chart(fig3, use_container_width=True)
+        else:
+            st.info("Dados de data não disponíveis para análise.")
+        
+        st.markdown("---")
+        
+        # Gráfico 4: Top 10 Materiais Mais Solicitados
+        st.subheader("Top 10 Materiais Mais Solicitados")
+        if 'MATERIAL' in df_dash.columns:
+            materiais_mais_solicitados = df_dash['MATERIAL'].value_counts().head(10).reset_index()
+            materiais_mais_solicitados.columns = ['Material', 'Quantidade']
+            
+            fig4 = px.bar(
+                materiais_mais_solicitados,
+                x='Quantidade',
+                y='Material',
+                orientation='h',
+                title="Top 10 Materiais Mais Solicitados",
+                labels={'Quantidade': 'Quantidade de Solicitações', 'Material': 'Material'}
+            )
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.info("Dados de materiais não disponíveis para análise.")
+        
+        st.markdown("---")
+        
+        # Gráfico 5: Top 10 Fornecedores
+        st.subheader("Top 10 Fornecedores por Volume de Compras")
+        if 'FORNECEDOR' in df_dash.columns and 'VALOR_TOTAL' in df_dash.columns:
+            fornecedores_por_volume = df_dash.groupby('FORNECEDOR')['VALOR_TOTAL'].sum().reset_index()
+            fornecedores_por_volume = fornecedores_por_volume.sort_values('VALOR_TOTAL', ascending=False).head(10)
+            
+            fig5 = px.bar(
+                fornecedores_por_volume,
+                x='VALOR_TOTAL',
+                y='FORNECEDOR',
+                orientation='h',
+                title="Top 10 Fornecedores por Volume de Compras",
+                labels={'VALOR_TOTAL': 'Valor Total (R$)', 'FORNECEDOR': 'Fornecedor'}
+            )
+            st.plotly_chart(fig5, use_container_width=True)
+        else:
+            st.info("Dados de fornecedores não disponíveis para análise.")
+        
+        st.markdown("---")
+        
+        # Tabela de Detalhes
+        st.subheader("Detalhes dos Pedidos")
+        st.dataframe(df_dash[['DATA', 'SOLICITANTE', 'DEPARTAMENTO', 'MATERIAL', 'QUANTIDADE', 'VALOR_ITEM', 'VALOR_TOTAL', 'STATUS_PEDIDO']], use_container_width=True)
 
     elif menu == "📊 Performance ":
         st.markdown("""
