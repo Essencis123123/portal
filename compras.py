@@ -382,13 +382,13 @@ def salvar_dados_pedidos(df):
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else ''
                 )
 
-        # CONVERSÃO DE NÚMEROS (para strings with vírgula decimal)
+        # CONVERSÃO DE NÚMEROS (para strings com vírgula decimal)
         numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
         for col in numeric_cols_to_save:
             if col in df_to_save.columns:
                 # Garante que é numérico
                 df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0)
-                # Formata with vírgula decimal
+                # Formata com vírgula decimal
                 df_to_save[col] = df_to_save[col].apply(
                     lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00'
                 )
@@ -397,7 +397,7 @@ def salvar_dados_pedidos(df):
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
-        # Preenche NaNs with string vazia
+        # Preenche NaNs com string vazia
         df_to_save = df_to_save.fillna('')
         
         # Garante a ordem padrão das colunas
@@ -407,7 +407,7 @@ def salvar_dados_pedidos(df):
         worksheet.clear()
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
-        st.success("Dados salvos with sucesso!")
+        st.success("Dados salvos com sucesso!")
         
     except Exception as e:
         st.error(f"Erro ao salvar dados no Google Sheets: {e}")
@@ -452,7 +452,7 @@ def salvar_dados_solicitantes(df):
         df_copy = df.copy()
         set_with_dataframe(worksheet, df_copy, include_index=False)
         
-        st.success("Solicitante cadastrado with sucesso!")
+        st.success("Solicitante cadastrado com sucesso!")
     except Exception as e:
         st.error(f"Erro ao salvar dados de solicitantes no Google Sheets: {e}")
 
@@ -505,7 +505,7 @@ def carregar_dados_materiais():
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "MATERIAIS" é 2
         worksheet = sheet.get_worksheet(2)
-        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
+        data = worksheet.get_all_records(value_render_option='UNFORMatted_VALUE')
         df = pd.DataFrame(data)
         # Verifica se as colunas esperadas existem
         if not all(col in df.columns for col in ["CODIGO", "DESCRICAO"]):
@@ -621,7 +621,7 @@ def render_main_app():
             st.session_state.df_solicitantes = carregar_dados_solicitantes()
             st.session_state.df_almoxarifado = carregar_dados_almoxarifado()
             st.session_state.df_materiais = carregar_dados_materiais()
-            st.success("Dados atualizados with sucesso!")
+            st.success("Dados atualizados com sucesso!")
             st.rerun()
         if st.sidebar.button("Logout"):
             st.session_state['logado'] = False
@@ -757,7 +757,7 @@ def render_main_app():
         
         st.write("---")
         
-        if st.button("Finalizar e Registrar Requisição", key="btn_finalizar_requisicao"):
+        if st.button("Finalizar and Registrar Requisição", key="btn_finalizar_requisicao"):
             if requisicao and not st.session_state.itens_requisicao_temp.empty:
                 linhas_a_adicionar = []
                 for _, item_row in st.session_state.itens_requisicao_temp.iterrows():
@@ -865,42 +865,58 @@ def render_main_app():
         cols_disponiveis = [col for col in cols_para_editar if col in pedidos_pendentes_oc_reset.columns]
         df_editavel = pedidos_pendentes_oc_reset[cols_disponiveis].copy()
         
+        # DEBUG: Verificar tipos de dados
+        st.write("🔍 DEBUG: Tipos de dados das colunas:")
+        for col in cols_disponiveis:
+            if col in df_editavel.columns:
+                st.write(f"{col}: {df_editavel[col].dtype}")
+        
+        # Garantir que as colunas numéricas estejam no formato correto
+        for col in ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
+            if col in df_editavel.columns:
+                df_editavel[col] = pd.to_numeric(df_editavel[col], errors='coerce').fillna(0)
+        
         with st.form(key="form_atualizar_pedidos"):
+            # Configuração simplificada para evitar erros de tipo
+            column_config = {
+                "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
+                "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY"),
+                "SOLICITANTE": st.column_config.TextColumn("Solicitante"),
+                "DEPARTAMENTO": st.column_config.TextColumn("Departamento"),
+                "FILIAL": st.column_config.TextColumn("Filial"),
+                "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
+                "MATERIAL": st.column_config.TextColumn("Material"),
+                "UN": st.column_config.TextColumn("UN"),
+                "QUANTIDADE": st.column_config.NumberColumn("Qtd.", format="%d"),
+                "TIPO_PEDIDO": st.column_config.TextColumn("Tipo Pedido"),
+                "REQUISICAO": st.column_config.TextColumn("N° Requisição"),
+                "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
+                "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
+                "VALOR_ITEM": st.column_config.TextColumn(
+                    "Valor Unitário (R$)",
+                    help="Digite o valor com vírgula decimal (ex: 5,58)"
+                ),
+                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="%.2f"),
+                "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD/MM/YYYY"),
+                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
+                "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]),
+                "STATUS_PEDIDO": st.column_config.TextColumn("Status Pedido"),
+                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY"),
+                "DIAS_ATRASO": st.column_config.NumberColumn("Dias Atraso", format="%d"),
+                "DIAS_EMISSAO": st.column_config.NumberColumn("Dias Emissão", format="%d"),
+                "DOC NF": st.column_config.TextColumn("Doc NF"),
+                "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Entregue", format="%d"),
+            }
+            
+            # Filtrar apenas as colunas que existem no DataFrame
+            filtered_column_config = {k: v for k, v in column_config.items() if k in df_editavel.columns}
+            
             edited_df = st.data_editor(
                 df_editavel,
                 use_container_width=True,
                 hide_index=True,
-                column_order=cols_disponiveis, # Usa a nova ordem
-                column_config={
-                    "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
-                    "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=False),
-                    "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True),
-                    "DEPARTAMENTO": "Departamento",
-                    "FILIAL": "Filial",
-                    "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"),
-                    "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
-                    "UN": st.column_config.TextColumn("UN", disabled=True),
-                    "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
-                    # CORREÇÃO: TIPO_PEDIDO com D maiúsculo
-                    "TIPO_PEDIDO": st.column_config.TextColumn("Tipo Pedido", disabled=True),
-                    "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
-                    "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
-                    "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    "VALOR_ITEM": st.column_config.TextColumn(
-                        "Valor Unitário (R$)",
-                        help="Digite o valor com vírgula decimal (ex: 5,58)"
-                    ),
-                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
-                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD/MM/YYYY"),
-                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
-                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]),
-                    "STATUS_PEDIDO": st.column_config.TextColumn("Status Pedido", disabled=True),
-                    "DATA_ENTREGA": st.column_config.TextColumn("Data Entrega", disabled=True),
-                    "DIAS_ATRASO": st.column_config.TextColumn("Dias Atraso", disabled=True),
-                    "DIAS_EMISSAO": st.column_config.TextColumn("Dias Emissão", disabled=True),
-                    "DOC NF": st.column_config.TextColumn("Doc NF", disabled=True),
-                    "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Entregue", format="%d"),
-                }
+                column_order=cols_disponiveis,
+                column_config=filtered_column_config
             )
             
             submitted = st.form_submit_button("Salvar Atualizações")
@@ -1361,7 +1377,7 @@ def render_main_app():
         # Gráfico 3: Evolução Temporal de Pedidos
         st.subheader("Evolução Temporal de Pedidos")
         if 'DATA' in df_dash.columns:
-            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').astype(str)
+            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').ast.pyarrow()
             evolucao_temporal = df_dash.groupby('MES_ANO').agg({
                 'REQUISICAO': 'count',
                 'VALOR_TOTAL': 'sum'
@@ -1483,7 +1499,7 @@ def render_main_app():
             st.stop()
         
         if not mes_selecionado_p or ano_selecionado_p is None:
-              st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
+              st.warning("Selecione pelo menos um mês and um ano para visualizar os dados.")
               st.stop()
 
         if mes_selecionado_p and ano_selecionado_p:
@@ -1534,7 +1550,7 @@ def render_main_app():
         st.markdown("---")
 
         st.subheader("Curva de Desempenho da Negociação (Média Mensal)")
-        df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').astype(str)
+        df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').ast.pyarrow()
         
         curva_mensal = df_negociados.groupby('MES_APROVACAO')['PERC_ECONOMIA'].mean().reset_index()
         
