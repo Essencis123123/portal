@@ -237,7 +237,7 @@ def get_gspread_client():
         st.error(f"Erro ao conectar com Google Sheets: {e}")
         return None
 
-# Funções auxiliares para formatação e parsing de datas
+# Funções auxiliares para formatação and parsing de datas
 def parse_date_input(date_value):
     """
     Converte valores de data de qualquer entrada (editor, string) para datetime,
@@ -350,7 +350,7 @@ def carregar_dados_pedidos():
         return criar_dataframe_pedidos_vazio()
 
 def criar_dataframe_pedidos_vazio():
-    """Cria um DataFrame vazio com a estrutura de pedidos."""
+    """Cria um DataFrame vazio with a estrutura de pedidos."""
     return pd.DataFrame(columns=COLUNA_ORDEM_PADRAO)
 
 def formatar_numero_brasileiro(valor, casas_decimais=2):
@@ -460,7 +460,7 @@ def validar_dados_pedidos(df):
     """Valida e corrige dados inconsistentes no DataFrame de pedidos"""
     df = df.copy()
     
-    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
+    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRasO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -881,11 +881,11 @@ def render_main_app():
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
                     "UN": st.column_config.TextColumn("UN", disabled=True),
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
-                    "TIPO_PEDido": st.column_config.TextColumn("Tipo Pedido", disabled=True),
+                    # CORREÇÃO: TIPO_PEDIDO com D maiúsculo
+                    "TIPO_PEDIDO": st.column_config.TextColumn("Tipo Pedido", disabled=True),
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    # ALTERAÇÃO AQUI: Troque NumberColumn por TextColumn para VALOR_ITEM
                     "VALOR_ITEM": st.column_config.TextColumn(
                         "Valor Unitário (R$)",
                         help="Digite o valor com vírgula decimal (ex: 5,58)"
@@ -1059,7 +1059,7 @@ def render_main_app():
             df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)]
 
         if df_history.empty:
-            st.warning("Nenhum registro encontrado com os filtros aplicados.")
+            st.warning("Nenhum registro encontrado with os filtros aplicados.")
             st.stop()
         
         df_for_editor = df_history.copy()
@@ -1392,7 +1392,7 @@ def render_main_app():
             )
             
             fig3.update_layout(
-                title_text="Evolução Temporal de Pedidos e Valor",
+                title_text="Evolução Temporal de Pedidos and Valor",
                 xaxis_tickangle=-45
             )
             
@@ -1459,7 +1459,7 @@ def render_main_app():
         st.header("📊 Análise de Performance de Negociações")
 
         df_performance = st.session_state.df_pedidos.copy()
-        df_performance['DATA'] = pd.to_datetime(df_performance['DATA'], errors='coerce', dayfirst=True)
+        df_performance['DATA'] = pd.to_datetime(df_performance['DATA', errors='coerce', dayfirst=True)
         
         st.markdown("---")
         st.subheader("Filtros de Período")
