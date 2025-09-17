@@ -213,38 +213,28 @@ def get_gspread_client():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         
-        # Verifica se as credenciais estão disponíveis nos secrets
         if 'gcp_service_account' in st.secrets:
-            credentials_info = dict(st.secrets["gcp_service_account"])
+            credentials_info = st.secrets["gcp_service_account"]
             
-            # Corrige a formatação da chave privada se necessário
-            if 'private_key' in credentials_info:
-                # Remove espaços em branco e quebras de linha extras
-                credentials_info['private_key'] = credentials_info['private_key'].replace('\\n', '\n').strip()
+            if isinstance(credentials_info, str):
+                try:
+                    credentials_info = json.loads(credentials_info)
+                except json.JSONDecodeError as e:
+                    st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
+                    return None
             
             creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
         else:
-            # Tenta carregar de variáveis de ambiente
-            service_account_info = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-            if service_account_info:
-                creds = Credentials.from_service_account_info(json.loads(service_account_info), scopes=scopes)
-            else:
-                # Tenta carregar de arquivo
-                creds = Credentials.from_service_account_file(
-                    'service-account-key.json', scopes=scopes
-                )
+            creds = Credentials.from_service_account_file(
+                os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), scopes=scopes
+            )
         
         client = gspread.authorize(creds)
+        
         return client
 
     except Exception as e:
         st.error(f"Erro ao conectar com Google Sheets: {e}")
-        st.info("""
-        **Solução do problema:**
-        1. Verifique se as credenciais do Google Sheets estão configuradas corretamente
-        2. Certifique-se de que a chave privada está no formato correto
-        3. Verifique se o serviço tem acesso à planilha
-        """)
         return None
 
 # Funções auxiliares para formatação and parsing de datas
@@ -374,7 +364,6 @@ def salvar_dados_pedidos(df):
     try:
         gc = get_gspread_client()
         if gc is None:
-            st.warning("Não foi possível conectar ao Google Sheets. Os dados não foram salvos.")
             return
         
         sheet = gc.open("dados_pedido")
@@ -404,7 +393,7 @@ def salvar_dados_pedidos(df):
                     lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00'
                 )
         
-        # Remove coluna temporária if existir
+        # Remove coluna temporária se existir
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
@@ -454,7 +443,6 @@ def salvar_dados_solicitantes(df):
     try:
         gc = get_gspread_client()
         if gc is None:
-            st.warning("Não foi possível conectar ao Google Sheets. Os dados não foram salvos.")
             return
         
         sheet = gc.open("dados_pedido")
@@ -533,8 +521,7 @@ def salvar_dados_materiais(df):
     try:
         gc = get_gspread_client()
         if gc is None:
-            st.warning("Não foi possível conectar ao Google Sheets. Os dados não foram salvos.")
-            return False
+            return
             
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "MATERIAIS" é 2
@@ -988,7 +975,7 @@ def render_main_app():
                             # Recalcular STATUS_PEDIDO se a data de entrega for atualizada aqui
                             if pd.notna(edited_row['DATA_ENTREGA']):
                                 st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE': # Se foi marcado como entregue mas a data foi removida
+                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE': # Se foi marcado como entregue mas la data foi removida
                                 st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'PENDENTE'
     
             if not changes_detected:
@@ -1092,7 +1079,7 @@ def render_main_app():
                 return status
         df_for_editor['STATUS_PEDIDO'] = df_for_editor['STATUS_PEDIDO'].apply(formatar_status_display)
 
-        for col in ['VALOR_ITEM', 'VALOR_RENegOCIADO', 'VALOR_TOTAL']:
+        for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
             if col in df_for_editor.columns:
                 df_for_editor[col] = df_for_editor[col].apply(
                     lambda x: f"{float(x):.2f}" if pd.notna(x) and x != '' else ''
