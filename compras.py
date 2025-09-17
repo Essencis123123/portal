@@ -1058,6 +1058,7 @@ def render_main_app():
                 cod_material_filter = st.text_input("Código Material")
             
             df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
+
         else:
             st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
             st.stop()
