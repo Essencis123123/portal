@@ -85,6 +85,14 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# Ordem padrão das colunas
+COLUNA_ORDEM_PADRAO_FISCAL = [
+    "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "VENCIMENTO",
+    "STATUS", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS",
+    "VALOR_FRETE", "DOC_NF", "RECEBEDOR", "DIAS_VENCIMENTO",
+    "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
+]
+
 @st.cache_data(show_spinner=False)
 def load_logo(url: str):
     try:
@@ -113,21 +121,77 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
+def parse_date_input(date_value):
+    """
+    Converte valores de data de qualquer entrada para datetime,
+    suportando formatos comuns (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD).
+    Retorna pd.NaT para valores inválidos.
+    """
+    if pd.isna(date_value) or date_value == '' or date_value is None:
+        return pd.NaT
+    
+    if isinstance(date_value, (pd.Timestamp, datetime.datetime)):
+        return date_value
+    
+    if isinstance(date_value, datetime.date):
+        return datetime.datetime.combine(date_value, datetime.time())
+    
+    if isinstance(date_value, str):
+        # Remove espaços em branco
+        date_value = date_value.strip()
+        
+        # Primeiro tenta formatos específicos brasileiros
+        formats = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
+        for fmt in formats:
+            try:
+                return datetime.datetime.strptime(date_value, fmt)
+            except ValueError:
+                continue
+        
+        # Se não funcionar, tenta o parser do pandas
+        try:
+            dt = pd.to_datetime(date_value, dayfirst=True, errors='coerce')
+            if pd.notna(dt):
+                return dt
+        except:
+            pass
+                
+    return pd.NaT
+
+def converter_para_float_brasileiro(valor_str):
+    """
+    Converte string no formato brasileiro (ex: "5,58") para float (5.58)
+    """
+    if isinstance(valor_str, (int, float)):
+        return float(valor_str)
+    
+    if not isinstance(valor_str, str):
+        return 0.0
+    
+    # Remove possíveis R$ e espaços
+    valor_str = valor_str.replace('R$', '').strip()
+    
+    # Substitui vírgula por ponto and remove pontos de milhar
+    if ',' in valor_str and '.' in valor_str:
+        # Formato com milhar: 1.234,56 → 1234.56
+        valor_str = valor_str.replace('.', '').replace(',', '.')
+    elif ',' in valor_str:
+        # Formato simples com vírgula decimal: 1234,56 → 1234.56
+        valor_str = valor_str.replace(',', '.')
+    
+    try:
+        return float(valor_str)
+    except ValueError:
+        return 0.0
+
+def formatar_numero_brasileiro(valor, casas_decimais=2):
+    """Formata número no padrão brasileiro (vírgula como separador decimal)"""
+    if pd.isna(valor) or valor == 0:
+        return ''
+    return f"{valor:,.{casas_decimais}f}".replace('.', '|').replace(',', '.').replace('|', ',')
+
 def _to_datetime(series):
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
-
-def parse_brazil_number(value_str):
-    if not isinstance(value_str, str):
-        return value_str
-    
-    cleaned_value = value_str.strip()
-    cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
-    cleaned_value = cleaned_value.replace('.', '').replace(',', '.')
-
-    try:
-        return float(cleaned_value)
-    except (ValueError, TypeError):
-        return np.nan
 
 def carregar_dados() -> pd.DataFrame:
     try:
@@ -164,7 +228,7 @@ def carregar_dados() -> pd.DataFrame:
 
         for c in ["V_TOTAL_NF", "VALOR_JUROS", "VALOR_FRETE"]:
             if c in df.columns:
-                df[c] = df[c].apply(parse_brazil_number).fillna(0.0)
+                df[c] = df[c].apply(converter_para_float_brasileiro).fillna(0.0)
             else:
                 df[c] = 0.0
 
@@ -176,16 +240,16 @@ def carregar_dados() -> pd.DataFrame:
         ref = pd.Timestamp.today().normalize()
         df["DIAS_VENCIMENTO"] = (df["VENCIMENTO"] - ref).dt.days.fillna(0).astype(int)
 
+        # Garante que todas as colunas padrão existam
+        for col in COLUNA_ORDEM_PADRAO_FISCAL:
+            if col not in df.columns:
+                df[col] = ''
+
         return df
 
     except Exception as e:
         st.error(f"Erro ao carregar dados da planilha. Verifique nome/aba/credenciais. Detalhe: {e}")
-        return pd.DataFrame(columns=[
-            "DATA", "FORNECEDOR", "NF", "ORDEM_COMPRA", "V_TOTAL_NF", "STATUS",
-            "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "VALOR_JUROS", "VALOR_FRETE",
-            "DOC_NF", "RECEBEDOR", "VENCIMENTO", "DIAS_VENCIMENTO",
-            "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
-        ])
+        return pd.DataFrame(columns=COLUNA_ORDEM_PADRAO_FISCAL)
 
 def salvar_dados(df: pd.DataFrame) -> bool:
     try:
@@ -218,6 +282,14 @@ def salvar_dados(df: pd.DataFrame) -> bool:
             df_to_save["REGISTRO_LANCAMENTO"] = df_to_save["REGISTRO_LANCAMENTO"].dt.strftime("%d/%m/%Y %H:%M:%S")
 
         df_to_save = df_to_save.drop(columns=["DIAS_VENCIMENTO"], errors="ignore")
+
+        # Formata números no padrão brasileiro antes de salvar
+        numeric_cols = ['V_TOTAL_NF', 'VALOR_JUROS', 'VALOR_FRETE']
+        for col in numeric_cols:
+            if col in df_to_save.columns:
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: formatar_numero_brasileiro(x) if pd.notna(x) and x != '' else '0,00'
+                )
 
         set_with_dataframe(worksheet, df_to_save, include_index=False, resize=True)
         return True
@@ -317,7 +389,7 @@ else:
         "📋 Lançamentos": ("📋 VISUALIZAÇÃO DE NOTAS FISCAIS", "Gerenciamento e acompanhamento financeiro de NFs"),
         "💰 Gestão de Juros": ("💰 GESTÃO DE JUROS E MULTAS", "Calcule e gerencie juros para notas em atraso"),
         "📊 Dashboards": ("📊 DASHBOARDS FINANCEIROS COMPLETOS", "Análise estratégica de custos e eficiências"),
-        "⚙️ Configurações": ("⚙️ CONFIGURAÇÕES DO SISTEMA", "Parâmetros e manutenção de dados"),
+        "⚙️ Configurações": ("⚙️ CONFIGURAÇões DO SISTEMA", "Parâmetros e manutenção de dados"),
     }
     titulo, subtitulo = headers.get(menu)
     st.markdown(f"""
@@ -368,18 +440,12 @@ else:
             total_juros = df_display['VALOR_JUROS'].sum()
             total_frete = df_display['VALOR_FRETE'].sum()
 
-            def formatar_milhar(valor):
-                if abs(valor) >= 1000:
-                    return f"R$ {valor/1000:,.1f}K".replace(",", "X").replace(".", ",").replace("X", ".")
-                else:
-                    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            
             c1.metric("📊 Total de NFs", total_nfs)
-            c2.metric("💰 Valor NFs", formatar_milhar(total_valor))
+            c2.metric("💰 Valor NFs", f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             c3.metric("⏳ Pendentes", nfs_pendentes)
             c4.metric("✅ Finalizadas", total_nfs - nfs_pendentes)
-            c5.metric("💸 Juros", formatar_milhar(total_juros))
-            c6.metric("🚚 Fretes", formatar_milhar(total_frete))
+            c5.metric("💸 Juros", f"R$ {total_juros:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            c6.metric("🚚 Fretes", f"R$ {total_frete:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
             st.markdown("---")
             st.subheader("📋 Detalhes das Notas Fiscais")
