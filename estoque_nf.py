@@ -144,18 +144,35 @@ def get_gspread_client():
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     return gspread.authorize(credentials)
 
-def parse_brazil_number(value_str):
-    if not isinstance(value_str, str):
-        return value_str
-
-    cleaned_value = value_str.strip()
-    cleaned_value = re.sub(r'R\$\s*', '', cleaned_value)
-    cleaned_value = cleaned_value.replace('.', '').replace(',', '.')
-
+# Função para converter valores no formato brasileiro (igual ao painel de compras)
+def converter_para_float_brasileiro(valor_str):
+    """
+    Converte string no formato brasileiro (ex: "5,58") para float (5.58)
+    """
+    if isinstance(valor_str, (int, float)):
+        return float(valor_str)
+    
+    if not isinstance(valor_str, str):
+        return 0.0
+    
+    # Remove possíveis R$ e espaços
+    valor_str = valor_str.replace('R$', '').strip()
+    
+    # Substitui vírgula por ponto and remove pontos de milhar
+    if ',' in valor_str and '.' in valor_str:
+        # Formato com milhar: 1.234,56 → 1234.56
+        valor_str = valor_str.replace('.', '').replace(',', '.')
+    elif ',' in valor_str:
+        # Formato simples com vírgula decimal: 1234,56 → 1234.56
+        valor_str = valor_str.replace(',', '.')
+    
     try:
-        return float(cleaned_value)
-    except (ValueError, TypeError):
-        return np.nan
+        return float(valor_str)
+    except ValueError:
+        return 0.0
+
+def parse_brazil_number(value_str):
+    return converter_para_float_brasileiro(value_str)
 
 def _to_datetime(series, dayfirst=True):
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
@@ -172,9 +189,9 @@ def carregar_dados_almoxarifado():
         sheet = gc.open("dados_pedido")
         worksheet = sheet.get_worksheet(1)
         
-        data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
+        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         
-        if not data or len(data) <= 1:
+        if not data:
             return pd.DataFrame(columns=[
                 "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
                 "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
@@ -182,9 +199,7 @@ def carregar_dados_almoxarifado():
                 "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
             ])
         
-        headers = data[0]
-        records = data[1:]
-        df = pd.DataFrame(records, columns=headers)
+        df = pd.DataFrame(data)
 
         colunas_essenciais = [
             "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
@@ -204,7 +219,7 @@ def carregar_dados_almoxarifado():
         
         for col in ['V. TOTAL NF', 'VALOR FRETE']:
             if col in df.columns:
-                df[col] = df[col].apply(parse_brazil_number).fillna(0)
+                df[col] = df[col].apply(converter_para_float_brasileiro).fillna(0)
         
         return df
     except Exception as e:
@@ -224,23 +239,34 @@ def salvar_dados_almoxarifado(df):
 
         df_copy = df.copy()
 
-        df_copy = df_copy.rename(columns={
-            "REGISTRO_ADICIONAL": "OBSERVACAO",
-            "V. TOTAL NF": "V. TOTAL NF",
-            "DOC NF": "DOC NF",
-            "CONDICAO FRETE": "CONDICAO FRETE",
-            "VALOR FRETE": "VALOR FRETE",
-            "FORNECEDOR_NF": "FORNECEDOR_NF",
-            "REGISTRO_LANCAMENTO": "REGISTRO_LANCAMENTO",
-            "REGISTRO_ENVIO": "REGISTRO_ENVIO",
-            "STATUS_FINANCEIRO": "STATUS_FINANCEIRO",
-        }, errors='ignore')
-        
+        # Formatar datas para o padrão DD/MM/YYYY
         for col in ['DATA', 'VENCIMENTO', 'REGISTRO_ENVIO', 'REGISTRO_LANCAMENTO']:
             if col in df_copy.columns:
-                df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y %H:%M:%S') if pd.notna(x) else '')
+                df_copy[col] = df_copy[col].apply(
+                    lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime.datetime)) else ''
+                )
 
-        df_copy = df_copy.loc[:,~df_copy.columns.duplicated()]
+        # Formatar valores numéricos com vírgula decimal (padrão brasileiro)
+        for col in ['V. TOTAL NF', 'VALOR FRETE']:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(
+                    lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00'
+                )
+        
+        # Garantir que todas as colunas estejam presentes
+        colunas_esperadas = [
+            "DATA", "RECEBEDOR", "FORNECEDOR_NF", "NF", "VOLUME", "V. TOTAL NF",
+            "CONDICAO FRETE", "VALOR FRETE", "OBSERVACAO", "DOC NF", "VENCIMENTO",
+            "STATUS_FINANCEIRO", "CONDICAO_PROBLEMA", "REGISTRO_ADICIONAL", "ORDEM_COMPRA",
+            "REGISTRO_ENVIO", "REGISTRO_LANCAMENTO"
+        ]
+        
+        for col in colunas_esperadas:
+            if col not in df_copy.columns:
+                df_copy[col] = ''
+        
+        # Preencher valores vazios
+        df_copy = df_copy.fillna('')
         
         worksheet.clear()
         set_with_dataframe(worksheet, df_copy, include_index=False)
@@ -256,16 +282,13 @@ def carregar_dados_pedidos():
         sheet = gc.open("dados_pedido")
         worksheet = sheet.get_worksheet(0)
         
-        data = worksheet.get_all_values(value_render_option='UNFORMATTED_VALUE')
+        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         
-        if not data or len(data) <= 1:
+        if not data:
             st.warning("A planilha está vazia ou não contém dados.")
             return pd.DataFrame()
             
-        headers = data[0]
-        records = data[1:]
-        
-        df = pd.DataFrame(records, columns=headers)
+        df = pd.DataFrame(data)
         
         if 'QUANTIDADE_ENTREGUE' not in df.columns:
             df['QUANTIDADE_ENTREGUE'] = 0.0
@@ -277,7 +300,7 @@ def carregar_dados_pedidos():
         numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE']
         for col in numeric_cols:
             if col in df.columns:
-                df[col] = df[col].apply(parse_brazil_number).fillna(0)
+                df[col] = df[col].apply(converter_para_float_brasileiro).fillna(0)
         
         if 'DOC NF' not in df.columns:
             df['DOC NF'] = ''
@@ -297,6 +320,14 @@ def salvar_dados_pedidos(df):
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']:
             if col in df_copy.columns:
                 df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '')
+        
+        # Formatar valores numéricos com vírgula decimal
+        numeric_cols = ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE', 'QUANTIDADE_ENTREGUE']
+        for col in numeric_cols:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(
+                    lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00'
+                )
         
         set_with_dataframe(worksheet, df_copy, include_index=False)
         return True
@@ -328,6 +359,7 @@ def confirm_divergence_dialog(novo_registro_nf, edited_items, valor_oc_total, di
     
     with col_v_1:
         if abs(divergencia_oc) > 0.01:
+            # Formatar valores no padrão brasileiro
             valor_oc_formatado = f"R$ {valor_oc_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             valor_nf_formatado = f"R$ {novo_registro_nf['V. TOTAL NF']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             divergencia_formatada = f"R$ {divergencia_oc:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -618,8 +650,8 @@ def render_registrar_nf_page():
                 st.error("⚠️ A 'Quantidade Recebida' não pode ser zero. Por favor, preencha os itens da nota fiscal.")
             else:
                 try:
-                    valor_total_float = parse_brazil_number(valor_total_nf)
-                    valor_frete_float = parse_brazil_number(valor_frete_nf)
+                    valor_total_float = converter_para_float_brasileiro(valor_total_nf)
+                    valor_frete_float = converter_para_float_brasileiro(valor_frete_nf)
                     
                     pedidos_relacionados = st.session_state.df_pedidos[
                         st.session_state.df_pedidos['ORDEM_COMPRA'] == ordem_compra_nf
@@ -676,6 +708,17 @@ def render_registrar_nf_page():
         df_ultimas_nfs['VENCIMENTO'] = df_ultimas_nfs['VENCIMENTO'].dt.strftime('%d/%m/%Y').fillna('')
         df_ultimas_nfs['REGISTRO_LANCAMENTO_VISUAL'] = df_ultimas_nfs['REGISTRO_LANCAMENTO'].dt.strftime('%d/%m/%Y %H:%M:%S').fillna('')
 
+        # Formatar valores no padrão brasileiro
+        if 'V. TOTAL NF' in df_ultimas_nfs.columns:
+            df_ultimas_nfs['V. TOTAL NF'] = df_ultimas_nfs['V. TOTAL NF'].apply(
+                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
+            )
+        
+        if 'VALOR FRETE' in df_ultimas_nfs.columns:
+            df_ultimas_nfs['VALOR FRETE'] = df_ultimas_nfs['VALOR FRETE'].apply(
+                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
+            )
+
         col_map = {
             'DATA': 'Data',
             'FORNECEDOR_NF': 'Fornecedor',
@@ -683,6 +726,7 @@ def render_registrar_nf_page():
             'ORDEM_COMPRA': 'Ordem de Compra',
             'VOLUME': 'Volume',
             'V. TOTAL NF': 'Valor Total NF',
+            'VALOR FRETE': 'Valor Frete',
             'STATUS_FINANCEIRO': 'Status Financeiro',
             'DOC NF': 'Anexo NF',
             'REGISTRO_LANCAMENTO_VISUAL': 'Registro de Lançamento'
@@ -745,6 +789,12 @@ def render_dashboard_page():
         with col2: st.metric("🔄 Em Andamento", em_andamento)
         with col3: st.metric("⚠️ Com Problema", com_problema)
         with col4: st.metric("✅ Finalizadas", finalizadas)
+        
+        # Calcular valores totais formatados no padrão brasileiro
+        if 'V. TOTAL NF' in df_almoxarifado_filtrado.columns:
+            valor_total = df_almoxarifado_filtrado['V. TOTAL NF'].sum()
+            valor_total_formatado = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            st.metric("💰 Valor Total das NFs", valor_total_formatado)
         
         st.subheader("📈 Análise do Status Financeiro")
         
@@ -839,6 +889,12 @@ def render_consultar_nfs_page():
             
             df_exibir_consulta['DATA'] = df_exibir_consulta['DATA'].dt.strftime('%d/%m/%Y').fillna('Data inválida')
             
+            # Formatar valores no padrão brasileiro
+            if 'V. TOTAL NF' in df_exibir_consulta.columns:
+                df_exibir_consulta['V. TOTAL NF'] = df_exibir_consulta['V. TOTAL NF'].apply(
+                    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else 'R$ 0,00'
+                )
+
             def colorir_status(status):
                 cores = {
                     "EM ANDAMENTO": "🟡",
