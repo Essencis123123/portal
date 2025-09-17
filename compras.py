@@ -1466,7 +1466,7 @@ def render_main_app():
         st.header("📊 Análise de Performance de Negociações")
 
         df_performance = st.session_state.df_pedidos.copy()
-        df_performance['DATA'] = pd.to_datetime(df_performance['DATA', errors='coerce', dayfirst=True)
+        df_performance['DATA'] = pd.to_datetime(df_performance['DATA'], errors='coerce', dayfirst=True)
         
         st.markdown("---")
         st.subheader("Filtros de Período")
