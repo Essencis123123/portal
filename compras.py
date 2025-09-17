@@ -288,13 +288,15 @@ def converter_para_float_brasileiro(valor_str):
     # Remove possíveis R$ e espaços
     valor_str = valor_str.replace('R$', '').strip()
     
-    # Substitui vírgula por ponto and remove pontos de milhar
+    # Verifica se há vírgula e ponto para determinar o formato
     if ',' in valor_str and '.' in valor_str:
         # Formato com milhar: 1.234,56 → 1234.56
+        # Remove pontos de milhar e substitui vírgula decimal por ponto
         valor_str = valor_str.replace('.', '').replace(',', '.')
     elif ',' in valor_str:
         # Formato simples com vírgula decimal: 1234,56 → 1234.56
         valor_str = valor_str.replace(',', '.')
+    # Se só tem ponto, pode ser formato internacional ou já correto
     
     try:
         return float(valor_str)
@@ -700,7 +702,7 @@ def render_main_app():
 
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         
-        if st.session_state.df_materiais is not None and not st.session_state.df_materiais.empty:
+        if st.session_state.df_materiais is not and not st.session_state.df_materiais.empty:
             with col_item1:
                 item_codigo = st.text_input("Código do Material", key="input_codigo_material", value=st.session_state.item_codigo)
 
@@ -745,7 +747,7 @@ def render_main_app():
                         st.session_state.item_quantidade = 1
                         st.rerun()
                     else:
-                        st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
+                        st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade and Quantidade).")
         else:
             st.warning("Nenhum material encontrado. Por favor, cadastre um na aba 'Cadastro'.")
             st.text_input("Código do Material", disabled=True, value="")
@@ -757,7 +759,7 @@ def render_main_app():
         
         st.write("---")
         
-        if st.button("Finalizar e Registrar Requisição", key="btn_finalizar_requisicao"):
+        if st.button("Finalizar and Registrar Requisição", key="btn_finalizar_requisicao"):
             if requisicao and not st.session_state.itens_requisicao_temp.empty:
                 linhas_a_adicionar = []
                 for _, item_row in st.session_state.itens_requisicao_temp.iterrows():
@@ -808,7 +810,7 @@ def render_main_app():
                 st.balloons()
                 st.rerun()
             else:
-                st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
+                st.error("O campo 'Número da Requisição' and pelo menos um item são obrigatórios.")
 
     elif menu == "✍️ Pedidos (OC)":
         st.markdown("""
@@ -819,7 +821,7 @@ def render_main_app():
         """, unsafe_allow_html=True)
     
         st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
-        st.info("Edite os campos diretamente na tabela abaixo e selecione las linhas para exclusão.")
+        st.info("Edite os campos diretamente na tabela abaixo and selecione las linhas para exclusão.")
         
         pedidos_pendentes_oc = st.session_state.df_pedidos[
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | 
@@ -956,11 +958,11 @@ def render_main_app():
                                 edited_row[col_val] = 0
                             else:
                                 if isinstance(edited_row[col_val], str):
-                                    # ALTERAÇÃO AQUI: Use a função de conversão brasileira
-                                    if col_val == 'VALOR_ITEM':
+                                    # CORREÇÃO: Use a função de conversão brasileira para valores monetários
+                                    if col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                                         edited_row[col_val] = converter_para_float_brasileiro(edited_row[col_val])
-                                    else:
-                                        edited_row[col_val] = float(edited_row[col_val].replace('R$', '').replace('.', '').replace(',', '.').strip())
+                                    else:  # QUANTIDADE_ENTREGUE
+                                        edited_row[col_val] = float(edited_row[col_val])
                                 else:
                                     edited_row[col_val] = float(edited_row[col_val])
                         
@@ -1255,13 +1257,13 @@ def render_main_app():
             </div>
         """, unsafe_allow_html=True)
         
-        st.header("📊 Dashboards e Indicadores de Compras")
+        st.header("📊 Dashboards and Indicadores de Compras")
         
-        # Carregar e preparar dados
+        # Carregar and preparar dados
         df_dash = st.session_state.df_pedidos.copy()
         
         # Converter colunas para tipos adequados
-        df_dash['DATA'] = pd.to_datetime(df_dash['DATA'], errors='coerce')
+        df_dash['DATA'] = pd.to_datetime(df_dash['DATA', errors='coerce'])
         df_dash['VALOR_ITEM'] = pd.to_numeric(df_dash['VALOR_ITEM'], errors='coerce').fillna(0)
         df_dash['QUANTIDADE'] = pd.to_numeric(df_dash['QUANTIDADE'], errors='coerce').fillna(0)
         df_dash['VALOR_TOTAL'] = df_dash['VALOR_ITEM'] * df_dash['QUANTIDADE']
