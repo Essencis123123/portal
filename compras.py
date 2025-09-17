@@ -918,7 +918,6 @@ def render_main_app():
             submitted = st.form_submit_button("Salvar Atualizações")
     
         if submitted:
-if submitted:
             st.info("Processando alterações...")
     
             changes_detected = False
@@ -941,6 +940,7 @@ if submitted:
                     row_changed = False
                     
                     for col in edited_row.index:
+                        # Convertendo ambos para string para comparação consistente, especialmente para datas/números
                         if col != 'Excluir' and str(edited_row[col]) != str(original_row[col]):
                             row_changed = True
                             changes_detected = True
@@ -950,7 +950,7 @@ if submitted:
                         # Garante o parsing correto das datas
                         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']:
                             edited_row[col] = parse_date_input(edited_row[col])
-    
+
                         # CORREÇÃO: Usar a função converter_para_float_brasileiro para todos os campos numéricos
                         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
                             if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
@@ -967,16 +967,15 @@ if submitted:
                                 dias_emissao = 0
     
                         if original_index in st.session_state.df_pedidos.index:
-                            for col_name in COLUNA_ORDEM_PADRAO:
-                                if col_name in edited_row.index:
+                            for col_name in COLUNA_ORDEM_PADRAO: # Itera sobre todas as colunas da ordem padrão
+                                if col_name in edited_row.index: # Se a coluna foi editada
                                     st.session_state.df_pedidos.loc[original_index, col_name] = edited_row[col_name]
                                     
                             st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
-                            
-                            # Recalcular STATUS_PEDIDO
+                            # Recalcular STATUS_PEDIDO se a data de entrega for atualizada aqui
                             if pd.notna(edited_row['DATA_ENTREGA']):
                                 st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE':
+                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE': # Se foi marcado como entregue mas a data foi removida
                                 st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'PENDENTE'
     
             if not changes_detected:
@@ -1149,7 +1148,7 @@ if submitted:
 
             def calcular_dias_emissao(row):
                 if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
-                    return (row['DATA_APROVACAO'] - row['DATA']).days
+                    return (row['DATA_APROVacaO'] - row['DATA']).days
                 return 0
                 
             edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
@@ -1251,7 +1250,7 @@ if submitted:
             </div>
         """, unsafe_allow_html=True)
         
-        st.header("📊 Dashboards e Indicadores de Compras")
+        st.header("📊 Dashboards and Indicadores de Compras")
         
         # Carregar e preparar dados
         df_dash = st.session_state.df_pedidos.copy()
@@ -1369,7 +1368,7 @@ if submitted:
         # Gráfico 3: Evolução Temporal de Pedidos
         st.subheader("Evolução Temporal de Pedidos")
         if 'DATA' in df_dash.columns:
-            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').astype(str)
+            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').ast(str)
             evolucao_temporal = df_dash.groupby('MES_ANO').agg({
                 'REQUISICAO': 'count',
                 'VALOR_TOTAL': 'sum'
@@ -1467,7 +1466,7 @@ if submitted:
         st.header("📊 Análise de Performance de Negociações")
 
         df_performance = st.session_state.df_pedidos.copy()
-        df_performance['DATA'] = pd.to_datetime(df_performance['DATA'], errors='coerce', dayfirst=True)
+        df_performance['DATA'] = pd.to_datetime(df_performance['DATA', errors='coerce', dayfirst=True)
         
         st.markdown("---")
         st.subheader("Filtros de Período")
@@ -1491,7 +1490,7 @@ if submitted:
             st.stop()
         
         if not mes_selecionado_p or ano_selecionado_p is None:
-              st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
+              st.warning("Selecione pelo menos um mês and um ano para visualizar os dados.")
               st.stop()
 
         if mes_selecionado_p and ano_selecionado_p:
@@ -1517,7 +1516,7 @@ if submitted:
         ].copy()
         
         if df_negociados.empty:
-            st.info("Nenhum pedido com negociação registrada no período para as análises abaixo.")
+            st.info("Nenhum pedido with negociação registrada no período para as análises abaixo.")
             st.stop()
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
@@ -1576,7 +1575,7 @@ if submitted:
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
-            st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
+            st.info("Dados de solicitantes com negociação insuficientes para gerar the ranking.")
 
 # Lógica de execução principal
 if 'logado' not in st.session_state or not st.session_state.logado:
