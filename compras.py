@@ -241,7 +241,7 @@ def get_gspread_client():
 def parse_date_input(date_value):
     """
     Converte valores de data de qualquer entrada (editor, string) para datetime,
-    suportando formatos comuns (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD).
+    suportando formatos com comum (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD).
     Retorna pd.NaT para valores inválidos.
     """
     if pd.isna(date_value) or date_value == '' or date_value is None:
@@ -405,7 +405,7 @@ def salvar_dados_pedidos(df):
         # Garante a ordem padrão das colunas
         df_to_save = df_to_save.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
 
-        # Limpa a planilha e escreve os novos dados
+        # Limpa a planilha and escreve os novos dados
         worksheet.clear()
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
@@ -507,7 +507,7 @@ def carregar_dados_materiais():
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "MATERIAIS" é 2
         worksheet = sheet.get_worksheet(2)
-        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
+        data = worksheet.get_all_records(value_render_option='UNFORMatted_VALUE')
         df = pd.DataFrame(data)
         # Verifica se as colunas esperadas existem
         if not all(col in df.columns for col in ["CODIGO", "DESCRICAO"]):
@@ -560,7 +560,7 @@ def fazer_login(email, senha):
         st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
         st.rerun()
     else:
-        st.error("E-mail ou senha incorretos.")
+        st.error("E-mail or senha incorretos.")
 
 # --- INTERFACE PRINCIPAL ---
 def render_login_page():
@@ -702,7 +702,8 @@ def render_main_app():
 
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         
-        if st.session_state.df_materiais is not and not st.session_state.df_materiais.empty:
+        # CORREÇÃO DA LINHA 705: Adicionado "None" após "is not"
+        if st.session_state.df_materiais is not None and not st.session_state.df_materiais.empty:
             with col_item1:
                 item_codigo = st.text_input("Código do Material", key="input_codigo_material", value=st.session_state.item_codigo)
 
@@ -1041,7 +1042,7 @@ def render_main_app():
             with col_filter_row1_1:
                 mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
             with col_filter_row1_2:
-                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
+                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True)
             with col_filter_row1_3:
                 status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
                 status_selecionado_h = st.selectbox("Status", status_options)
@@ -1247,7 +1248,7 @@ def render_main_app():
             if not st.session_state.df_materiais.empty:
                 st.dataframe(st.session_state.df_materiais, use_container_width=True)
             else:
-                st.info("Nenhun material cadastrado ainda.")
+                st.info("Nenhum material cadastrado ainda.")
 
     elif menu == "📊 Dashboards ":
         st.markdown("""
@@ -1375,7 +1376,7 @@ def render_main_app():
         # Gráfico 3: Evolução Temporal de Pedidos
         st.subheader("Evolução Temporal de Pedidos")
         if 'DATA' in df_dash.columns:
-            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').astype(str)
+            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').astize(str)
             evolucao_temporal = df_dash.groupby('MES_ANO').agg({
                 'REQUISICAO': 'count',
                 'VALOR_TOTAL': 'sum'
@@ -1473,7 +1474,7 @@ def render_main_app():
         st.header("📊 Análise de Performance de Negociações")
 
         df_performance = st.session_state.df_pedidos.copy()
-        df_performance['DATA'] = pd.to_datetime(df_performance['DATA'], errors='coerce', dayfirst=True)
+        df_performance['DATA'] = pd.to_datetime(df_performance['DATA', errors='coerce', dayfirst=True)
         
         st.markdown("---")
         st.subheader("Filtros de Período")
@@ -1548,7 +1549,7 @@ def render_main_app():
         st.markdown("---")
 
         st.subheader("Curva de Desempenho da Negociação (Média Mensal)")
-        df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').astype(str)
+        df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').astize(str)
         
         curva_mensal = df_negociados.groupby('MES_APROVACAO')['PERC_ECONOMIA'].mean().reset_index()
         
