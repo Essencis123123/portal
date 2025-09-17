@@ -951,13 +951,18 @@ def render_main_app():
                         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']:
                             edited_row[col] = parse_date_input(edited_row[col])
 
-                        # CORREÇÃO: Usar a função converter_para_float_brasileiro para todos os campos numéricos
                         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
                             if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
                                 edited_row[col_val] = 0
                             else:
-                                # Usar a função brasileira para converter corretamente
-                                edited_row[col_val] = converter_para_float_brasileiro(str(edited_row[col_val]))
+                                if isinstance(edited_row[col_val], str):
+                                    # ALTERAÇÃO AQUI: Use a função de conversão brasileira
+                                    if col_val == 'VALOR_ITEM':
+                                        edited_row[col_val] = converter_para_float_brasileiro(edited_row[col_val])
+                                    else:
+                                        edited_row[col_val] = float(edited_row[col_val].replace('R$', '').replace('.', '').replace(',', '.').strip())
+                                else:
+                                    edited_row[col_val] = float(edited_row[col_val])
                         
                         dias_emissao = 0
                         if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']):
@@ -975,7 +980,7 @@ def render_main_app():
                             # Recalcular STATUS_PEDIDO se a data de entrega for atualizada aqui
                             if pd.notna(edited_row['DATA_ENTREGA']):
                                 st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE': # Se foi marcado como entregue mas la data foi removida
+                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE': # Se foi marcado como entregue mas a data foi removida
                                 st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'PENDENTE'
     
             if not changes_detected:
@@ -1250,7 +1255,7 @@ def render_main_app():
             </div>
         """, unsafe_allow_html=True)
         
-        st.header("📊 Dashboards and Indicadores de Compras")
+        st.header("📊 Dashboards e Indicadores de Compras")
         
         # Carregar e preparar dados
         df_dash = st.session_state.df_pedidos.copy()
