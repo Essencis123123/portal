@@ -747,7 +747,7 @@ def render_main_app():
                         st.session_state.item_quantidade = 1
                         st.rerun()
                     else:
-                        st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade and Quantidade).")
+                        st.error("Por favor, preencha todos os campos obrigatórios (Código, Descrição, Unidade e Quantidade).")
         else:
             st.warning("Nenhum material encontrado. Por favor, cadastre um na aba 'Cadastro'.")
             st.text_input("Código do Material", disabled=True, value="")
@@ -759,7 +759,7 @@ def render_main_app():
         
         st.write("---")
         
-        if st.button("Finalizar and Registrar Requisição", key="btn_finalizar_requisicao"):
+        if st.button("Finalizar e Registrar Requisição", key="btn_finalizar_requisicao"):
             if requisicao and not st.session_state.itens_requisicao_temp.empty:
                 linhas_a_adicionar = []
                 for _, item_row in st.session_state.itens_requisicao_temp.iterrows():
@@ -810,7 +810,7 @@ def render_main_app():
                 st.balloons()
                 st.rerun()
             else:
-                st.error("O campo 'Número da Requisição' and pelo menos um item são obrigatórios.")
+                st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.")
 
     elif menu == "✍️ Pedidos (OC)":
         st.markdown("""
@@ -821,7 +821,7 @@ def render_main_app():
         """, unsafe_allow_html=True)
     
         st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra")
-        st.info("Edite os campos diretamente na tabela abaixo and selecione las linhas para exclusão.")
+        st.info("Edite os campos diretamente na tabela abaixo e selecione las linhas para exclusão.")
         
         pedidos_pendentes_oc = st.session_state.df_pedidos[
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) | 
@@ -958,7 +958,7 @@ def render_main_app():
                                 edited_row[col_val] = 0
                             else:
                                 if isinstance(edited_row[col_val], str):
-                                    # CORREÇÃO: Use a função de conversão brasileira para valores monetários
+                                    # Use a função de conversão brasileira para valores monetários
                                     if col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
                                         edited_row[col_val] = converter_para_float_brasileiro(edited_row[col_val])
                                     else:  # QUANTIDADE_ENTREGUE
@@ -1247,7 +1247,7 @@ def render_main_app():
             if not st.session_state.df_materiais.empty:
                 st.dataframe(st.session_state.df_materiais, use_container_width=True)
             else:
-                st.info("Nenhum material cadastrado ainda.")
+                st.info("Nenhun material cadastrado ainda.")
 
     elif menu == "📊 Dashboards ":
         st.markdown("""
@@ -1257,13 +1257,13 @@ def render_main_app():
             </div>
         """, unsafe_allow_html=True)
         
-        st.header("📊 Dashboards and Indicadores de Compras")
+        st.header("📊 Dashboards e Indicadores de Compras")
         
-        # Carregar and preparar dados
+        # Carregar e preparar dados
         df_dash = st.session_state.df_pedidos.copy()
         
         # Converter colunas para tipos adequados
-        df_dash['DATA'] = pd.to_datetime(df_dash['DATA', errors='coerce'])
+        df_dash['DATA'] = pd.to_datetime(df_dash['DATA'], errors='coerce')
         df_dash['VALOR_ITEM'] = pd.to_numeric(df_dash['VALOR_ITEM'], errors='coerce').fillna(0)
         df_dash['QUANTIDADE'] = pd.to_numeric(df_dash['QUANTIDADE'], errors='coerce').fillna(0)
         df_dash['VALOR_TOTAL'] = df_dash['VALOR_ITEM'] * df_dash['QUANTIDADE']
@@ -1493,7 +1493,7 @@ def render_main_app():
             with col_filtro_p2:
                 ano_selecionado_p = st.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
-            st.info("Nenhum pedido com data válida para análise.")
+            st.info("Nenhum pedido with data válida para análise.")
             st.stop()
         
         if not mes_selecionado_p or ano_selecionado_p is None:
@@ -1523,7 +1523,7 @@ def render_main_app():
         ].copy()
         
         if df_negociados.empty:
-            st.info("Nenhum pedido com negociação registrada no período para as análises abaixo.")
+            st.info("Nenhum pedido with negociação registrada no período para as análises abaixo.")
             st.stop()
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
@@ -1582,7 +1582,7 @@ def render_main_app():
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
-            st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
+            st.info("Dados de solicitantes com negociação insuficientes para gerar the ranking.")
 
 # Lógica de execução principal
 if 'logado' not in st.session_state or not st.session_state.logado:
