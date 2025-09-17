@@ -213,28 +213,38 @@ def get_gspread_client():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         
+        # Verifica se as credenciais estão disponíveis nos secrets
         if 'gcp_service_account' in st.secrets:
-            credentials_info = st.secrets["gcp_service_account"]
+            credentials_info = dict(st.secrets["gcp_service_account"])
             
-            if isinstance(credentials_info, str):
-                try:
-                    credentials_info = json.loads(credentials_info)
-                except json.JSONDecodeError as e:
-                    st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
-                    return None
+            # Corrige a formatação da chave privada se necessário
+            if 'private_key' in credentials_info:
+                # Remove espaços em branco e quebras de linha extras
+                credentials_info['private_key'] = credentials_info['private_key'].replace('\\n', '\n').strip()
             
             creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
         else:
-            creds = Credentials.from_service_account_file(
-                os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), scopes=scopes
-            )
+            # Tenta carregar de variáveis de ambiente
+            service_account_info = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+            if service_account_info:
+                creds = Credentials.from_service_account_info(json.loads(service_account_info), scopes=scopes)
+            else:
+                # Tenta carregar de arquivo
+                creds = Credentials.from_service_account_file(
+                    'service-account-key.json', scopes=scopes
+                )
         
         client = gspread.authorize(creds)
-        
         return client
 
     except Exception as e:
         st.error(f"Erro ao conectar com Google Sheets: {e}")
+        st.info("""
+        **Solução do problema:**
+        1. Verifique se as credenciais do Google Sheets estão configuradas corretamente
+        2. Certifique-se de que a chave privada está no formato correto
+        3. Verifique se o serviço tem acesso à planilha
+        """)
         return None
 
 # Funções auxiliares para formatação and parsing de datas
@@ -364,6 +374,7 @@ def salvar_dados_pedidos(df):
     try:
         gc = get_gspread_client()
         if gc is None:
+            st.warning("Não foi possível conectar ao Google Sheets. Os dados não foram salvos.")
             return
         
         sheet = gc.open("dados_pedido")
@@ -393,7 +404,7 @@ def salvar_dados_pedidos(df):
                     lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00'
                 )
         
-        # Remove coluna temporária se existir
+        # Remove coluna temporária if existir
         if 'VALOR_TOTAL' in df_to_save.columns:
             df_to_save.drop(columns='VALOR_TOTAL', inplace=True, errors='ignore')
 
@@ -443,6 +454,7 @@ def salvar_dados_solicitantes(df):
     try:
         gc = get_gspread_client()
         if gc is None:
+            st.warning("Não foi possível conectar ao Google Sheets. Os dados não foram salvos.")
             return
         
         sheet = gc.open("dados_pedido")
@@ -521,7 +533,8 @@ def salvar_dados_materiais(df):
     try:
         gc = get_gspread_client()
         if gc is None:
-            return
+            st.warning("Não foi possível conectar ao Google Sheets. Os dados não foram salvos.")
+            return False
             
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "MATERIAIS" é 2
@@ -1079,7 +1092,7 @@ def render_main_app():
                 return status
         df_for_editor['STATUS_PEDIDO'] = df_for_editor['STATUS_PEDIDO'].apply(formatar_status_display)
 
-        for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
+        for col in ['VALOR_ITEM', 'VALOR_RENegOCIADO', 'VALOR_TOTAL']:
             if col in df_for_editor.columns:
                 df_for_editor[col] = df_for_editor[col].apply(
                     lambda x: f"{float(x):.2f}" if pd.notna(x) and x != '' else ''
@@ -1148,7 +1161,7 @@ def render_main_app():
 
             def calcular_dias_emissao(row):
                 if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']):
-                    return (row['DATA_APROVacaO'] - row['DATA']).days
+                    return (row['DATA_APROVACAO'] - row['DATA']).days
                 return 0
                 
             edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1)
@@ -1368,7 +1381,7 @@ def render_main_app():
         # Gráfico 3: Evolução Temporal de Pedidos
         st.subheader("Evolução Temporal de Pedidos")
         if 'DATA' in df_dash.columns:
-            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').ast(str)
+            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').astype(str)
             evolucao_temporal = df_dash.groupby('MES_ANO').agg({
                 'REQUISICAO': 'count',
                 'VALOR_TOTAL': 'sum'
@@ -1490,7 +1503,7 @@ def render_main_app():
             st.stop()
         
         if not mes_selecionado_p or ano_selecionado_p is None:
-              st.warning("Selecione pelo menos um mês and um ano para visualizar os dados.")
+              st.warning("Selecione pelo menos um mês e um ano para visualizar os dados.")
               st.stop()
 
         if mes_selecionado_p and ano_selecionado_p:
@@ -1516,7 +1529,7 @@ def render_main_app():
         ].copy()
         
         if df_negociados.empty:
-            st.info("Nenhum pedido with negociação registrada no período para as análises abaixo.")
+            st.info("Nenhum pedido com negociação registrada no período para as análises abaixo.")
             st.stop()
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
@@ -1575,7 +1588,7 @@ def render_main_app():
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
-            st.info("Dados de solicitantes com negociação insuficientes para gerar the ranking.")
+            st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
 
 # Lógica de execução principal
 if 'logado' not in st.session_state or not st.session_state.logado:
