@@ -919,73 +919,73 @@ def render_main_app():
     
         if submitted:
 if submitted:
-        st.info("Processando alterações...")
-
-        changes_detected = False
-        
-        linhas_para_excluir = edited_df[edited_df['Excluir'] == True].index.tolist()
-        
-        if linhas_para_excluir:
-            changes_detected = True
-            indices_para_excluir = [indices_originais[i] for i in linhas_para_excluir if i < len(indices_originais)]
-            st.session_state.df_pedidos = st.session_state.df_pedidos.drop(indices_para_excluir)
-            st.success(f"{len(indices_para_excluir)} linha(s) excluída(s) com sucesso!")
-
-        linhas_para_atualizar = edited_df[edited_df['Excluir'] == False]
-        
-        for index, edited_row in linhas_para_atualizar.iterrows():
-            if index < len(indices_originais):
-                original_index = indices_originais[index]
-                
-                original_row = df_editavel.loc[index]
-                row_changed = False
-                
-                for col in edited_row.index:
-                    if col != 'Excluir' and str(edited_row[col]) != str(original_row[col]):
-                        row_changed = True
-                        changes_detected = True
-                        break
-                
-                if row_changed:
-                    # Garante o parsing correto das datas
-                    for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']:
-                        edited_row[col] = parse_date_input(edited_row[col])
-
-                    # CORREÇÃO: Usar a função converter_para_float_brasileiro para todos os campos numéricos
-                    for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
-                        if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
-                            edited_row[col_val] = 0
-                        else:
-                            # Usar a função brasileira para converter corretamente
-                            edited_row[col_val] = converter_para_float_brasileiro(str(edited_row[col_val]))
+            st.info("Processando alterações...")
+    
+            changes_detected = False
+            
+            linhas_para_excluir = edited_df[edited_df['Excluir'] == True].index.tolist()
+            
+            if linhas_para_excluir:
+                changes_detected = True
+                indices_para_excluir = [indices_originais[i] for i in linhas_para_excluir if i < len(indices_originais)]
+                st.session_state.df_pedidos = st.session_state.df_pedidos.drop(indices_para_excluir)
+                st.success(f"{len(indices_para_excluir)} linha(s) excluída(s) com sucesso!")
+    
+            linhas_para_atualizar = edited_df[edited_df['Excluir'] == False]
+            
+            for index, edited_row in linhas_para_atualizar.iterrows():
+                if index < len(indices_originais):
+                    original_index = indices_originais[index]
                     
-                    dias_emissao = 0
-                    if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']):
-                        try:
-                            dias_emissao = (edited_row['DATA_APROVACAO'] - edited_row['DATA']).days
-                        except:
-                            dias_emissao = 0
-
-                    if original_index in st.session_state.df_pedidos.index:
-                        for col_name in COLUNA_ORDEM_PADRAO:
-                            if col_name in edited_row.index:
-                                st.session_state.df_pedidos.loc[original_index, col_name] = edited_row[col_name]
-                                
-                        st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
+                    original_row = df_editavel.loc[index]
+                    row_changed = False
+                    
+                    for col in edited_row.index:
+                        if col != 'Excluir' and str(edited_row[col]) != str(original_row[col]):
+                            row_changed = True
+                            changes_detected = True
+                            break
+                    
+                    if row_changed:
+                        # Garante o parsing correto das datas
+                        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']:
+                            edited_row[col] = parse_date_input(edited_row[col])
+    
+                        # CORREÇÃO: Usar a função converter_para_float_brasileiro para todos os campos numéricos
+                        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
+                            if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
+                                edited_row[col_val] = 0
+                            else:
+                                # Usar a função brasileira para converter corretamente
+                                edited_row[col_val] = converter_para_float_brasileiro(str(edited_row[col_val]))
                         
-                        # Recalcular STATUS_PEDIDO
-                        if pd.notna(edited_row['DATA_ENTREGA']):
-                            st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
-                        elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE':
-                            st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'PENDENTE'
-
-        if not changes_detected:
-            st.info("Nenhuma alteração detectada.")
-        else:
-            salvar_dados_pedidos(st.session_state.df_pedidos)
-            st.success("Dados atualizados com sucesso!")
-            time.sleep(2)
-            st.rerun()
+                        dias_emissao = 0
+                        if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']):
+                            try:
+                                dias_emissao = (edited_row['DATA_APROVACAO'] - edited_row['DATA']).days
+                            except:
+                                dias_emissao = 0
+    
+                        if original_index in st.session_state.df_pedidos.index:
+                            for col_name in COLUNA_ORDEM_PADRAO:
+                                if col_name in edited_row.index:
+                                    st.session_state.df_pedidos.loc[original_index, col_name] = edited_row[col_name]
+                                    
+                            st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao
+                            
+                            # Recalcular STATUS_PEDIDO
+                            if pd.notna(edited_row['DATA_ENTREGA']):
+                                st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE'
+                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE':
+                                st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'PENDENTE'
+    
+            if not changes_detected:
+                st.info("Nenhuma alteração detectada.")
+            else:
+                salvar_dados_pedidos(st.session_state.df_pedidos)
+                st.success("Dados atualizados com sucesso!")
+                time.sleep(2)
+                st.rerun()
 
     elif menu == "📜 Histórico ":
         st.markdown("""
