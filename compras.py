@@ -241,7 +241,7 @@ def get_gspread_client():
 def parse_date_input(date_value):
     """
     Converte valores de data de qualquer entrada (editor, string) para datetime,
-    suportando formatos com comum (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD).
+    suportando formatos comuns (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD).
     Retorna pd.NaT para valores inválidos.
     """
     if pd.isna(date_value) or date_value == '' or date_value is None:
@@ -405,7 +405,7 @@ def salvar_dados_pedidos(df):
         # Garante a ordem padrão das colunas
         df_to_save = df_to_save.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='')
 
-        # Limpa a planilha and escreve os novos dados
+        # Limpa a planilha e escreve os novos dados
         worksheet.clear()
         set_with_dataframe(worksheet, df_to_save, resize=True, include_column_header=True)
         
@@ -507,7 +507,7 @@ def carregar_dados_materiais():
         sheet = gc.open("dados_pedido")
         # CORRIGIDO: O índice correto para "MATERIAIS" é 2
         worksheet = sheet.get_worksheet(2)
-        data = worksheet.get_all_records(value_render_option='UNFORMatted_VALUE')
+        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         df = pd.DataFrame(data)
         # Verifica se as colunas esperadas existem
         if not all(col in df.columns for col in ["CODIGO", "DESCRICAO"]):
@@ -560,7 +560,7 @@ def fazer_login(email, senha):
         st.success(f"Login bem-sucedido! Bem-vindo(a), {st.session_state['nome_colaborador']}.")
         st.rerun()
     else:
-        st.error("E-mail or senha incorretos.")
+        st.error("E-mail ou senha incorretos.")
 
 # --- INTERFACE PRINCIPAL ---
 def render_login_page():
@@ -702,7 +702,6 @@ def render_main_app():
 
         col_item1, col_item2, col_item3, col_item4 = st.columns([1, 2, 1, 1])
         
-        # CORREÇÃO DA LINHA 705: Adicionado "None" após "is not"
         if st.session_state.df_materiais is not None and not st.session_state.df_materiais.empty:
             with col_item1:
                 item_codigo = st.text_input("Código do Material", key="input_codigo_material", value=st.session_state.item_codigo)
@@ -958,14 +957,8 @@ def render_main_app():
                             if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
                                 edited_row[col_val] = 0
                             else:
-                                if isinstance(edited_row[col_val], str):
-                                    # Use a função de conversão brasileira para valores monetários
-                                    if col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-                                        edited_row[col_val] = converter_para_float_brasileiro(edited_row[col_val])
-                                    else:  # QUANTIDADE_ENTREGUE
-                                        edited_row[col_val] = float(edited_row[col_val])
-                                else:
-                                    edited_row[col_val] = float(edited_row[col_val])
+                                # Use a função de conversão brasileira para valores monetários e quantidade
+                                edited_row[col_val] = converter_para_float_brasileiro(str(edited_row[col_val]))
                         
                         dias_emissao = 0
                         if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']):
@@ -1029,8 +1022,6 @@ def render_main_app():
         
         df_valid_dates = df_history.dropna(subset=['DATA'])
         
-# ... código anterior ...
-
         if not df_valid_dates.empty:
             meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
             anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
@@ -1044,7 +1035,7 @@ def render_main_app():
             with col_filter_row1_1:
                 mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
             with col_filter_row1_2:
-                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))  # CORREÇÃO AQUI
+                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))
             with col_filter_row1_3:
                 status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
                 status_selecionado_h = st.selectbox("Status", status_options)
@@ -1060,9 +1051,6 @@ def render_main_app():
                 cod_material_filter = st.text_input("Código Material")
             
             df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
-
-# ... resto do código ...
-
         else:
             st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
             st.stop()
@@ -1381,7 +1369,7 @@ def render_main_app():
         # Gráfico 3: Evolução Temporal de Pedidos
         st.subheader("Evolução Temporal de Pedidos")
         if 'DATA' in df_dash.columns:
-            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').astize(str)
+            df_dash['MES_ANO'] = df_dash['DATA'].dt.to_period('M').astype(str)
             evolucao_temporal = df_dash.groupby('MES_ANO').agg({
                 'REQUISICAO': 'count',
                 'VALOR_TOTAL': 'sum'
@@ -1499,7 +1487,7 @@ def render_main_app():
             with col_filtro_p2:
                 ano_selecionado_p = st.selectbox("Selecione o Ano", sorted(anos_disponiveis_p, reverse=True))
         else:
-            st.info("Nenhum pedido with data válida para análise.")
+            st.info("Nenhum pedido com data válida para análise.")
             st.stop()
         
         if not mes_selecionado_p or ano_selecionado_p is None:
@@ -1529,7 +1517,7 @@ def render_main_app():
         ].copy()
         
         if df_negociados.empty:
-            st.info("Nenhum pedido with negociação registrada no período para as análises abaixo.")
+            st.info("Nenhum pedido com negociação registrada no período para as análises abaixo.")
             st.stop()
             
         df_negociados['ECONOMIA'] = (df_negociados['QUANTIDADE'] * df_negociados['VALOR_ITEM']) - (df_negociados['QUANTIDADE'] * df_negociados['VALOR_RENEGOCIADO'])
@@ -1554,7 +1542,7 @@ def render_main_app():
         st.markdown("---")
 
         st.subheader("Curva de Desempenho da Negociação (Média Mensal)")
-        df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').astize(str)
+        df_negociados['MES_APROVACAO'] = df_negociados['DATA_APROVACAO'].dt.to_period('M').astype(str)
         
         curva_mensal = df_negociados.groupby('MES_APROVACAO')['PERC_ECONOMIA'].mean().reset_index()
         
@@ -1588,7 +1576,7 @@ def render_main_app():
             )
             st.plotly_chart(fig_ranking, use_container_width=True)
         else:
-            st.info("Dados de solicitantes com negociação insuficientes para gerar the ranking.")
+            st.info("Dados de solicitantes com negociação insuficientes para gerar o ranking.")
 
 # Lógica de execução principal
 if 'logado' not in st.session_state or not st.session_state.logado:
