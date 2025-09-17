@@ -1029,6 +1029,8 @@ def render_main_app():
         
         df_valid_dates = df_history.dropna(subset=['DATA'])
         
+# ... código anterior ...
+
         if not df_valid_dates.empty:
             meses_disponiveis = df_valid_dates['DATA'].dt.month.unique()
             anos_disponiveis = df_valid_dates['DATA'].dt.year.unique()
@@ -1042,7 +1044,7 @@ def render_main_app():
             with col_filter_row1_1:
                 mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x))
             with col_filter_row1_2:
-                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True)
+                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True))  # CORREÇÃO AQUI
             with col_filter_row1_3:
                 status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist()
                 status_selecionado_h = st.selectbox("Status", status_options)
@@ -1058,6 +1060,8 @@ def render_main_app():
                 cod_material_filter = st.text_input("Código Material")
             
             df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)]
+
+# ... resto do código ...
 
         else:
             st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.")
