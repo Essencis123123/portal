@@ -212,27 +212,25 @@ COLUNA_ORDEM_PADRAO = [
         """Conecta com o Google Sheets usando os secrets do Streamlit."""
         try:
             scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-            credentials_info = st.secrets["gcp_service_account"]
-            creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+            
+            # Verifica se está usando secrets do Streamlit
+            if 'gcp_service_account' in st.secrets:
+                credentials_info = st.secrets["gcp_service_account"]
+                creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+            else:
+                # Fallback para variável de ambiente
+                creds = Credentials.from_service_account_file(
+                    os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), scopes=scopes
+                )
+            
             client = gspread.authorize(creds)
             return client
-        except Exception as e:
-            st.error(f"Erro ao conectar com Google Sheets: {e}")
-            return None
-            
-            creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        else:
-            creds = Credentials.from_service_account_file(
-                os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), scopes=scopes
-            )
-        
-        client = gspread.authorize(creds)
-        
-        return client
-
+    
         except Exception as e: 
             st.error(f"Erro ao conectar com Google Sheets: {e}") 
-            return None 
+            return None
+
+
 
 def parse_date_input(date_value): 
     """ 
