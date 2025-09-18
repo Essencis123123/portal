@@ -208,17 +208,17 @@ COLUNA_ORDEM_PADRAO = [
 ] 
 
 # --- Funções de Conexão e Carregamento de Dados (Versão Aprimorada) --- 
-def get_gspread_client():
-    """Conecta com o Google Sheets usando os secrets do Streamlit."""
-    try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials_info = st.secrets["gcp_service_account"]
-        creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-        client = gspread.authorize(creds)
-        return client
-    except Exception as e:
-        st.error(f"Erro ao conectar com Google Sheets: {e}")
-        return None
+    def get_gspread_client():
+        """Conecta com o Google Sheets usando os secrets do Streamlit."""
+        try:
+            scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+            credentials_info = st.secrets["gcp_service_account"]
+            creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+            client = gspread.authorize(creds)
+            return client
+        except Exception as e:
+            st.error(f"Erro ao conectar com Google Sheets: {e}")
+            return None
             
             creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
         else:
