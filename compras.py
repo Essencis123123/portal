@@ -212,16 +212,13 @@ def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        
-        if 'gcp_service_account' in st.secrets:
-            credentials_info = st.secrets["gcp_service_account"]
-            
-            if isinstance(credentials_info, str):  # ← PROBLEMA AQUI
-                try:
-                    credentials_info = json.loads(credentials_info)  # ← Tenta fazer parse de string
-                except json.JSONDecodeError as e:
-                    st.error(f"Erro ao decodificar as credenciais JSON: {e}. Verifique a formatação do secrets.toml.")
-                    return None
+        credentials_info = st.secrets["gcp_service_account"]
+        creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        client = gspread.authorize(creds)
+        return client
+    except Exception as e:
+        st.error(f"Erro ao conectar com Google Sheets: {e}")
+        return None
             
             creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
         else:
