@@ -214,27 +214,34 @@ def get_gspread_client():
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 
                  'https://www.googleapis.com/auth/drive']
         
-        # VERIFIQUE O NOME EXATO DA SEÇÃO NO SECRETS.TOML
-        if 'gcp_service_account' in st.secrets:
-            credentials_info = dict(st.secrets["gcp_service_account"])
-            
-            # Garante que a private_key está no formato correto
-            if 'private_key' in credentials_info:
-                credentials_info['private_key'] = credentials_info['private_key'].replace('\\n', '\n')
-            
-            creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
-            client = gspread.authorize(creds)
-            return client
-        else:
-            st.error("Seção 'gcp_service_account' não encontrada nos secrets")
-            return None
+        # Pega as credenciais do secrets
+        sa_info = st.secrets["gcp_service_account"]
+        
+        # Prepara o dicionário de credenciais
+        credentials_info = {
+            "type": sa_info["type"],
+            "project_id": sa_info["project_id"],
+            "private_key_id": sa_info["private_key_id"],
+            "private_key": sa_info["private_key"].strip(),  # Remove espaços em branco extras
+            "client_email": sa_info["client_email"],
+            "client_id": sa_info["client_id"],
+            "auth_uri": sa_info["auth_uri"],
+            "token_uri": sa_info["token_uri"],
+            "auth_provider_x509_cert_url": sa_info["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": sa_info["client_x509_cert_url"]
+        }
+        
+        # Cria as credenciais
+        creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        client = gspread.authorize(creds)
+        
+        return client
 
     except Exception as e: 
         st.error(f"Erro ao conectar com Google Sheets: {e}")
         import traceback
         st.error(f"Detalhes do erro: {traceback.format_exc()}")
         return None
-
 
 def parse_date_input(date_value): 
     """ 
@@ -389,19 +396,37 @@ def carregar_dados_solicitantes():
     try: 
         gc = get_gspread_client() 
         if gc is None: 
-            return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"]) 
-             
-        sheet = gc.open("dados_pedido") 
-        worksheet = sheet.get_worksheet(3) 
-        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE') 
-        df = pd.DataFrame(data) 
-        if not all(col in df.columns for col in ["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"]): 
-             st.error("A planilha de Solicitantes não tem as colunas esperadas: NOME, DEPARTAMENTO, EMAIL, FILIAL.") 
-             return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"]) 
-        return df 
-    except Exception as e: 
-        st.error(f"Erro ao carregar dados de solicitantes: {e}") 
-        return pd.DataFrame(columns=["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"]) 
+            st.warning("Não foi possível conectar ao Google Sheets")
+            return criar_dataframe_solicitantes_vazio()
+            
+        sheet = gc.open("dados_pedido")
+        worksheet = sheet.get_worksheet(3)  # 4ª aba (índice 3)
+        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
+        
+        if not data:
+            st.info("Planilha de solicitantes está vazia")
+            return criar_dataframe_solicitantes_vazio()
+            
+        df = pd.DataFrame(data)
+        
+        # Verifica se as colunas necessárias existem
+        colunas_necessarias = ["NOME", "DEPARTAMENTO", "EMAIL", "FILIAL"]
+        colunas_faltantes = [col for col in colunas_necessarias if col not in df.columns]
+        
+        if colunas_faltantes:
+            st.warning(f"Colunas faltantes na planilha de solicitantes: {colunas_faltantes}")
+            # Adiciona colunas faltantes
+            for col in colunas_faltantes:
+                df[col] = ""
+                
+        return df
+        
+    except gspread.exceptions.WorksheetNotFound:
+        st.warning("Aba de solicitantes não encontrada. Será criada uma nova quando necessário.")
+        return criar_dataframe_solicitantes_vazio()
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de solicitantes: {e}")
+        return criar_dataframe_solicitantes_vazio()
 
 def salvar_dados_solicitantes(df): 
     """Salva o DataFrame de solicitantes no Google Sheets.""" 
@@ -517,8 +542,34 @@ def render_login_page():
             if st.form_submit_button("Entrar"): 
                 fazer_login(email, senha) 
 
+def verificar_ou_criar_abas():
+    """Verifica se todas as abas necessárias existem, cria se necessário."""
+    try:
+        gc = get_gspread_client()
+        if gc is None:
+            return False
+            
+        sheet = gc.open("dados_pedido")
+        abas_existentes = [ws.title for ws in sheet.worksheets()]
+        
+        abas_necessarias = ["Pedidos", "Almoxarifado", "Materiais", "Solicitantes"]
+        
+        for aba in abas_necessarias:
+            if aba not in abas_existentes:
+                sheet.add_worksheet(title=aba, rows=100, cols=20)
+                st.info(f"Aba '{aba}' criada automaticamente")
+                
+        return True
+        
+    except Exception as e:
+        st.error(f"Erro ao verificar/criar abas: {e}")
+        return False
+
 def render_main_app(): 
     """Exibe a interface principal da aplicação após o login.""" 
+    # Verificar/criar abas necessárias primeiro
+    verificar_ou_criar_abas()
+    
     logo_img = load_logo(logo_url) 
 
     if 'df_pedidos' not in st.session_state: 
@@ -560,6 +611,45 @@ def render_main_app():
             "📌 Navegação", 
             ["📝 Requisição", "✍️ Pedidos (OC)", "📜 Histórico ", "👤 Cadastro", "📊 Dashboards ", "📊 Performance "] 
         ) 
+        
+        # Botão de teste de conexão
+        if st.button("🧪 Testar Conexão Google Sheets"):
+            st.header("Teste de Conexão")
+            
+            gc = get_gspread_client()
+            if gc:
+                try:
+                    # Tenta abrir a planilha pelo sheet_id
+                    sheet = gc.open_by_key(st.secrets["gcp_service_account"]["sheet_id"])
+                    st.success("✅ Conexão bem-sucedida com Google Sheets!")
+                    
+                    # Lista as abas disponíveis
+                    worksheets = sheet.worksheets()
+                    st.write(f"📋 Abas encontradas ({len(worksheets)}):")
+                    for i, ws in enumerate(worksheets):
+                        st.write(f"{i+1}. {ws.title} - {ws.row_count} linhas")
+                        
+                    # Verifica se as abas necessárias existem
+                    abas_necessarias = ["Pedidos", "Almoxarifado", "Materiais", "Solicitantes"]
+                    abas_existentes = [ws.title for ws in worksheets]
+                    
+                    st.write("---")
+                    st.subheader("Verificação de Abas")
+                    for aba in abas_necessarias:
+                        if aba in abas_existentes:
+                            st.success(f"✅ {aba}")
+                        else:
+                            st.error(f"❌ {aba} (não encontrada)")
+                            
+                except gspread.exceptions.SpreadsheetNotFound:
+                    st.error("❌ Planilha não encontrada. Verifique o sheet_id.")
+                except gspread.exceptions.APIError as e:
+                    st.error(f"❌ Erro da API Google: {e}")
+                except Exception as e:
+                    st.error(f"❌ Erro inesperado: {e}")
+            else:
+                st.error("❌ Falha ao obter cliente do Google Sheets")
+        
         st.divider() 
         if st.sidebar.button("Atualizar Dados"): 
             st.cache_data.clear() 
@@ -764,7 +854,7 @@ def render_main_app():
         """, unsafe_allow_html=True) 
       
         st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra") 
-        st.info("Edite os campos diretamente na tabela abaixo e selecione las linhas para exclusão.") 
+        st.info("Edite os campos diretamente na tabela abaixo and selecione las linhas para exclusão.") 
           
         pedidos_pendentes_oc = st.session_state.df_pedidos[ 
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) |  
@@ -1089,7 +1179,7 @@ def render_main_app():
                     return (row['DATA_APROVACAO'] - row['DATA']).days 
                 return 0 
                   
-            edited_history_df['DIAS_ATRASO'] = edited_history_df.apply(calcular_dias_atraso, axis=1) 
+            edited_history_df['DIAS_ATRasO'] = edited_history_df.apply(calcular_dias_atraso, axis=1) 
             edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(calcular_dias_emissao, axis=1) 
 
             for col in COLUNA_ORDEM_PADRAO: 
@@ -1231,7 +1321,7 @@ def render_main_app():
             df_dash = df_dash[df_dash['DEPARTAMENTO'] == departamento_selecionado] 
           
         if status_selecionado != 'Todos': 
-            df_dash = df_dash[df_dash['STATUS_PEDIDO'] == status_selecionado] 
+            df_dash = df_dash[df_dash['STATUS_Pedido'] == status_selecionado] 
           
         if df_dash.empty: 
             st.warning("Nenhum dado disponível para os filtros selecionados.") 
@@ -1334,6 +1424,7 @@ def render_main_app():
               
             fig3.update_yaxes(title_text="Quantidade de Pedidos", secondary_y=False) 
             fig3.update_yaxes(title_text="Valor Total (R$)", secondary_y=True) 
+            
               
             st.plotly_chart(fig3, use_container_width=True) 
         else: 
