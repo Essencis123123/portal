@@ -211,23 +211,28 @@ COLUNA_ORDEM_PADRAO = [
 def get_gspread_client():
     """Conecta com o Google Sheets usando os secrets do Streamlit."""
     try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 
+                 'https://www.googleapis.com/auth/drive']
         
-        # Verifica se está usando secrets do Streamlit
+        # VERIFIQUE O NOME EXATO DA SEÇÃO NO SECRETS.TOML
         if 'gcp_service_account' in st.secrets:
-            credentials_info = st.secrets["gcp_service_account"]
+            credentials_info = dict(st.secrets["gcp_service_account"])
+            
+            # Garante que a private_key está no formato correto
+            if 'private_key' in credentials_info:
+                credentials_info['private_key'] = credentials_info['private_key'].replace('\\n', '\n')
+            
             creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+            client = gspread.authorize(creds)
+            return client
         else:
-            # Fallback para variável de ambiente
-            creds = Credentials.from_service_account_file(
-                os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), scopes=scopes
-            )
-        
-        client = gspread.authorize(creds)
-        return client
+            st.error("Seção 'gcp_service_account' não encontrada nos secrets")
+            return None
 
     except Exception as e: 
-        st.error(f"Erro ao conectar com Google Sheets: {e}") 
+        st.error(f"Erro ao conectar com Google Sheets: {e}")
+        import traceback
+        st.error(f"Detalhes do erro: {traceback.format_exc()}")
         return None
 
 
