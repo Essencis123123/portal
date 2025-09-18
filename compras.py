@@ -230,9 +230,9 @@ COLUNA_ORDEM_PADRAO = [
         
         return client
 
-    except Exception as e: 
-        st.error(f"Erro ao conectar com Google Sheets: {e}") 
-        return None 
+        except Exception as e: 
+            st.error(f"Erro ao conectar com Google Sheets: {e}") 
+            return None 
 
 def parse_date_input(date_value): 
     """ 
