@@ -91,7 +91,7 @@ st.markdown(
         color: white !important;
     }
     
-    /* Foca nos itens */
+    /* Foco nos itens */
     [data-testid="stSidebar"] .stRadio label:focus {
         color: white !important;
         outline: none;
@@ -632,7 +632,7 @@ def render_main_app():
         st.markdown("""
             <div class='header-container'>
                 <h1>📝 REGISTRAR REQUISIÇÃO DE COMPRA</h1>
-                <p>Sistema de Controle and Análise de Pedidos</p>
+                <p>Sistema de Controle e Análise de Pedidos</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -832,16 +832,9 @@ def render_main_app():
         
         indices_originais = pedidos_pendentes_oc.index.tolist()
         
-        # Converter colunas para tipos adequados antes do data_editor
         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
             if col in pedidos_pendentes_oc.columns:
                 pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_date_input)
-        
-        # Converter colunas numéricas
-        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
-        for col in numeric_cols:
-            if col in pedidos_pendentes_oc.columns:
-                pedidos_pendentes_oc[col] = pd.to_numeric(pedidos_pendentes_oc[col], errors='coerce').fillna(0)
         
         df_almox = st.session_state.df_almoxarifado.copy()
         if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns:
@@ -851,7 +844,6 @@ def render_main_app():
                 pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_from_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', ''))
                 pedidos_pendentes_oc.drop(columns=['DOC NF_from_almox'], inplace=True, errors='ignore')
         
-        # Converter datas para formato de data (não datetime)
         data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
         for col in data_cols_to_convert:
             if col in pedidos_pendentes_oc.columns:
@@ -873,17 +865,12 @@ def render_main_app():
         cols_disponiveis = [col for col in cols_para_editar if col in pedidos_pendentes_oc_reset.columns]
         df_editavel = pedidos_pendentes_oc_reset[cols_disponiveis].copy()
         
-        # Garantir que as colunas numéricas sejam do tipo float
-        for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']:
-            if col in df_editavel.columns:
-                df_editavel[col] = df_editavel[col].astype(float)
-        
         with st.form(key="form_atualizar_pedidos"):
             edited_df = st.data_editor(
                 df_editavel,
                 use_container_width=True,
                 hide_index=True,
-                column_order=cols_disponiveis,
+                column_order=cols_disponiveis, # Usa a nova ordem
                 column_config={
                     "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False),
                     "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=False),
@@ -894,22 +881,23 @@ def render_main_app():
                     "MATERIAL": st.column_config.TextColumn("Material", disabled=True),
                     "UN": st.column_config.TextColumn("UN", disabled=True),
                     "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True),
+                    # CORREÇÃO: TIPO_PEDIDO com D maiúsculo
                     "TIPO_PEDIDO": st.column_config.TextColumn("Tipo Pedido", disabled=True),
                     "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True),
                     "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"),
                     "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"),
-                    "VALOR_ITEM": st.column_config.NumberColumn(
+                    "VALOR_ITEM": st.column_config.TextColumn(
                         "Valor Unitário (R$)",
-                        format="%.2f"
+                        help="Digite o valor com vírgula decimal (ex: 5,58)"
                     ),
-                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="%.2f"),
+                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"),
                     "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD/MM/YYYY"),
                     "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"),
                     "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]),
                     "STATUS_PEDIDO": st.column_config.TextColumn("Status Pedido", disabled=True),
-                    "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY"),
-                    "DIAS_ATRASO": st.column_config.NumberColumn("Dias Atraso", disabled=True),
-                    "DIAS_EMISSAO": st.column_config.NumberColumn("Dias Emissão", disabled=True),
+                    "DATA_ENTREGA": st.column_config.TextColumn("Data Entrega", disabled=True),
+                    "DIAS_ATRASO": st.column_config.TextColumn("Dias Atraso", disabled=True),
+                    "DIAS_EMISSAO": st.column_config.TextColumn("Dias Emissão", disabled=True),
                     "DOC NF": st.column_config.TextColumn("Doc NF", disabled=True),
                     "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Entregue", format="%d"),
                 }
@@ -950,7 +938,7 @@ def render_main_app():
                         # Garante o parsing correto das datas
                         for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']:
                             edited_row[col] = parse_date_input(edited_row[col])
-
+    
                         for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']:
                             if pd.isna(edited_row[col_val]) or edited_row[col_val] == '':
                                 edited_row[col_val] = 0
