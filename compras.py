@@ -24,25 +24,53 @@ import sys
 # Configuração da página com layout wide and ícone 
 st.set_page_config(page_title="Painel do Comprador", layout="wide", page_icon="👨‍💼") 
 
-# --- CSS Personalizado para o Tema Essencis --- 
+# --- CSS Personalizado para o Tema Essencis (SAP Fiori Inspired) --- 
 st.markdown( 
     """ 
     <style> 
-    /* Aumenta o tamanho da fonte de todo o corpo do aplicativo */ 
+    /* SAP Fiori Color Palette */
+    :root {
+        --sap-blue: #0854a0;
+        --sap-light-blue: #427cac;
+        --sap-dark-blue: #1c4d86;
+        --sap-accent: #00a4ef;
+        --sap-success: #107e3e;
+        --sap-warning: #e26100;
+        --sap-error: #b00;
+        --sap-neutral: #6a6d70;
+        --sap-background: #fafafa;
+        --sap-white: #ffffff;
+        --sap-light-gray: #f2f2f2;
+        --sap-border: #e5e5e5;
+        --shadow-level-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        --shadow-level-2: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+        --shadow-level-3: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+    }
+
+    /* Reset and base styling */ 
     html, body, [data-testid="stAppViewContainer"] { 
-        font-size: 1.1rem; 
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     } 
+
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stDeployButton {display: none;}
      
-    /* Cor do menu lateral e texto */ 
+    /* Sidebar Styling */ 
     [data-testid="stSidebar"] { 
-        background-color: #1C4D86; 
+        background: linear-gradient(180deg, var(--sap-dark-blue) 0%, var(--sap-blue) 100%);
+        border-right: 1px solid var(--sap-border);
         color: white; 
     } 
      
     /* Regras para garantir que TODO o texto no sidebar seja branco */ 
     [data-testid="stSidebar"] *, 
     [data-testid="stSidebar"] p, 
-    [data.testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] h1, 
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3, 
     [data-testid="stSidebar"] label, 
@@ -52,67 +80,74 @@ st.markdown(
         color: white !important; 
     } 
 
-    /* ESTILOS ESPECÍFICOS PARA O MENU DE NAVEGAÇÃO */ 
-    /* Container principal do radio button */ 
+    /* Modern Navigation Styling */ 
     [data-testid="stSidebar"] .stRadio { 
-        background-color: #1C4D86; 
+        background: transparent; 
     } 
      
-    /* Container dos itens do menu */ 
     [data-testid="stSidebar"] .stRadio > div { 
-        background-color: #1C4D86; 
+        background: transparent; 
         border: none; 
     } 
      
-    /* Labels dos itens do menu */ 
     [data-testid="stSidebar"] .stRadio label { 
-        color: white !important; 
+        color: var(--sap-white) !important; 
         font-weight: 500; 
-        padding: 8px 12px; 
-        border-radius: 4px; 
-        margin: 2px 0; 
+        padding: 12px 16px; 
+        border-radius: 8px; 
+        margin: 4px 0; 
+        transition: all 0.3s ease;
+        border: 1px solid transparent;
     } 
      
-    /* Texto dentro das labels */ 
     [data-testid="stSidebar"] .stRadio label span { 
-        color: white !important; 
-        font-size: 16px; 
+        color: var(--sap-white) !important; 
+        font-size: 0.95rem; 
     } 
      
-    /* Hover dos itens do menu */ 
     [data-testid="stSidebar"] .stRadio label:hover { 
-        color: white !important; 
-        background-color: #2a5f9e; 
+        background: rgba(255, 255, 255, 0.1) !important;
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateX(4px);
     } 
      
-    /* Item selecionado */ 
     [data-testid="stSidebar"] .stRadio label[data-baseweb="radio"]:has(input:checked) { 
-        background-color: #0055a5; 
-        color: white !important; 
+        background: var(--sap-accent) !important; 
+        border-color: var(--sap-accent);
+        box-shadow: var(--shadow-level-1);
     } 
      
-    /* Foca nos itens */ 
     [data-testid="stSidebar"] .stRadio label:focus { 
-        color: white !important; 
-        outline: none; 
+        outline: 2px solid var(--sap-accent);
+        outline-offset: 2px;
     } 
      
-    /* Garantir que os ícones também fiquem brancos */ 
-    [data-testid="stSidebar"] .stRadio div label span { 
-        color: white !important; 
+    /* Modern Button Styling */ 
+    .stButton button { 
+        background: linear-gradient(135deg, var(--sap-blue) 0%, var(--sap-accent) 100%);
+        color: var(--sap-white) !important; 
+        border: none;
+        border-radius: 6px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: var(--shadow-level-1);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     } 
 
-    /* Estilo para o radio button, garantindo que o texto dele também seja branco */ 
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label span { 
-        color: white !important; 
-    } 
-     
-    /* Estilo para deixar a letra dos botões preta */ 
+    .stButton button:hover {
+        box-shadow: var(--shadow-level-2);
+        transform: translateY(-2px);
+    }
+
     .stButton button p { 
-        color: black !important; 
+        color: var(--sap-white) !important; 
+        margin: 0;
     } 
+    
     .stDownloadButton button p { 
-        color: white !important; 
+        color: var(--sap-white) !important; 
     } 
 
     [data-testid="stSidebar"] img { 
@@ -120,66 +155,137 @@ st.markdown(
         margin-left: auto; 
         margin-right: auto; 
         width: 80%; 
-        border-radius: 10px; 
-        padding: 10px 0; 
+        border-radius: 12px; 
+        padding: 1rem 0; 
+        box-shadow: var(--shadow-level-1);
     } 
 
-    /* Estilo para o container principal da página */ 
-    .main-container { 
-        background-color: white; 
-        padding: 40px; 
-        border-radius: 16px; 
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); 
-        color: #333; 
-    } 
-     
-    /* Estilo para o cabeçalho principal da página */ 
-    .header-container { 
-        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%); 
-        padding: 25px; 
-        border-radius: 15px; 
-        margin-bottom: 20px; 
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); 
-        text-align: center; 
-        color: white; 
-    } 
-     
-    .header-container h1 { 
-        color: white; 
-        margin: 0; 
-    } 
+    /* Modern Header */
+    .modern-header {
+        background: linear-gradient(135deg, var(--sap-blue) 0%, var(--sap-dark-blue) 100%);
+        padding: 1.5rem 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow-level-2);
+        color: var(--sap-white);
+    }
 
-    .header-container p { 
-        color: white; 
-        margin: 5px 0 0 0; 
-        font-size: 18px; 
-    } 
-     
-    /* Estilo para os sub-cabeçalhos dentro da área principal */ 
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .header-title {
+        font-size: 1.8rem;
+        font-weight: 300;
+        margin: 0;
+        color: var(--sap-white);
+    }
+
+    .header-subtitle {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin: 0.25rem 0 0 0;
+        font-weight: 300;
+    }
+
+    /* Breadcrumbs */
+    .breadcrumbs {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+        color: var(--sap-neutral);
+    }
+
+    .breadcrumb-item {
+        color: var(--sap-neutral);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+
+    .breadcrumb-item:hover {
+        color: var(--sap-blue);
+    }
+
+    .breadcrumb-separator {
+        color: var(--sap-border);
+    }
+
+    /* Modern Cards */
+    .modern-card {
+        background: var(--sap-white);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: var(--shadow-level-1);
+        border: 1px solid var(--sap-border);
+        transition: all 0.3s ease;
+        margin-bottom: 1.5rem;
+    }
+
+    .modern-card:hover {
+        box-shadow: var(--shadow-level-2);
+        transform: translateY(-2px);
+    }
+
+    /* Modern Typography */ 
     h2, h3 { 
-        color: #1C4D86; 
-        font-weight: 600; 
+        color: var(--sap-dark-blue); 
+        font-weight: 400; 
+        line-height: 1.3;
     } 
      
-    /* Estilo para os botões de ação */ 
-    .stButton button { 
-        background-color: #0055a5; 
-        color: white; 
-        border-radius: 8px; 
-        transition: background-color 0.3s; 
-    } 
-    .stButton button:hover { 
-        background-color: #007ea7; 
-    } 
-     
-    /* Estilo para os cards de métricas */ 
+    /* Modern Metrics Cards */ 
     [data-testid="stMetric"] > div { 
-        background-color: #f0f2f5; 
-        color: #1C4D86; 
-        padding: 20px; 
-        border-radius: 10px; 
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); 
-    } 
+        background: var(--sap-white); 
+        color: var(--sap-dark-blue); 
+        padding: 1.5rem; 
+        border-radius: 12px; 
+        box-shadow: var(--shadow-level-1); 
+        border: 1px solid var(--sap-border);
+        transition: all 0.3s ease;
+    }
+
+    [data-testid="stMetric"] > div:hover {
+        box-shadow: var(--shadow-level-2);
+        transform: translateY(-2px);
+    }
+
+    /* Modern Input Fields */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stDateInput > div > div > input,
+    .stNumberInput > div > div > input {
+        border: 2px solid var(--sap-border) !important;
+        border-radius: 8px !important;
+        padding: 0.75rem !important;
+        transition: all 0.3s ease !important;
+        background: var(--sap-white) !important;
+    }
+
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus-within,
+    .stDateInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus {
+        border-color: var(--sap-accent) !important;
+        box-shadow: 0 0 0 3px rgba(0, 164, 239, 0.1) !important;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .header-content {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .modern-header {
+            padding: 1rem;
+        }
+    }
     </style> 
     """, 
     unsafe_allow_html=True 
@@ -198,6 +304,32 @@ def load_logo(url):
 
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png" 
 logo_img = load_logo(logo_url) 
+
+def render_modern_header(title, subtitle, show_back_button=True):
+    """Render modern header with breadcrumbs"""
+    # Breadcrumbs
+    breadcrumb_html = """
+        <div class="breadcrumbs">
+            <a href="main_app.py" class="breadcrumb-item">🏠 Início</a>
+            <span class="breadcrumb-separator">›</span>
+            <span class="breadcrumb-item">Sistema de Compras</span>
+        </div>
+    """ if show_back_button else ""
+    
+    # Header
+    header_html = f"""
+        {breadcrumb_html}
+        <div class="modern-header">
+            <div class="header-content">
+                <div>
+                    <h1 class="header-title">{title}</h1>
+                    <p class="header-subtitle">{subtitle}</p>
+                </div>
+            </div>
+        </div>
+    """
+    
+    st.markdown(header_html, unsafe_allow_html=True) 
 
 # Ordem padrão das colunas 
 COLUNA_ORDEM_PADRAO = [ 
@@ -665,14 +797,7 @@ def render_main_app():
             st.rerun() 
 
     if menu == "📝 Requisição": 
-        st.markdown(""" 
-            <div class='header-container'> 
-                <h1>📝 REGISTRAR REQUISIÇÃO DE COMPRA</h1> 
-                <p>Sistema de Controle and Análise de Pedidos</p> 
-            </div> 
-        """, unsafe_allow_html=True) 
-          
-        st.header("📝 Registrar Nova Requisição de Compra") 
+        render_modern_header("📝 Registrar Requisição de Compra", "Sistema de Controle e Análise de Pedidos") 
           
         if st.session_state.df_solicitantes is not None and not st.session_state.df_solicitantes.empty: 
             solicitantes_nomes = [""] + st.session_state.df_solicitantes['NOME'].unique().tolist() 
@@ -846,15 +971,9 @@ def render_main_app():
                 st.error("O campo 'Número da Requisição' e pelo menos um item são obrigatórios.") 
 
     elif menu == "✍️ Pedidos (OC)": 
-        st.markdown(""" 
-            <div class='header-container'> 
-                <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1> 
-                <p>Vincule as Ordens de Compra às Requisições Pendentes</p> 
-            </div> 
-        """, unsafe_allow_html=True) 
+        render_modern_header("✍️ Atualizar Pedidos com OC", "Vincule as Ordens de Compra às Requisições Pendentes")
       
-        st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra") 
-        st.info("Edite os campos diretamente na tabela abaixo and selecione las linhas para exclusão.") 
+        st.info("Edite os campos diretamente na tabela abaixo e selecione as linhas para exclusão.") 
           
         pedidos_pendentes_oc = st.session_state.df_pedidos[ 
             (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) |  
