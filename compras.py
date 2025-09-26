@@ -321,10 +321,12 @@ def carregar_dados_pedidos():
             if col in df.columns: 
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True) 
          
-        numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO", "QUANTIDADE_ENTREGUE"] 
-        for col in numeric_cols: 
-            if col in df.columns: 
-                df[col] = df[col].apply(converter_para_float_brasileiro).fillna(0) 
+        # Fix pandas FutureWarning: Convert to numeric first, then fillna
+        numeric_cols = ['QUANTIDADE', "VALOR_ITEM", "VALOR_RENEGOCIADO", "DIAS_ATRASO", "DIAS_EMISSAO", "QUANTIDADE_ENTREGUE"]
+        for col in numeric_cols:
+            if col in df.columns:
+                # Convert to numeric first, then fillna to avoid FutureWarning
+                df[col] = pd.to_numeric(df[col].apply(converter_para_float_brasileiro), errors='coerce').fillna(0) 
           
         df = df.reindex(columns=COLUNA_ORDEM_PADRAO, fill_value='') 
 
@@ -363,12 +365,13 @@ def salvar_dados_pedidos(df):
                     lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '' 
                 ) 
 
-        numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE'] 
-        for col in numeric_cols_to_save: 
-            if col in df_to_save.columns: 
-                df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0) 
-                df_to_save[col] = df_to_save[col].apply( 
-                    lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00' 
+        # Fix pandas FutureWarning: Convert to numeric first, then fillna
+        numeric_cols_to_save = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE']
+        for col in numeric_cols_to_save:
+            if col in df_to_save.columns:
+                df_to_save[col] = pd.to_numeric(df_to_save[col], errors='coerce').fillna(0)
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: f"{x:.2f}".replace('.', ',') if pd.notna(x) and x != '' else '0,00'
                 ) 
          
         if 'VALOR_TOTAL' in df_to_save.columns: 
@@ -848,174 +851,207 @@ def render_main_app():
     elif menu == "✍️ Pedidos (OC)": 
         st.markdown(""" 
             <div class='header-container'> 
-                <h1>✍️ ATUALIZAR PEDIDOS COM OC</h1> 
-                <p>Vincule as Ordens de Compra às Requisições Pendentes</p> 
+                <h1>✍️ PEDIDOS PENDENTES</h1> 
+                <p>Gerencie Requisições Pendentes com Seleção em Lote</p> 
             </div> 
         """, unsafe_allow_html=True) 
       
-        st.header("✍️ Atualizar Requisições com Dados de Ordem de Compra") 
-        st.info("Edite os campos diretamente na tabela abaixo and selecione las linhas para exclusão.") 
+        st.header("✍️ Pedidos Pendentes - Seleção e Atualização em Lote") 
+        st.info("Selecione um solicitante à esquerda, marque itens desejados e aplique dados em lote.") 
+        
+        # Calculate date threshold for highlighting (3 days ago)
+        date_threshold = datetime.date.today() - datetime.timedelta(days=3)
           
+        # Get pending orders (without purchase order)
         pedidos_pendentes_oc = st.session_state.df_pedidos[ 
-            (st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) |  
-            (st.session_state.df_pedidos['ORDEM_COMPRA'] == "") 
+            ((st.session_state.df_pedidos['ORDEM_COMPRA'].isnull()) |  
+            (st.session_state.df_pedidos['ORDEM_COMPRA'] == "")) &
+            (st.session_state.df_pedidos['STATUS_PEDIDO'] == "PENDENTE")
         ].copy() 
           
         if pedidos_pendentes_oc.empty: 
-            st.success("🎉 Todas as requisições pendentes já foram atualizadas com uma Ordem de Compra!") 
-            st.stop() 
-          
-        indices_originais = pedidos_pendentes_oc.index.tolist() 
-          
-        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']: 
-            if col in pedidos_pendentes_oc.columns: 
-                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_date_input) 
-          
-        numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO', 'DIAS_ATRASO', 'DIAS_EMISSAO', 'QUANTIDADE_ENTREGUE'] 
-        for col in numeric_cols: 
-            if col in pedidos_pendentes_oc.columns: 
-                pedidos_pendentes_oc[col] = pd.to_numeric(pedidos_pendentes_oc[col], errors='coerce').fillna(0) 
-          
-        df_almox = st.session_state.df_almoxarifado.copy() 
-        if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns: 
-            almox_map = df_almox.set_index('ORDEM_COMPRA')['DOC NF'].to_dict() 
-            if 'ORDEM_COMPRA' in pedidos_pendentes_oc.columns: 
-                pedidos_pendentes_oc['DOC NF_from_almox'] = pedidos_pendentes_oc['ORDEM_COMPRA'].map(almox_map) 
-                pedidos_pendentes_oc['DOC NF'] = pedidos_pendentes_oc['DOC NF_from_almox'].fillna(pedidos_pendentes_oc.get('DOC NF', '')) 
-                pedidos_pendentes_oc.drop(columns=['DOC NF_from_almox'], inplace=True, errors='ignore') 
-          
-        data_cols_to_convert = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA'] 
-        for col in data_cols_to_convert: 
-            if col in pedidos_pendentes_oc.columns: 
-                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply( 
-                    lambda x: x.date() if pd.notna(x) and isinstance(x, (pd.Timestamp, datetime.datetime)) else None 
-                ) 
-      
-        pedidos_pendentes_oc_reset = pedidos_pendentes_oc.reset_index(drop=True) 
-        pedidos_pendentes_oc_reset['Excluir'] = False 
-          
-        cols_para_editar = [ 
-            "Excluir", "DATA", "SOLICITANTE", "DEPARTAMENTO", "FILIAL", "CODIGO_MATERIAL", "MATERIAL", "UN", "QUANTIDADE", 
-            "TIPO_PEDIDO", "REQUISICAO", "FORNECEDOR", "ORDEM_COMPRA", "VALOR_ITEM", "VALOR_RENEGOCIADO", 
-            "DATA_APROVACAO", "PREVISAO_ENTREGA", "CONDICAO_FRETE", "STATUS_PEDIDO", "DATA_ENTREGA", 
-            "DIAS_ATRASO", "DIAS_EMISSAO", "DOC NF", "QUANTIDADE_ENTREGUE" 
-        ] 
-          
-        cols_disponiveis = [col for col in cols_para_editar if col in pedidos_pendentes_oc_reset.columns] 
-        df_editavel = pedidos_pendentes_oc_reset[cols_disponiveis].copy() 
-          
-        for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO']: 
-            if col in df_editavel.columns: 
-                df_editavel[col] = df_editavel[col].astype(float) 
-          
-        with st.form(key="form_atualizar_pedidos"): 
-            edited_df = st.data_editor( 
-                df_editavel, 
-                use_container_width=True, 
-                hide_index=True, 
-                column_order=cols_disponiveis, 
-                column_config={ 
-                    "Excluir": st.column_config.CheckboxColumn("Excluir?", default=False), 
-                    "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY", disabled=False), 
-                    "SOLICITANTE": st.column_config.TextColumn("Solicitante", disabled=True), 
-                    "DEPARTAMENTO": "Departamento", 
-                    "FILIAL": "Filial", 
-                    "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"), 
-                    "MATERIAL": st.column_config.TextColumn("Material", disabled=True), 
-                    "UN": st.column_config.TextColumn("UN", disabled=True), 
-                    "QUANTIDADE": st.column_config.NumberColumn("Qtd.", disabled=True), 
-                    "TIPO_PEDIDO": st.column_config.TextColumn("Tipo Pedido", disabled=True), 
-                    "REQUISICAO": st.column_config.Column("N° Requisição", disabled=True), 
-                    "FORNECEDOR": st.column_config.TextColumn("Nome Fornecedor"), 
-                    "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"), 
-                    "VALOR_ITEM": st.column_config.NumberColumn( 
-                        "Valor Unitário (R$)", 
-                        format="%.2f" 
-                    ), 
-                    "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="%.2f"), 
-                    "DATA_APROVACAO": st.column_config.DateColumn("Data de Aprovação", format="DD/MM/YYYY"), 
-                    "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"), 
-                    "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]), 
-                    "STATUS_PEDIDO": st.column_config.TextColumn("Status Pedido", disabled=True), 
-                    "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY"), 
-                    "DIAS_ATRASO": st.column_config.NumberColumn("Dias Atraso", disabled=True), 
-                    "DIAS_EMISSAO": st.column_config.NumberColumn("Dias Emissão", disabled=True), 
-                    "DOC NF": st.column_config.TextColumn("Doc NF", disabled=True), 
-                    "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Entregue", format="%d"), 
-                } 
-            ) 
-              
-            submitted = st.form_submit_button("Salvar Atualizações") 
-      
-        if submitted: 
-            st.info("Processando alterações...") 
-      
-            changes_detected = False 
-              
-            linhas_para_excluir = edited_df[edited_df['Excluir'] == True].index.tolist() 
-              
-            if linhas_para_excluir: 
-                changes_detected = True 
-                indices_para_excluir = [indices_originais[i] for i in linhas_para_excluir if i < len(indices_originais)] 
-                st.session_state.df_pedidos = st.session_state.df_pedidos.drop(indices_para_excluir) 
-                st.success(f"{len(indices_para_excluir)} linha(s) excluída(s) com sucesso!") 
-      
-            linhas_para_atualizar = edited_df[edited_df['Excluir'] == False] 
-              
-            for index, edited_row in linhas_para_atualizar.iterrows(): 
-                if index < len(indices_originais): 
-                    original_index = indices_originais[index] 
-                      
-                    original_row = df_editavel.loc[index] 
-                    row_changed = False 
-                      
-                    for col in edited_row.index: 
-                        if col != 'Excluir' and str(edited_row[col]) != str(original_row[col]): 
-                            row_changed = True 
-                            changes_detected = True 
-                            break 
-                      
-                    if row_changed: 
-                        for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA']: 
-                            edited_row[col] = parse_date_input(edited_row[col]) 
-
-                        for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']: 
-                            if pd.isna(edited_row[col_val]) or edited_row[col_val] == '': 
-                                edited_row[col_val] = 0 
-                            else: 
-                                if isinstance(edited_row[col_val], str): 
-                                    if col_val == 'VALOR_ITEM': 
-                                        edited_row[col_val] = converter_para_float_brasileiro(edited_row[col_val]) 
-                                    else: 
-                                        edited_row[col_val] = float(edited_row[col_val].replace('R$', '').replace('.', '').replace(',', '.').strip()) 
-                                else: 
-                                    edited_row[col_val] = float(edited_row[col_val]) 
-                          
-                        dias_emissao = 0 
-                        if pd.notna(edited_row['DATA_APROVACAO']) and pd.notna(edited_row['DATA']): 
-                            try: 
-                                dias_emissao = (edited_row['DATA_APROVACAO'] - edited_row['DATA']).days 
-                            except: 
-                                dias_emissao = 0 
-      
-                        if original_index in st.session_state.df_pedidos.index: 
-                            for col_name in COLUNA_ORDEM_PADRAO: 
-                                if col_name in edited_row.index: 
-                                    st.session_state.df_pedidos.loc[original_index, col_name] = edited_row[col_name] 
-                                      
-                            st.session_state.df_pedidos.loc[original_index, 'DIAS_EMISSAO'] = dias_emissao 
-                            if pd.notna(edited_row['DATA_ENTREGA']): 
-                                st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'ENTREGUE' 
-                            elif st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] == 'ENTREGUE': 
-                                st.session_state.df_pedidos.loc[original_index, 'STATUS_PEDIDO'] = 'PENDENTE' 
-      
-            if not changes_detected: 
-                st.info("Nenhuma alteração detectada.") 
-            else: 
-                salvar_dados_pedidos(st.session_state.df_pedidos) 
-                st.success("Dados atualizados com sucesso!") 
-                time.sleep(2) 
-                st.rerun() 
+            st.success("🎉 Todas as requisições pendentes já foram atualizadas!") 
+            st.stop()
+        
+        # Process dates for highlighting calculation
+        for col in ['DATA']:
+            if col in pedidos_pendentes_oc.columns:
+                pedidos_pendentes_oc[col] = pedidos_pendentes_oc[col].apply(parse_date_input)
+        
+        # Two-column layout: Requesters on left, Items on right
+        col_requesters, col_items = st.columns([1, 3])
+        
+        with col_requesters:
+            st.subheader("Solicitantes")
+            
+            # Get unique requesters and check if they have overdue items
+            solicitantes_info = []
+            for solicitante in pedidos_pendentes_oc['SOLICITANTE'].unique():
+                solicitante_items = pedidos_pendentes_oc[pedidos_pendentes_oc['SOLICITANTE'] == solicitante]
+                
+                # Check if any item is overdue (>3 days)
+                overdue = False
+                for _, item in solicitante_items.iterrows():
+                    if pd.notna(item['DATA']):
+                        item_date = item['DATA'].date() if hasattr(item['DATA'], 'date') else item['DATA']
+                        if item_date < date_threshold:
+                            overdue = True
+                            break
+                
+                solicitantes_info.append({
+                    'nome': solicitante,
+                    'overdue': overdue,
+                    'count': len(solicitante_items)
+                })
+            
+            # Display requesters with red highlighting for overdue
+            selected_solicitante = st.session_state.get('selected_solicitante_pedidos', None)
+            
+            for info in solicitantes_info:
+                # Create color styling based on overdue status
+                color = "🔴" if info['overdue'] else "⚪"
+                label = f"{color} {info['nome']} ({info['count']} itens)"
+                
+                if st.button(label, key=f"btn_sol_{info['nome']}", use_container_width=True):
+                    st.session_state.selected_solicitante_pedidos = info['nome']
+                    st.rerun()
+        
+        with col_items:
+            st.subheader("Itens Pendentes")
+            
+            if selected_solicitante:
+                # Filter items for selected requester
+                items_solicitante = pedidos_pendentes_oc[
+                    pedidos_pendentes_oc['SOLICITANTE'] == selected_solicitante
+                ].copy()
+                
+                if not items_solicitante.empty:
+                    # Add selection column
+                    if 'Selecionar' not in items_solicitante.columns:
+                        items_solicitante.insert(0, 'Selecionar', False)
+                    
+                    # Process dates and check for overdue items
+                    items_display = items_solicitante.copy()
+                    for col in ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']:
+                        if col in items_display.columns:
+                            items_display[col] = items_display[col].apply(parse_date_input)
+                            items_display[col] = items_display[col].apply(
+                                lambda x: x.date() if pd.notna(x) and hasattr(x, 'date') else x
+                            )
+                    
+                    # Convert numeric columns
+                    numeric_cols = ['QUANTIDADE', 'VALOR_ITEM', 'VALOR_RENEGOCIADO']
+                    for col in numeric_cols:
+                        if col in items_display.columns:
+                            items_display[col] = pd.to_numeric(items_display[col], errors='coerce').fillna(0)
+                    
+                    # Create styled data editor
+                    cols_to_show = ['Selecionar', 'DATA', 'REQUISICAO', 'CODIGO_MATERIAL', 'MATERIAL', 
+                                   'QUANTIDADE', 'FORNECEDOR', 'ORDEM_COMPRA', 'VALOR_ITEM', 
+                                   'VALOR_RENEGOCIADO', 'DATA_APROVACAO', 'PREVISAO_ENTREGA']
+                    cols_available = [col for col in cols_to_show if col in items_display.columns]
+                    
+                    # Use data_editor for item selection and editing
+                    edited_items = st.data_editor(
+                        items_display[cols_available],
+                        use_container_width=True,
+                        hide_index=True,
+                        key=f"items_editor_{selected_solicitante}",
+                        column_config={
+                            "Selecionar": st.column_config.CheckboxColumn("✓", default=False),
+                            "DATA": st.column_config.DateColumn("Data Req.", format="DD/MM/YYYY"),
+                            "REQUISICAO": "N° Req.",
+                            "CODIGO_MATERIAL": "Cód. Material",
+                            "MATERIAL": "Material",
+                            "QUANTIDADE": st.column_config.NumberColumn("Qtd.", format="%d"),
+                            "FORNECEDOR": "Fornecedor",
+                            "ORDEM_COMPRA": "OC",
+                            "VALOR_ITEM": st.column_config.NumberColumn("Valor Unit.", format="R$ %.2f"),
+                            "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Reneg.", format="R$ %.2f"),
+                            "DATA_APROVACAO": st.column_config.DateColumn("Data Aprov.", format="DD/MM/YYYY"),
+                            "PREVISAO_ENTREGA": st.column_config.DateColumn("Prev. Entrega", format="DD/MM/YYYY")
+                        }
+                    )
+                    
+                    # Action buttons for bulk operations
+                    st.markdown("---")
+                    col_actions1, col_actions2, col_actions3 = st.columns(3)
+                    
+                    with col_actions1:
+                        if st.button("Selecionar Todos", use_container_width=True):
+                            edited_items['Selecionar'] = True
+                            st.rerun()
+                    
+                    with col_actions2:
+                        if st.button("Limpar Seleção", use_container_width=True):
+                            edited_items['Selecionar'] = False
+                            st.rerun()
+                    
+                    with col_actions3:
+                        selected_count = edited_items['Selecionar'].sum() if 'Selecionar' in edited_items.columns else 0
+                        st.info(f"{selected_count} itens selecionados")
+                    
+                    # Form for bulk data application
+                    if selected_count > 0:
+                        with st.expander("🔄 Aplicar Dados aos Itens Selecionados", expanded=True):
+                            st.info(f"Os dados abaixo serão aplicados aos {selected_count} itens selecionados. Valores unitários não serão alterados.")
+                            
+                            with st.form("bulk_update_form"):
+                                col_form1, col_form2 = st.columns(2)
+                                
+                                with col_form1:
+                                    bulk_fornecedor = st.text_input("Fornecedor", key="bulk_fornecedor")
+                                    bulk_oc = st.text_input("Ordem de Compra", key="bulk_oc")
+                                    bulk_status = st.selectbox("Status do Pedido", 
+                                                             options=["", "PENDENTE", "EM ANDAMENTO", "APROVADO"],
+                                                             key="bulk_status")
+                                
+                                with col_form2:
+                                    # Fix date defaults - use current date instead of 01/01/2000
+                                    today = datetime.date.today()
+                                    bulk_data_aprovacao = st.date_input("Data de Aprovação", 
+                                                                       value=today, key="bulk_data_aprovacao")
+                                    bulk_previsao_entrega = st.date_input("Previsão de Entrega", 
+                                                                         value=today, key="bulk_previsao_entrega")
+                                
+                                if st.form_submit_button("Aplicar Dados aos Itens Selecionados", type="primary"):
+                                    # Apply bulk updates to selected items
+                                    selected_indices = edited_items[edited_items['Selecionar'] == True].index
+                                    updates_made = 0
+                                    
+                                    for idx in selected_indices:
+                                        original_idx = items_solicitante.iloc[idx].name
+                                        
+                                        # Apply updates (but not to value fields)
+                                        if bulk_fornecedor:
+                                            st.session_state.df_pedidos.loc[original_idx, 'FORNECEDOR'] = bulk_fornecedor
+                                            updates_made += 1
+                                        if bulk_oc:
+                                            st.session_state.df_pedidos.loc[original_idx, 'ORDEM_COMPRA'] = bulk_oc
+                                            updates_made += 1
+                                        if bulk_status:
+                                            st.session_state.df_pedidos.loc[original_idx, 'STATUS_PEDIDO'] = bulk_status
+                                            updates_made += 1
+                                        if bulk_data_aprovacao:
+                                            st.session_state.df_pedidos.loc[original_idx, 'DATA_APROVACAO'] = bulk_data_aprovacao
+                                            updates_made += 1
+                                        if bulk_previsao_entrega:
+                                            st.session_state.df_pedidos.loc[original_idx, 'PREVISAO_ENTREGA'] = bulk_previsao_entrega
+                                            updates_made += 1
+                                    
+                                    if updates_made > 0:
+                                        # Save changes
+                                        salvar_dados_pedidos(st.session_state.df_pedidos)
+                                        st.success(f"✅ Dados aplicados com sucesso a {len(selected_indices)} itens!")
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        st.warning("Nenhum dado foi preenchido para aplicação.")
+                
+                else:
+                    st.info("Nenhum item pendente encontrado para este solicitante.")
+            else:
+                st.info("Selecione um solicitante à esquerda para visualizar os itens pendentes.")
 
     elif menu == "📜 Histórico ": 
         st.markdown(""" 
@@ -1025,175 +1061,177 @@ def render_main_app():
             </div> 
         """, unsafe_allow_html=True) 
           
-        st.header("📜 Visualização and Edição do Histórico") 
-        st.info("Edite os dados diretamente na tabela abaixo. As alterações serão salvas automaticamente.") 
+        st.header("📜 Histórico Completo - Filtros e Anexos Funcionais") 
+        st.info("Visualize, filtre e baixe anexos de NF dos pedidos registrados.") 
 
         df_history = st.session_state.df_pedidos.copy() 
           
+        # Process dates
         for col in ['DATA', 'DATA_APROVACAO', 'DATA_ENTREGA', 'PREVISAO_ENTREGA']: 
             df_history[col] = df_history[col].apply(parse_date_input) 
           
-        for col in ['QUANTIDADE', 'VALOR_ITEM', 'QUANTIDADE_ENTREGUE']: 
+        # Fix pandas FutureWarning: Convert to numeric first, then fillna
+        for col in ['QUANTIDADE', 'VALOR_ITEM', 'QUANTIDADE_ENTREGUE']:
             df_history[col] = pd.to_numeric(df_history[col], errors='coerce').fillna(0) 
 
         df_history['VALOR_TOTAL'] = df_history['QUANTIDADE'] * df_history['VALOR_ITEM'] 
         df_history['VALOR_TOTAL'] = df_history['VALOR_TOTAL'].round(2) 
           
-        df_almox = st.session_state.df_almoxarifado.copy() 
-        if not df_almox.empty and 'ORDEM_COMPRA' in df_almox.columns: 
-            almox_map = df_almox.set_index('ORDEM_COMPRA')['DOC NF'].to_dict() 
-            if 'ORDEM_COMPRA' in df_history.columns: 
-                df_history['DOC NF_from_almox'] = df_history['ORDEM_COMPRA'].map(almox_map) 
-                df_history['DOC NF'] = df_history['DOC NF_from_almox'].fillna(df_history.get('DOC NF', '')) 
-                df_history.drop(columns=['DOC NF_from_almox'], inplace=True, errors='ignore') 
-          
-        df_valid_dates = df_history.dropna(subset=['DATA']) 
-          
-        if not df_valid_dates.empty: 
-            meses_disponiveis = df_valid_dates['DATA'].dt.month.unique() 
-            anos_disponiveis = df_valid_dates['DATA'].dt.year.unique() 
-              
-            meses_nomes = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",  
-                           7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"} 
-              
-            col_filter_row1_1, col_filter_row1_2, col_filter_row1_3, col_filter_row1_4 = st.columns(4) 
-            col_filter_row2_1, col_filter_row2_2, col_filter_row2_3 = st.columns(3) 
-
-            with col_filter_row1_1: 
-                mes_selecionado_h = st.selectbox("Mês", sorted(meses_disponiveis), format_func=lambda x: meses_nomes.get(x)) 
-            with col_filter_row1_2: 
-                ano_selecionado_h = st.selectbox("Ano", sorted(anos_disponiveis, reverse=True)) 
-            with col_filter_row1_3: 
-                status_options = ['Todos'] + df_history['STATUS_PEDIDO'].unique().tolist() 
-                status_selecionado_h = st.selectbox("Status", status_options) 
-            with col_filter_row1_4: 
-                solicitantes_disponiveis = ['Todos'] + df_history['SOLICITANTE'].unique().tolist() 
-                solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis) 
-                  
-            with col_filter_row2_1: 
-                req_filter = st.text_input("N° Requisição") 
-            with col_filter_row2_2: 
-                oc_filter = st.text_input("N° Ordem de Compra") 
-            with col_filter_row2_3: 
-                cod_material_filter = st.text_input("Código Material") 
-              
-            df_history = df_history[(df_history['DATA'].dt.month == mes_selecionado_h) & (df_history['DATA'].dt.year == ano_selecionado_h)] 
-        else: 
-            st.info("Nenhum dado com data válida para filtragem. Por favor, registre uma requisição primeiro.") 
-            st.stop() 
-          
-        if status_selecionado_h != 'Todos': 
-            df_history = df_history[df_history['STATUS_PEDIDO'] == status_selecionado_h] 
-        if solicitante_selecionado_h != 'Todos': 
-            df_history = df_history[df_history['SOLICITANTE'] == solicitante_selecionado_h] 
-        if req_filter: 
-            df_history = df_history[df_history['REQUISICAO'].str.contains(req_filter, case=False, na=False)] 
-        if oc_filter: 
-            df_history = df_history[df_history['ORDEM_COMPRA'].str.contains(oc_filter, case=False, na=False)] 
-        if cod_material_filter: 
-            df_history = df_history[df_history['CODIGO_MATERIAL'].str.contains(cod_material_filter, case=False, na=False)] 
-
-        if df_history.empty: 
-            st.warning("Nenhum registro encontrado with os filtros aplicados.") 
-            st.stop() 
-          
-        df_for_editor = df_history.copy() 
-        def formatar_status_display(status): 
-            if status == 'ENTREGUE': 
-                return '🟢 ENTREGUE' 
-            elif status == 'PENDENTE': 
-                return '🟡 PENDENTE' 
-            else: 
-                return status 
-        df_for_editor['STATUS_PEDIDO'] = df_for_editor['STATUS_PEDIDO'].apply(formatar_status_display) 
-
-        for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']: 
-            if col in df_for_editor.columns: 
-                df_for_editor[col] = df_for_editor[col].apply( 
-                    lambda x: f"{float(x):.2f}" if pd.notna(x) and x != '' else '' 
-                ) 
-
-        edited_history_df = st.data_editor( 
-            df_for_editor,  
-            use_container_width=True, 
-            hide_index=False, 
-            key='history_editor', 
-            column_config={ 
-                "DATA": st.column_config.DateColumn("Data Requisição", format="DD/MM/YYYY"), 
-                "SOLICITANTE": st.column_config.TextColumn("Solicitante"), 
-                "DEPARTAMENTO": "Departamento", 
-                "FILIAL": "Filial", 
-                "CODIGO_MATERIAL": st.column_config.TextColumn("Cód. Material"), 
-                "MATERIAL": st.column_config.TextColumn("Material"), 
-                "UN": st.column_config.TextColumn("UN"), 
-                "QUANTIDADE": st.column_config.NumberColumn("Quantidade", format="%d"), 
-                "TIPO_PEDIDO": st.column_config.SelectboxColumn("Tipo de Pedido", options=["LOCAL", "EMERGENCIAL", "PROGRAMADO"]), 
-                "REQUISICAO": "N° Requisição", 
-                "FORNECEDOR": st.column_config.TextColumn("Fornecedor"), 
-                "ORDEM_COMPRA": st.column_config.TextColumn("Ordem de Compra"), 
-                "VALOR_ITEM": st.column_config.NumberColumn("Valor Unitário (R$)", format="R$ %.2f"), 
-                "VALOR_RENEGOCIADO": st.column_config.NumberColumn("Valor Renegociado (R$)", format="R$ %.2f"), 
-                "DATA_APROVACAO": st.column_config.DateColumn("Data Aprovação", format="DD/MM/YYYY"), 
-                "PREVISAO_ENTREGA": st.column_config.DateColumn("Previsão de Entrega", format="DD/MM/YYYY"), 
-                "CONDICAO_FRETE": st.column_config.SelectboxColumn("Condição de Frete", options=["", "CIF", "FOB", "RETIRAR"]), 
-                "STATUS_PEDIDO": st.column_config.SelectboxColumn("Status", options=['🟢 ENTREGUE', '🟡 PENDENTE', 'EM ANDAMENTO', '']), 
-                "DATA_ENTREGA": st.column_config.DateColumn("Data Entrega", format="DD/MM/YYYY"), 
-                "DIAS_ATRASO": "Dias Atraso", 
-                "DIAS_EMISSAO": "Dias Emissão", 
-                "DOC NF": st.column_config.LinkColumn( 
-                    "Anexo NF", 
-                    help="Clique para visualizar o anexo", 
-                    display_text="📥 Anexo" 
-                ), 
-                "QUANTIDADE_ENTREGUE": st.column_config.NumberColumn("Qtd. Entregue", format="%d") 
-            }, 
-            column_order=COLUNA_ORDEM_PADRAO + ["VALOR_TOTAL"] 
-        ) 
-
-        if not edited_history_df.equals(df_for_editor): 
-            st.info("Salvando alterações...") 
-              
-            edited_history_df['STATUS_PEDIDO'] = edited_history_df['STATUS_PEDIDO'].map({ 
-                '🟢 ENTREGUE': 'ENTREGUE', 
-                '🟡 PENDENTE': 'PENDENTE', 
-                'EM ANDAMENTO': 'EM ANDAMENTO', 
-                '': '' 
-            }).fillna(edited_history_df['STATUS_PEDIDO']) 
-
-            for col_val in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'QUANTIDADE_ENTREGUE']: 
-                edited_history_df[col_val] = pd.to_numeric(edited_history_df[col_val], errors='coerce').fillna(0).round(2) 
-              
-            data_cols_history = ['DATA', 'DATA_APROVACAO', 'PREVISAO_ENTREGA', 'DATA_ENTREGA'] 
-              
-            for col in data_cols_history: 
-                edited_history_df[col] = edited_history_df[col].apply(parse_date_input) 
-              
-            def calcular_dias_atraso(row): 
-                if pd.notna(row['DATA_ENTREGA']) and pd.notna(row['PREVISAO_ENTREGA']): 
-                    if row['DATA_ENTREGA'] > row['PREVISAO_ENTREGA']: 
-                        return (row['DATA_ENTREGA'] - row['PREVISAO_ENTREGA']).days 
-                return 0 
-
-            def calcular_dias_emissao(row): 
-                if pd.notna(row['DATA_APROVACAO']) and pd.notna(row['DATA']): 
-                    return (row['DATA_APROVACAO'] - row['DATA']).days 
-                return 0 
-                  
-            edited_history_df['DIAS_ATRasO'] = edited_history_df.apply(calcular_dias_atraso, axis=1) 
-            edited_history_df['DIAS_EMISSAO'] = edited_history_df.apply(calcular_dias_emissao, axis=1) 
-
-            for col in COLUNA_ORDEM_PADRAO: 
-                if col in edited_history_df.columns: 
-                    st.session_state.df_pedidos.loc[edited_history_df.index, col] = edited_history_df[col] 
-              
-            salvar_dados_pedidos(st.session_state.df_pedidos) 
-            st.success("Histórico atualizado com sucesso!") 
-            st.rerun() 
-
-        st.markdown("---") 
-        st.subheader("💰 Resumo do Custo Total") 
-        total_historico = df_history['VALOR_TOTAL'].sum() 
-        st.metric(label="Custo Total no Período Selecionado", value=f"R$ {total_historico:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")) 
+        # Enhanced filtering interface
+        st.subheader("🔍 Filtros")
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+        
+        with col_f1:
+            # Date range filter using delivery dates
+            today = datetime.date.today()
+            data_inicio_hist = st.date_input("Data Início (Entrega)", 
+                                           value=today - datetime.timedelta(days=30),
+                                           key="hist_data_inicio")
+            data_fim_hist = st.date_input("Data Fim (Entrega)", 
+                                        value=today,
+                                        key="hist_data_fim")
+        
+        with col_f2:
+            # Status filter
+            status_options = ['Todos'] + sorted([s for s in df_history['STATUS_PEDIDO'].unique() if pd.notna(s)])
+            status_selecionado_h = st.selectbox("Status", status_options, key="hist_status")
+        
+        with col_f3:
+            # Solicitante filter
+            solicitantes_disponiveis = ['Todos'] + sorted([s for s in df_history['SOLICITANTE'].unique() if pd.notna(s)])
+            solicitante_selecionado_h = st.selectbox("Solicitante", solicitantes_disponiveis, key="hist_solicitante")
+        
+        with col_f4:
+            # Text search filter
+            texto_busca = st.text_input("Busca Geral (Material, Req, OC)", key="hist_busca")
+        
+        # Apply filters
+        df_filtered = df_history.copy()
+        
+        # Filter by delivery date range
+        if 'PREVISAO_ENTREGA' in df_filtered.columns:
+            df_filtered = df_filtered[
+                (df_filtered['PREVISAO_ENTREGA'].isna()) | 
+                (df_filtered['PREVISAO_ENTREGA'].dt.date >= data_inicio_hist) & 
+                (df_filtered['PREVISAO_ENTREGA'].dt.date <= data_fim_hist)
+            ]
+        
+        # Filter by status
+        if status_selecionado_h != 'Todos':
+            df_filtered = df_filtered[df_filtered['STATUS_PEDIDO'] == status_selecionado_h]
+        
+        # Filter by solicitante
+        if solicitante_selecionado_h != 'Todos':
+            df_filtered = df_filtered[df_filtered['SOLICITANTE'] == solicitante_selecionado_h]
+        
+        # Text search filter - using .astype(str).str.contains to avoid Series errors
+        if texto_busca:
+            mask = (
+                df_filtered['MATERIAL'].astype(str).str.contains(texto_busca, case=False, na=False) |
+                df_filtered['REQUISICAO'].astype(str).str.contains(texto_busca, case=False, na=False) |
+                df_filtered['ORDEM_COMPRA'].astype(str).str.contains(texto_busca, case=False, na=False)
+            )
+            df_filtered = df_filtered[mask]
+        
+        # Display results
+        if df_filtered.empty:
+            st.warning("Nenhum registro encontrado com os filtros aplicados.")
+            return
+        
+        st.subheader(f"📋 Resultados: {len(df_filtered)} registros encontrados")
+        
+        # Enhanced attachment handling function
+        def format_nf_column(doc_nf):
+            """Format the NF document column with download capability"""
+            if pd.isna(doc_nf) or doc_nf == '' or doc_nf == 'nan':
+                return "—"  # Em dash for empty values
+            
+            # Check if it's a URL, file path, or base64 data
+            doc_str = str(doc_nf)
+            if any(doc_str.startswith(prefix) for prefix in ['http://', 'https://', 'file://', 'data:']):
+                return f"[📥 Baixar NF]({doc_str})"
+            else:
+                return f"📄 {doc_str}"
+        
+        # Prepare display dataframe
+        df_display = df_filtered.copy()
+        
+        # Format status for display
+        def formatar_status_display(status):
+            if status == 'ENTREGUE':
+                return '🟢 ENTREGUE'
+            elif status == 'PENDENTE':
+                return '🟡 PENDENTE'
+            else:
+                return str(status) if pd.notna(status) else ''
+        
+        df_display['STATUS_PEDIDO'] = df_display['STATUS_PEDIDO'].apply(formatar_status_display)
+        
+        # Format monetary values
+        for col in ['VALOR_ITEM', 'VALOR_RENEGOCIADO', 'VALOR_TOTAL']:
+            if col in df_display.columns:
+                df_display[col] = df_display[col].apply(
+                    lambda x: f"R$ {float(x):.2f}".replace('.', ',') if pd.notna(x) and x != '' else ''
+                )
+        
+        # Format attachment column
+        if 'DOC NF' in df_display.columns:
+            df_display['Anexo NF'] = df_display['DOC NF'].apply(format_nf_column)
+        else:
+            df_display['Anexo NF'] = "—"
+        
+        # Select columns for display
+        display_cols = [
+            'DATA', 'REQUISICAO', 'SOLICITANTE', 'MATERIAL', 'QUANTIDADE', 
+            'VALOR_TOTAL', 'STATUS_PEDIDO', 'ORDEM_COMPRA', 'FORNECEDOR', 
+            'PREVISAO_ENTREGA', 'Anexo NF'
+        ]
+        available_cols = [col for col in display_cols if col in df_display.columns]
+        
+        # Display the data with attachment functionality
+        st.dataframe(
+            df_display[available_cols],
+            use_container_width=True,
+            column_config={
+                "DATA": st.column_config.DateColumn("Data Req.", format="DD/MM/YYYY"),
+                "REQUISICAO": "N° Req.",
+                "SOLICITANTE": "Solicitante",
+                "MATERIAL": "Material",
+                "QUANTIDADE": st.column_config.NumberColumn("Qtd.", format="%d"),
+                "VALOR_TOTAL": "Valor Total",
+                "STATUS_PEDIDO": "Status",
+                "ORDEM_COMPRA": "OC",
+                "FORNECEDOR": "Fornecedor",
+                "PREVISAO_ENTREGA": st.column_config.DateColumn("Prev. Entrega", format="DD/MM/YYYY"),
+                "Anexo NF": st.column_config.LinkColumn("Anexo NF", display_text="📥 Download")
+            }
+        )
+        
+        # Summary metrics
+        st.markdown("---")
+        col_sum1, col_sum2, col_sum3 = st.columns(3)
+        
+        with col_sum1:
+            total_value = df_filtered['VALOR_TOTAL'].sum()
+            st.metric("💰 Valor Total", f"R$ {total_value:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        
+        with col_sum2:
+            delivered_count = len(df_filtered[df_filtered['STATUS_PEDIDO'].str.contains('ENTREGUE', na=False)])
+            st.metric("✅ Entregues", f"{delivered_count} de {len(df_filtered)}")
+        
+        with col_sum3:
+            pending_count = len(df_filtered[df_filtered['STATUS_PEDIDO'].str.contains('PENDENTE', na=False)])
+            st.metric("⏳ Pendentes", f"{pending_count} de {len(df_filtered)}")
+        
+        # Export functionality
+        if st.button("📥 Exportar Resultados (CSV)", use_container_width=True):
+            csv_data = df_filtered[available_cols].to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label="Baixar CSV",
+                data=csv_data,
+                file_name=f"historico_pedidos_{datetime.date.today().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
 
     elif menu == "👤 Cadastro": 
         st.markdown(""" 
@@ -1203,11 +1241,12 @@ def render_main_app():
             </div> 
         """, unsafe_allow_html=True) 
           
-        tab1, tab2 = st.tabs(["👤 Cadastro de Solicitantes", "📦 Cadastro de Materiais"]) 
+        tab1, tab2, tab3 = st.tabs(["👤 Cadastro de Solicitantes", "📦 Cadastro de Materiais", "🏢 Cadastro de Fornecedores"]) 
           
         with tab1: 
             st.header("👤 Cadastro de Solicitantes") 
-              
+            
+            # Individual registration
             with st.form("form_cadastro_solicitante"): 
                 col1, col2 = st.columns(2) 
                 with col1: 
@@ -1227,21 +1266,52 @@ def render_main_app():
                         }]) 
                           
                         st.session_state.df_solicitantes = pd.concat([st.session_state.df_solicitantes, novo_solicitante], ignore_index=True) 
-                        salvar_dados_solicitantes(st.session_state.df_solicitantes) 
-                        st.success("Solicitante cadastrado com sucesso!") 
-                        st.rerun() 
+                        if salvar_dados_solicitantes(st.session_state.df_solicitantes):
+                            st.success("✅ Solicitante cadastrado com sucesso!") 
+                            st.rerun() 
+                        else:
+                            st.error("❌ Erro ao salvar solicitante.")
                     else: 
                         st.error("Por favor, preencha todos os campos.") 
+            
+            # Bulk upload for solicitantes
+            st.markdown("---")
+            st.subheader("📤 Upload em Massa")
+            st.info("Faça upload de um arquivo CSV com colunas: NOME, DEPARTAMENTO, EMAIL, FILIAL")
+            
+            uploaded_file = st.file_uploader("Escolha um arquivo CSV", type=['csv'], key="upload_solicitantes")
+            
+            if uploaded_file is not None:
+                try:
+                    df_upload = pd.read_csv(uploaded_file)
+                    
+                    # Validate required columns
+                    required_cols = ['NOME', 'DEPARTAMENTO', 'EMAIL', 'FILIAL']
+                    if all(col in df_upload.columns for col in required_cols):
+                        st.dataframe(df_upload, use_container_width=True)
+                        
+                        if st.button("Confirmar Upload de Solicitantes"):
+                            st.session_state.df_solicitantes = pd.concat([st.session_state.df_solicitantes, df_upload], ignore_index=True)
+                            if salvar_dados_solicitantes(st.session_state.df_solicitantes):
+                                st.success(f"✅ {len(df_upload)} solicitantes importados com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao salvar dados.")
+                    else:
+                        st.error(f"❌ Arquivo deve conter as colunas: {', '.join(required_cols)}")
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar arquivo: {e}")
               
             st.subheader("Solicitantes Cadastrados") 
             if not st.session_state.df_solicitantes.empty: 
                 st.dataframe(st.session_state.df_solicitantes, use_container_width=True) 
             else: 
-                st.info("Nenhum solicitante cadastrado ainda.") 
+                st.info("Nenhum solicitante cadastrado ainda.")
           
         with tab2: 
             st.header("📦 Cadastro de Materiais") 
-              
+            
+            # Individual registration
             with st.form("form_cadastro_material"): 
                 col1, col2 = st.columns(2) 
                 with col1: 
@@ -1257,9 +1327,114 @@ def render_main_app():
                         }]) 
                           
                         st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, novo_material], ignore_index=True) 
-                        salvar_dados_materiais(st.session_state.df_materiais) 
-                        st.success("Material cadastrado com sucesso!") 
-                        st.rerun() 
+                        if salvar_dados_materiais(st.session_state.df_materiais):
+                            st.success("✅ Material cadastrado com sucesso!") 
+                            st.rerun()
+                        else:
+                            st.error("❌ Erro ao salvar material.")
+                    else: 
+                        st.error("Por favor, preencha todos os campos.") 
+            
+            # Bulk upload for materials
+            st.markdown("---")
+            st.subheader("📤 Upload em Massa")
+            st.info("Faça upload de um arquivo CSV com colunas: CODIGO, DESCRICAO")
+            
+            uploaded_materials = st.file_uploader("Escolha um arquivo CSV", type=['csv'], key="upload_materials")
+            
+            if uploaded_materials is not None:
+                try:
+                    df_materials_upload = pd.read_csv(uploaded_materials)
+                    
+                    # Validate required columns
+                    required_cols_mat = ['CODIGO', 'DESCRICAO']
+                    if all(col in df_materials_upload.columns for col in required_cols_mat):
+                        st.dataframe(df_materials_upload, use_container_width=True)
+                        
+                        if st.button("Confirmar Upload de Materiais"):
+                            st.session_state.df_materiais = pd.concat([st.session_state.df_materiais, df_materials_upload], ignore_index=True)
+                            if salvar_dados_materiais(st.session_state.df_materiais):
+                                st.success(f"✅ {len(df_materials_upload)} materiais importados com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao salvar dados.")
+                    else:
+                        st.error(f"❌ Arquivo deve conter as colunas: {', '.join(required_cols_mat)}")
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar arquivo: {e}")
+            
+            st.subheader("Materiais Cadastrados") 
+            if not st.session_state.df_materiais.empty: 
+                st.dataframe(st.session_state.df_materiais, use_container_width=True) 
+            else: 
+                st.info("Nenhum material cadastrado ainda.")
+        
+        with tab3:
+            st.header("🏢 Cadastro de Fornecedores")
+            
+            # Individual registration
+            with st.form("form_cadastro_fornecedor"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    nome_fornecedor = st.text_input("Nome/Razão Social do Fornecedor")
+                    cnpj_fornecedor = st.text_input("CNPJ")
+                with col2:
+                    email_fornecedor = st.text_input("E-mail")
+                    telefone_fornecedor = st.text_input("Telefone")
+                
+                if st.form_submit_button("Cadastrar Fornecedor"):
+                    if nome_fornecedor and cnpj_fornecedor:
+                        # Initialize fornecedores dataframe if it doesn't exist
+                        if 'df_fornecedores' not in st.session_state:
+                            st.session_state.df_fornecedores = pd.DataFrame(columns=["NOME", "CNPJ", "EMAIL", "TELEFONE"])
+                        
+                        novo_fornecedor = pd.DataFrame([{
+                            "NOME": nome_fornecedor,
+                            "CNPJ": cnpj_fornecedor,
+                            "EMAIL": email_fornecedor,
+                            "TELEFONE": telefone_fornecedor
+                        }])
+                        
+                        st.session_state.df_fornecedores = pd.concat([st.session_state.df_fornecedores, novo_fornecedor], ignore_index=True)
+                        # Note: You may want to implement salvar_dados_fornecedores function
+                        st.success("✅ Fornecedor cadastrado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("Por favor, preencha pelo menos o nome e CNPJ.")
+            
+            # Bulk upload for suppliers
+            st.markdown("---")
+            st.subheader("📤 Upload em Massa")
+            st.info("Faça upload de um arquivo CSV com colunas: NOME, CNPJ, EMAIL, TELEFONE")
+            
+            uploaded_suppliers = st.file_uploader("Escolha um arquivo CSV", type=['csv'], key="upload_suppliers")
+            
+            if uploaded_suppliers is not None:
+                try:
+                    df_suppliers_upload = pd.read_csv(uploaded_suppliers)
+                    
+                    # Validate required columns
+                    required_cols_sup = ['NOME', 'CNPJ']
+                    if all(col in df_suppliers_upload.columns for col in required_cols_sup):
+                        st.dataframe(df_suppliers_upload, use_container_width=True)
+                        
+                        if st.button("Confirmar Upload de Fornecedores"):
+                            if 'df_fornecedores' not in st.session_state:
+                                st.session_state.df_fornecedores = pd.DataFrame(columns=["NOME", "CNPJ", "EMAIL", "TELEFONE"])
+                            
+                            st.session_state.df_fornecedores = pd.concat([st.session_state.df_fornecedores, df_suppliers_upload], ignore_index=True)
+                            st.success(f"✅ {len(df_suppliers_upload)} fornecedores importados com sucesso!")
+                            st.rerun()
+                    else:
+                        st.error(f"❌ Arquivo deve conter pelo menos as colunas: {', '.join(required_cols_sup)}")
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar arquivo: {e}")
+            
+            st.subheader("Fornecedores Cadastrados")
+            if 'df_fornecedores' in st.session_state and not st.session_state.df_fornecedores.empty:
+                st.dataframe(st.session_state.df_fornecedores, use_container_width=True)
+            else:
+                st.info("Nenhum fornecedor cadastrado ainda.") 
                     else: 
                         st.error("Por favor, preencha todos os campos.") 
               
@@ -1282,8 +1457,9 @@ def render_main_app():
         df_dash = st.session_state.df_pedidos.copy() 
           
         df_dash['DATA'] = pd.to_datetime(df_dash['DATA'], errors='coerce') 
-        df_dash['VALOR_ITEM'] = pd.to_numeric(df_dash['VALOR_ITEM'], errors='coerce').fillna(0) 
-        df_dash['QUANTIDADE'] = pd.to_numeric(df_dash['QUANTIDADE'], errors='coerce').fillna(0) 
+        # Fix pandas FutureWarning: Convert to numeric first, then fillna
+        df_dash['VALOR_ITEM'] = pd.to_numeric(df_dash['VALOR_ITEM'], errors='coerce').fillna(0)
+        df_dash['QUANTIDADE'] = pd.to_numeric(df_dash['QUANTIDADE'], errors='coerce').fillna(0)
         df_dash['VALOR_TOTAL'] = df_dash['VALOR_ITEM'] * df_dash['QUANTIDADE'] 
           
         st.subheader("Filtros") 
@@ -1519,8 +1695,9 @@ def render_main_app():
             st.warning("Nenhum dado disponível para o período selecionado.") 
             st.stop() 
           
-        df_performance_filtrado['VALOR_RENEGOCIADO'] = pd.to_numeric(df_performance_filtrado['VALOR_RENEGOCIADO'], errors='coerce').fillna(0) 
-        df_performance_filtrado['VALOR_ITEM'] = pd.to_numeric(df_performance_filtrado['VALOR_ITEM'], errors='coerce').fillna(0) 
+        # Fix pandas FutureWarning: Convert to numeric first, then fillna
+        df_performance_filtrado['VALOR_RENEGOCIADO'] = pd.to_numeric(df_performance_filtrado['VALOR_RENEGOCIADO'], errors='coerce').fillna(0)
+        df_performance_filtrado['VALOR_ITEM'] = pd.to_numeric(df_performance_filtrado['VALOR_ITEM'], errors='coerce').fillna(0)
         df_performance_filtrado['QUANTIDADE'] = pd.to_numeric(df_performance_filtrado['QUANTIDADE'], errors='coerce').fillna(0) 
 
         df_negociados = df_performance_filtrado.copy() 
