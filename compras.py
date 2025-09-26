@@ -1108,13 +1108,16 @@ def render_main_app():
         # Apply filters
         df_filtered = df_history.copy()
         
-        # Filter by delivery date range
+        # Filter by delivery date range (only if column has datetime data)
         if 'PREVISAO_ENTREGA' in df_filtered.columns:
-            df_filtered = df_filtered[
-                (df_filtered['PREVISAO_ENTREGA'].isna()) | 
-                (df_filtered['PREVISAO_ENTREGA'].dt.date >= data_inicio_hist) & 
-                (df_filtered['PREVISAO_ENTREGA'].dt.date <= data_fim_hist)
-            ]
+            # Only apply date filter if the column has datetime values
+            date_mask = df_filtered['PREVISAO_ENTREGA'].isna()
+            if df_filtered['PREVISAO_ENTREGA'].dtype.name.startswith('datetime'):
+                date_mask = date_mask | (
+                    (df_filtered['PREVISAO_ENTREGA'].dt.date >= data_inicio_hist) & 
+                    (df_filtered['PREVISAO_ENTREGA'].dt.date <= data_fim_hist)
+                )
+            df_filtered = df_filtered[date_mask]
         
         # Filter by status
         if status_selecionado_h != 'Todos':
@@ -1434,15 +1437,7 @@ def render_main_app():
             if 'df_fornecedores' in st.session_state and not st.session_state.df_fornecedores.empty:
                 st.dataframe(st.session_state.df_fornecedores, use_container_width=True)
             else:
-                st.info("Nenhum fornecedor cadastrado ainda.") 
-                    else: 
-                        st.error("Por favor, preencha todos os campos.") 
-              
-            st.subheader("Materiais Cadastrados") 
-            if not st.session_state.df_materiais.empty: 
-                st.dataframe(st.session_state.df_materiais, use_container_width=True) 
-            else: 
-                st.info("Nenhum material cadastrado ainda.") 
+                st.info("Nenhum fornecedor cadastrado ainda.")
 
     elif menu == "📊 Dashboards ": 
         st.markdown(""" 
