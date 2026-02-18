@@ -61,39 +61,47 @@ try:
     
     # Configurações de paginação
     page_size = 30
-    total_pages = max(1, (len(filtered) // page_size) + (1 if len(filtered) % page_size > 0 else 0))
+    total_pages = max(1, (len(filtered) // page_size) + (1 if len(filtered) % page_size > 0 else 1))
     
     # Inicializar session state para página
     if 'current_page' not in st.session_state:
         st.session_state.current_page = 1
     
-    # Navegação com setas
-    col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+    # Resetar página quando faz nova busca
+    if search and st.session_state.get('last_search') != search:
+        st.session_state.current_page = 1
+    st.session_state.last_search = search
     
-    with col1:
-        if st.button('⬅️ Anterior', use_container_width=True):
-            if st.session_state.current_page > 1:
-                st.session_state.current_page -= 1
-    
-    with col2:
-        if st.button('Próximo ➡️', use_container_width=True):
-            if st.session_state.current_page < total_pages:
-                st.session_state.current_page += 1
-    
-    with col3:
-        page_info = st.empty()
-    
-    with col4:
-        if st.button('⏮️ Primeira', use_container_width=True):
-            st.session_state.current_page = 1
-    
-    with col5:
-        if st.button('Última ⏭️', use_container_width=True):
-            st.session_state.current_page = total_pages
-    
-    # Validar página atual
-    st.session_state.current_page = max(1, min(st.session_state.current_page, total_pages))
-    page_info.markdown(f"<div style='text-align: center; font-weight: bold;'>Página {st.session_state.current_page} de {total_pages}</div>", unsafe_allow_html=True)
+    # Navegação com setas - APENAS QUANDO HÁ BUSCA
+    if search and len(filtered) > page_size:
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+        
+        with col1:
+            if st.button('⬅️ Anterior', use_container_width=True):
+                if st.session_state.current_page > 1:
+                    st.session_state.current_page -= 1
+        
+        with col2:
+            if st.button('Próximo ➡️', use_container_width=True):
+                if st.session_state.current_page < total_pages:
+                    st.session_state.current_page += 1
+        
+        with col3:
+            page_info = st.empty()
+        
+        with col4:
+            if st.button('⏮️ Primeira', use_container_width=True):
+                st.session_state.current_page = 1
+        
+        with col5:
+            if st.button('Última ⏭️', use_container_width=True):
+                st.session_state.current_page = total_pages
+        
+        # Validar página atual
+        st.session_state.current_page = max(1, min(st.session_state.current_page, total_pages))
+        page_info.markdown(f"<div style='text-align: center; font-weight: bold;'>Página {st.session_state.current_page} de {total_pages}</div>", unsafe_allow_html=True)
+    else:
+        st.session_state.current_page = 1
     
     # Calcular índices
     start = (st.session_state.current_page - 1) * page_size
