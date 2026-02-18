@@ -54,18 +54,28 @@ try:
             mask = df.astype(str).apply(lambda x: x.str.contains(search, case=False, na=False)).any(axis=1)
             filtered = df[mask].copy()
             
-            # Ordenar por relevância - itens que COMEÇAM com a busca vêm primeiro
+            # Ordenar por relevância - verificar cada coluna individualmente
             def relevancia(row):
-                row_str = ' '.join(row.astype(str))
-                if row_str.upper().strip().startswith(search.upper()):
-                    return 0  # Máxima relevância
-                elif search.upper() in row_str.upper():
-                    return 1  # Relevância média
-                else:
-                    return 2  # Menor relevância
+                row_list = row.astype(str)
+                max_relevancia = 2  # Default: encontrado em algum lugar
+                
+                # Verificar cada coluna
+                for col_value in row_list:
+                    col_str = str(col_value).strip().upper()
+                    search_upper = search.upper()
+                    
+                    # Se coluna começa com o termo, máxima relevância
+                    if col_str.startswith(search_upper):
+                        return 0
+                    # Se contém no início (após espaço), relevância média
+                    elif f" {search_upper}" in col_str:
+                        max_relevancia = min(max_relevancia, 1)
+                
+                return max_relevancia
             
             filtered['_relevancia'] = filtered.apply(relevancia, axis=1)
-            filtered = filtered.sort_values('_relevancia').drop('_relevancia', axis=1)
+            filtered = filtered.sort_values('_relevancia', ascending=True).drop('_relevancia', axis=1)
+            filtered = filtered.reset_index(drop=True)
             
         except Exception as search_error:
             st.warning(f"⚠️ Erro na busca: {str(search_error)}")
