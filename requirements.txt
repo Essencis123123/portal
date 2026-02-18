@@ -1,12 +1,12 @@
 gspread
 oauth2client
 gspread_dataframe
-pandas
-streamlit
+pandas>=2.0.0
+streamlit>=1.40.0
 plotly
 requests
 Pillow
-openpyxl
+openpyxl>=3.11.0
 google-api-python-client
 supabase
 streamlit-option-menu
