@@ -52,12 +52,30 @@ try:
     if search:
         try:
             mask = df.astype(str).apply(lambda x: x.str.contains(search, case=False, na=False)).any(axis=1)
-            filtered = df[mask]
+            filtered = df[mask].copy()
+            
+            # Ordenar por relevância - itens que COMEÇAM com a busca vêm primeiro
+            def relevancia(row):
+                row_str = ' '.join(row.astype(str))
+                if row_str.upper().strip().startswith(search.upper()):
+                    return 0  # Máxima relevância
+                elif search.upper() in row_str.upper():
+                    return 1  # Relevância média
+                else:
+                    return 2  # Menor relevância
+            
+            filtered['_relevancia'] = filtered.apply(relevancia, axis=1)
+            filtered = filtered.sort_values('_relevancia').drop('_relevancia', axis=1)
+            
         except Exception as search_error:
             st.warning(f"⚠️ Erro na busca: {str(search_error)}")
             filtered = df
     else:
         filtered = df
+    
+    # Renderizar informações de busca
+    if search:
+        st.markdown(f"<div class='result-info'>🔍 Pesquisa: <b>'{search}'</b> | Total encontrado: <b>{len(filtered)} resultados</b></div>", unsafe_allow_html=True)
     
     # Configurações de paginação
     page_size = 30
