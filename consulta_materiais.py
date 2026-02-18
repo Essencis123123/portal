@@ -1,16 +1,1 @@
-import pandas as pd
-
-# Updated Excel file name
-EXCEL_FILE_NAME = 'corrected_file_name.xlsx'
-
-try:
-    # Load the Excel file
-    df = pd.read_excel(EXCEL_FILE_NAME)
-    # Process the DataFrame
-    # ... (your processing code here)
-except FileNotFoundError:
-    print(f'Error: The file "{EXCEL_FILE_NAME}" was not found.')
-except pd.errors.EmptyDataError:
-    print('Error: The file is empty.')
-except Exception as e:
-    print(f'An unexpected error occurred: {e}')
+import streamlit as st\nimport pandas as pd\n\n# Load data from Excel file\ndb_file = 'Database - Códigos Oracle.xlsx'\ntry:\n    data = pd.read_excel(dbb_file)\nexcept Exception as e:\n    st.error(f'Error loading data: {e}')\n    st.stop()\n\n# Set up search functionality\nst.title('Search Database')\nsearch_term = st.text_input('Search by código or nome:')\n\n# Filter data based on search term\nif search_term:\n    filtered_data = data[(data['código'].astype(str).str.contains(search_term, case=False)) | (data['nome'].str.contains(search_term, case=False))]\nelse:\n    filtered_data = data\n\n# Pagination setup\npage_size = 10\npage_number = st.number_input('Select page:', min_value=1, max_value=(len(filtered_data) // page_size) + 1, value=1)\nstart_idx = (page_number - 1) * page_size\nend_idx = start_idx + page_size\n\n# Display data with pagination\nif not filtered_data.empty:\n    st.write(filtered_data.iloc[start_idx:end_idx])\nelse:\n    st.warning('No results found.')
