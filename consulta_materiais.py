@@ -15,7 +15,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title('🔍 Consulte Códigos de Materiais Oracle')
+st.title('🔍 Consulte Códigos de Materiais (Oracle Cloud)')
 
 try:
     # Carrega o arquivo Excel
