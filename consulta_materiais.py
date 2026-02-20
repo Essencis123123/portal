@@ -153,7 +153,7 @@ try:
         st.markdown(f"<div class='metric-card'><h3>📄 Página</h3><p style='font-size: 1.5rem;'>{st.session_state.current_page}/{total_pages}</p></div>", unsafe_allow_html=True)
     
 except FileNotFoundError:
-    st.error("❌ Arquivo 'Database - Códigos Oracle.xlsx' não encontrado!")
+    st.error("❌ Arquivo 'codigos.xlsx' não encontrado!")
 except Exception as e:
     st.error(f"❌ Erro: {str(e)}")
     st.info("💡 Dica: Clique em 'Detalhes do Arquivo' na barra lateral para ver mais informações.")
