@@ -19,7 +19,7 @@ st.title('🔍 Consulte Códigos de Materiais (Oracle Cloud)')
 
 try:
     # Carrega o arquivo Excel
-    df = pd.read_excel('Database - Códigos Oracle.xlsx')
+    df = pd.read_excel('codigo.xlsx')
     
     # Sidebar com informações
     with st.sidebar:
