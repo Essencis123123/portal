@@ -22,14 +22,45 @@ st.set_page_config(page_title="Painel Financeiro - Almoxarifado", layout="wide",
 st.markdown(
     """
     <style>
-    html, body, [data-testid="stAppViewContainer"] {
-        font-size: 1.1rem;
+    /* SAP Fiori Color Palette */
+    :root {
+        --sap-blue: #0854a0;
+        --sap-light-blue: #427cac;
+        --sap-dark-blue: #1c4d86;
+        --sap-accent: #00a4ef;
+        --sap-success: #107e3e;
+        --sap-warning: #e26100;
+        --sap-error: #b00;
+        --sap-neutral: #6a6d70;
+        --sap-background: #fafafa;
+        --sap-white: #ffffff;
+        --sap-light-gray: #f2f2f2;
+        --sap-border: #e5e5e5;
+        --shadow-level-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        --shadow-level-2: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+        --shadow-level-3: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
     }
 
+    /* Reset and base styling */
+    html, body, [data-testid="stAppViewContainer"] {
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stDeployButton {display: none;}
+
+    /* Sidebar Styling */
     [data-testid="stSidebar"] {
-        background-color: #1C4D86;
+        background: linear-gradient(180deg, var(--sap-dark-blue) 0%, var(--sap-blue) 100%);
+        border-right: 1px solid var(--sap-border);
         color: white;
     }
+    
     [data-testid="stSidebar"] *, [data-testid="stSidebar"] p, [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] label,
     .stDownloadButton button p { color: white !important; }
@@ -41,44 +72,158 @@ st.markdown(
     [data-testid="stSidebar"] .stDateInput label p { color: white !important; }
     [data-testid="stSidebar"] .stDateInput input { color: black !important; }
 
-    .stButton button p { color: black !important; }
+    /* Modern Button Styling */ 
+    .stButton button { 
+        background: linear-gradient(135deg, var(--sap-blue) 0%, var(--sap-accent) 100%);
+        color: var(--sap-white) !important; 
+        border: none;
+        border-radius: 6px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: var(--shadow-level-1);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    } 
+
+    .stButton button:hover {
+        box-shadow: var(--shadow-level-2);
+        transform: translateY(-2px);
+    }
+
+    .stButton button p { 
+        color: var(--sap-white) !important; 
+        margin: 0;
+    } 
+    
     .stDownloadButton button p { color: white !important; }
 
     [data-testid="stSidebar"] img {
         display: block; margin-left: auto; margin-right: auto;
-        width: 80%; border-radius: 10px; padding: 10px 0;
+        width: 80%; border-radius: 12px; padding: 1rem 0;
+        box-shadow: var(--shadow-level-1);
     }
 
-    .main-container {
-        background-color: white; padding: 40px; border-radius: 16px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.15); color: #333;
+    /* Modern Header */
+    .modern-header {
+        background: linear-gradient(135deg, var(--sap-blue) 0%, var(--sap-dark-blue) 100%);
+        padding: 1.5rem 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow-level-2);
+        color: var(--sap-white);
     }
 
-    .header-container {
-        background: linear-gradient(135deg, #0055a5 0%, #1C4D86 100%);
-        padding: 25px; border-radius: 15px; margin-bottom: 20px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; color: white;
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
     }
-    .header-container h1 { color: white; margin: 0; }
-    .header-container p { color: white; margin: 5px 0 0 0; font-size: 18px; }
 
-    h2, h3 { color: #1C4D86; font-weight: 600; }
-
-    .stButton button {
-        background-color: #0055a5; color: white; border-radius: 8px; transition: background-color .3s;
+    .header-title {
+        font-size: 1.8rem;
+        font-weight: 300;
+        margin: 0;
+        color: var(--sap-white);
     }
-    .stButton button:hover { background-color: #007ea7; }
 
-    [data-testid="stMetric"] > div {
-        background-color: #f0f2f5; color: #1C4D86; padding: 5px; border-radius: 8px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    .header-subtitle {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin: 0.25rem 0 0 0;
+        font-weight: 300;
+    }
+
+    /* Breadcrumbs */
+    .breadcrumbs {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+        color: var(--sap-neutral);
+    }
+
+    .breadcrumb-item {
+        color: var(--sap-neutral);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+
+    .breadcrumb-item:hover {
+        color: var(--sap-blue);
+    }
+
+    .breadcrumb-separator {
+        color: var(--sap-border);
+    }
+
+    /* Modern Typography */ 
+    h2, h3 { 
+        color: var(--sap-dark-blue); 
+        font-weight: 400; 
+        line-height: 1.3;
+    } 
+
+    /* Modern Metrics Cards */ 
+    [data-testid="stMetric"] > div { 
+        background: var(--sap-white); 
+        color: var(--sap-dark-blue); 
+        padding: 1.5rem; 
+        border-radius: 12px; 
+        box-shadow: var(--shadow-level-1); 
+        border: 1px solid var(--sap-border);
+        transition: all 0.3s ease;
         text-align: center;
     }
-    [data-testid="stMetric"] .stMetricValue {
-        font-size: 0.9rem;
+
+    [data-testid="stMetric"] > div:hover {
+        box-shadow: var(--shadow-level-2);
+        transform: translateY(-2px);
     }
+
+    [data-testid="stMetric"] .stMetricValue {
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+    
     [data-testid="stMetric"] .stMetricLabel {
-        font-size: 0.6rem;
+        font-size: 0.9rem;
+        opacity: 0.8;
+    }
+
+    /* Modern Input Fields */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stDateInput > div > div > input,
+    .stNumberInput > div > div > input {
+        border: 2px solid var(--sap-border) !important;
+        border-radius: 8px !important;
+        padding: 0.75rem !important;
+        transition: all 0.3s ease !important;
+        background: var(--sap-white) !important;
+    }
+
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus-within,
+    .stDateInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus {
+        border-color: var(--sap-accent) !important;
+        box-shadow: 0 0 0 3px rgba(0, 164, 239, 0.1) !important;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .header-content {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .modern-header {
+            padding: 1rem;
+        }
     }
     </style>
     """,
@@ -104,6 +249,32 @@ def load_logo(url: str):
 
 logo_url = "http://nfeviasolo.com.br/portal2/imagens/Logo%20Essencis%20MG%20-%20branca.png"
 logo_img = load_logo(logo_url)
+
+def render_modern_header(title, subtitle, show_back_button=True):
+    """Render modern header with breadcrumbs"""
+    # Breadcrumbs
+    breadcrumb_html = """
+        <div class="breadcrumbs">
+            <a href="main_app.py" class="breadcrumb-item">🏠 Início</a>
+            <span class="breadcrumb-separator">›</span>
+            <span class="breadcrumb-item">Painel Fiscal</span>
+        </div>
+    """ if show_back_button else ""
+    
+    # Header
+    header_html = f"""
+        {breadcrumb_html}
+        <div class="modern-header">
+            <div class="header-content">
+                <div>
+                    <h1 class="header-title">{title}</h1>
+                    <p class="header-subtitle">{subtitle}</p>
+                </div>
+            </div>
+        </div>
+    """
+    
+    st.markdown(header_html, unsafe_allow_html=True)
 
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
